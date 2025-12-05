@@ -29,6 +29,10 @@ this repo is a rewrite of the old repo from the beginning.
 
 ## notes
 * one of credentials (real/demo) is tied to the websocket. so if we use demo for opening a position, we have to use the real credentials to show the chart
+* two magical lines for pwa
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+* also some magic to get the correct dimensions for pwa and safari ios
 
 ## more
 - get a pwa up and running
