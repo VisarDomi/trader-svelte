@@ -12,7 +12,7 @@ const pwaCertPath = path.join(mkcertPath, 'pwa');
 
 export default defineConfig({
 	plugins: [sveltekit()],
-
+	clearScreen: false,
 	server: {
 		// 2. Listen on all network interfaces so 192.168.x.x works
 		host: '0.0.0.0',
