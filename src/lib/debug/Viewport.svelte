@@ -1,14 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
 
-    // State using Svelte 5 Runes
-    let stats = $state({
-        currentW: 0,
-        currentH: 0,
-        maxLong: 0,
-        maxShort: 0
-    });
-
     function scanDimensions() {
         // 1. Gather every source iOS gives us
         const sources = [
@@ -38,14 +30,6 @@
         // 4. Save
         localStorage.setItem('MAX_LONG', savedLong.toString());
         localStorage.setItem('MAX_SHORT', savedShort.toString());
-
-        // 5. Update UI
-        stats = {
-            currentW: window.innerWidth,
-            currentH: window.innerHeight,
-            maxLong: savedLong,
-            maxShort: savedShort
-        };
     }
 
     onMount(() => {
@@ -63,29 +47,3 @@
         };
     });
 </script>
-
-<div class="debug-float">
-    <div><strong>Current:</strong> {stats.currentW} x {stats.currentH}</div>
-    <div style="margin-top: 4px; border-top: 1px solid #555; padding-top: 4px;">
-        <strong>MAX Long:</strong> {stats.maxLong}<br>
-        <strong>MAX Short:</strong> {stats.maxShort}
-    </div>
-</div>
-
-<style>
-    .debug-float {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(0, 0, 0, 0.85);
-        color: #00ff00;
-        border: 1px solid #00ff00;
-        padding: 10px;
-        border-radius: 8px;
-        font-family: monospace;
-        font-size: 12px;
-        z-index: 99999;
-        pointer-events: none; /* Lets you click through it */
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    }
-</style>
