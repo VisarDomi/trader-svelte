@@ -9,7 +9,8 @@
         "**/*.html",
         "**/*.css",
         "**/*.json",
-        "**/*.md"
+        "**/*.md",
+        "**/*.yaml"
     ],
     "ignore": {
         "useGitignore": true,

@@ -1,8 +1,8 @@
-const express = require('express');
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+import express from "express";
+import https from "https";
+import fs from "fs";
+import path from "path";
+import os from "os";
 
 const IP = '192.168.1.197'
 const port = 37984;
