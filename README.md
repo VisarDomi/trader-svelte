@@ -33,6 +33,11 @@ this repo is a rewrite of the old repo from the beginning.
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
 * also some magic to get the correct dimensions for pwa and safari ios
+* no need for html for the icons
 
 ## more
-- get a pwa up and running
+- get a pwa up and running - done
+- show a chart
+- open a position
+- show position
+- close position
