@@ -2,10 +2,10 @@
     "watch": [
         "."
     ],
-    "ext": "js,jsx,ts,tsx,html,css,scss,json,md,yml",
+    "ext": "svelte,ts,html,css,json,md",
     "ignore": [
         ".git",
-        "node_modules/**/node_modules",
+        "node_modules/*",
         "dist/*",
         "build/*",
         "repomix/repomix-output.xml"

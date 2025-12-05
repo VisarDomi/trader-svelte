@@ -26,3 +26,9 @@ this repo is a rewrite of the old repo from the beginning.
 * mdsvex - i don't need markdown now
 * storybook - i don't need help in creating ui
 * mcp - i don't need a model context protocol - maybe later when i do the gemini hack
+
+## notes
+* one of credentials (real/demo) is tied to the websocket. so if we use demo for opening a position, we have to use the real credentials to show the chart
+
+## more
+- get a pwa up and running
