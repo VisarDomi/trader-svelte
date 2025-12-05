@@ -20,8 +20,12 @@
 		"@sveltejs/kit": "^2.49.1",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
 		"@vitest/browser-playwright": "^4.0.15",
+		"svelte": "^5.45.5",
 		"svelte-check": "^4.3.4",
 		"vite": "^7.2.6",
 		"vitest": "^4.0.15"
+	},
+	"dependencies": {
+		"@repo/types": "workspace:*"
 	}
 }

@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "private": true,
     "scripts": {
-        "dev": "go run main.go",
-        "build": "go build -o bin/server main.go"
+        "dev": "go run src/main.go",
+        "build": "go build -o bin/server src/main.go"
     }
 }

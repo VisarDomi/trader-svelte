@@ -3,6 +3,7 @@
         "module": "esnext",
         "moduleResolution": "bundler",
         "target": "esnext",
-        "outDir": "dist"
+        "outDir": "dist",
+        "preserveSymlinks": true
     }
 }

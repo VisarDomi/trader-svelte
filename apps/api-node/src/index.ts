@@ -5,7 +5,7 @@ import path from "path";
 import os from "os";
 
 const IP = '192.168.1.197'
-const port = 37984;
+const PORT = 37984;
 
 const mkcertPath = path.join(os.homedir(), '.local/share/mkcert');
 const caPath = path.join(mkcertPath, 'rootCA.pem');
@@ -20,14 +20,12 @@ app.get('/cert', (req, res) => {
     res.send(certFile);
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
-
 const options = {
     key: fs.readFileSync(path.join(pwaCertPath, 'key.pem'), 'utf-8'),
     cert: fs.readFileSync(path.join(pwaCertPath, 'cert.pem'), 'utf-8')
 };
 
-https.createServer(options, app).listen(port, () => {
-    console.log(`HTTPS server running at https://localhost:${port}`);
-    console.log(`Access on your phone at https://${IP}:${port}`);
+https.createServer(options, app).listen(PORT, () => {
+    console.log(`HTTPS server running at https://localhost:${PORT}`);
+    console.log(`Access on your phone at https://${IP}:${PORT}`);
 });
