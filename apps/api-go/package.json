@@ -1,9 +1,0 @@
-{
-    "name": "api-go",
-    "version": "0.0.0",
-    "private": true,
-    "scripts": {
-        "dev": "go run src/main.go",
-        "build": "go build -o bin/server src/main.go"
-    }
-}
