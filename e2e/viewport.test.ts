@@ -18,7 +18,7 @@ test.describe('Viewport Logic (iPhone 12 Pro Max)', () => {
 		// 1. Start in PORTRAIT
 		// Simulating browser bars taking up some vertical space.
 		// Real screen is 926 high, but visual viewport might be only ~844 due to address bar.
-		await page.setViewportSize({ width: 428, height: 844 });
+		await page.setViewportSize({ width: 428, height: 896 });
 		await page.goto('/');
 
 		// Force a resize event just to be safe
@@ -28,8 +28,8 @@ test.describe('Viewport Logic (iPhone 12 Pro Max)', () => {
 		let dims = await getStoredDimensions(page);
 		console.log('Portrait Reading:', dims);
 
-		// Sanity check: Long should be at least 844, Short at least 428
-		expect(parseFloat(dims.long!)).toBeGreaterThanOrEqual(844);
+		// Sanity check: Long should be at least 896, Short at least 428
+		expect(parseFloat(dims.long!)).toBeGreaterThanOrEqual(896);
 		expect(parseFloat(dims.short!)).toBeGreaterThanOrEqual(428);
 
 		// 2. Rotate to LANDSCAPE
@@ -51,7 +51,7 @@ test.describe('Viewport Logic (iPhone 12 Pro Max)', () => {
 
 		// 3. THE GRAND ASSERTION
 		// The MAX_LONG should now be 926 (captured from Landscape width)
-		// even though our first portrait height was only 844.
+		// even though our first portrait height was only 896.
 		// The scanner should have kept the larger of the two "Long" values it saw.
 		expect(finalLong).toBe(926);
 
