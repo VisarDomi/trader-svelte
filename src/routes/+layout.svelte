@@ -5,5 +5,9 @@
 	let { children } = $props();
 </script>
 
+<svelte:head>
+    <title>Moon Tendies</title>
+</svelte:head>
+
 <Viewport />
 {@render children()}
