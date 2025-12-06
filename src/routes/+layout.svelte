@@ -1,13 +1,14 @@
 <script lang="ts">
-	import '$lib/styles.css';
-	import Viewport from '$lib/dimensions/Viewport.svelte';
+    import '$lib/styles.css';
+    import {initViewportScanner} from '$lib/dimensions/scanner.js';
 
-	let { children } = $props();
+    let { children } = $props();
+
+    $effect(() => initViewportScanner());
 </script>
 
 <svelte:head>
     <title>Moon Tendies</title>
 </svelte:head>
 
-<Viewport />
 {@render children()}
