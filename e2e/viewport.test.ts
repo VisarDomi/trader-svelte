@@ -1,12 +1,20 @@
 import { test, expect, type Page } from '@playwright/test';
+import * as STORAGE from '$lib/constants/storage.js';
+import * as EVENT from '$lib/constants/events.js';
+import * as TEST from '$lib/constants/test.js';
 
 async function getStoredDimensions(page: Page) {
-	return await page.evaluate(() => {
+	const keys = {
+		longKey: STORAGE.MAX_LONG_KEY,
+		shortKey: STORAGE.MAX_SHORT_KEY
+	};
+
+	return await page.evaluate((k) => {
 		return {
-			long: localStorage.getItem('MAX_LONG'),
-			short: localStorage.getItem('MAX_SHORT')
+			long: localStorage.getItem(k.longKey),
+			short: localStorage.getItem(k.shortKey)
 		};
-	});
+	}, keys);
 }
 
 test.describe('Viewport Logic (iPhone 12 Pro Max)', () => {
@@ -15,32 +23,24 @@ test.describe('Viewport Logic (iPhone 12 Pro Max)', () => {
 	// Logical Height: 926
 
 	test('captures maximum screen real estate across rotation', async ({ page }) => {
-		// 1. Start in PORTRAIT
-		// Simulating browser bars taking up some vertical space.
-		// Real screen is 926 high, but visual viewport might be only ~844 due to address bar.
-		await page.setViewportSize({ width: 428, height: 896 });
+		await page.setViewportSize({ width: TEST.PORTRAIT_SHORT, height: TEST.PORTRAIT_LONG });
 		await page.goto('/');
 
-		// Force a resize event just to be safe
-		await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+		// Pass EVENT.WINDOW_RESIZE string to the browser
+		await page.evaluate((evt) => window.dispatchEvent(new Event(evt)), EVENT.WINDOW_RESIZE);
 		await page.waitForTimeout(200);
 
 		let dims = await getStoredDimensions(page);
 		console.log('Portrait Reading:', dims);
 
-		// Sanity check: Long should be at least 896, Short at least 428
-		expect(parseFloat(dims.long!)).toBeGreaterThanOrEqual(896);
-		expect(parseFloat(dims.short!)).toBeGreaterThanOrEqual(428);
+		expect(parseFloat(dims.long!)).toBeGreaterThanOrEqual(TEST.PORTRAIT_LONG);
+		expect(parseFloat(dims.short!)).toBeGreaterThanOrEqual(TEST.PORTRAIT_SHORT);
 
-		// 2. Rotate to LANDSCAPE
-		// In landscape, the address bar often retracts or changes.
-		// The width becomes the "Long" side.
-		// We simulate the FULL 926 width being available now.
-		await page.setViewportSize({ width: 926, height: 428 });
+		await page.setViewportSize({ width: TEST.LANDSCAPE_LONG, height: TEST.LANDSCAPE_SHORT });
 
-		// Trigger rotation event logic
-		await page.evaluate(() => window.dispatchEvent(new Event('orientationchange')));
-		await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+		// Pass the event strings dynamically
+		await page.evaluate((evt) => window.dispatchEvent(new Event(evt)), EVENT.WINDOW_ORIENTATION_CHANGE);
+		await page.evaluate((evt) => window.dispatchEvent(new Event(evt)), EVENT.WINDOW_RESIZE);
 		await page.waitForTimeout(200);
 
 		dims = await getStoredDimensions(page);
@@ -49,13 +49,7 @@ test.describe('Viewport Logic (iPhone 12 Pro Max)', () => {
 		const finalLong = parseFloat(dims.long!);
 		const finalShort = parseFloat(dims.short!);
 
-		// 3. THE GRAND ASSERTION
-		// The MAX_LONG should now be 926 (captured from Landscape width)
-		// even though our first portrait height was only 896.
-		// The scanner should have kept the larger of the two "Long" values it saw.
-		expect(finalLong).toBe(926);
-
-		// The MAX_SHORT should remain 428 (consistent across both)
-		expect(finalShort).toBe(428);
+		expect(finalLong).toBe(TEST.LANDSCAPE_LONG);
+		expect(finalShort).toBe(TEST.LANDSCAPE_SHORT);
 	});
 });

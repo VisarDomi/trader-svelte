@@ -1,5 +1,8 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import * as STORAGE from '../constants/storage.js';
+    import * as EVENT from '../constants/events.js';
+    import * as VIEWPORT from '../constants/viewport.js';
 
     function scanDimensions() {
         const sources = [
@@ -9,30 +12,30 @@
             { name: 'screen.avail', w: screen.availWidth, h: screen.availHeight },
             { name: 'visualViewport', w: window.visualViewport?.width || 0, h: window.visualViewport?.height || 0 }
         ];
-        let savedLong = parseFloat(localStorage.getItem('MAX_LONG') || '0');
-        let savedShort = parseFloat(localStorage.getItem('MAX_SHORT') || '0');
+        let savedLong = parseFloat(localStorage.getItem(STORAGE.MAX_LONG_KEY) || '0');
+        let savedShort = parseFloat(localStorage.getItem(STORAGE.MAX_SHORT_KEY) || '0');
         sources.forEach(s => {
             if (!s.w || !s.h) return;
 
             const long = Math.max(s.w, s.h);
             const short = Math.min(s.w, s.h);
 
-            if (long > savedLong && long < 4000) savedLong = long;
-            if (short > savedShort && short < 4000) savedShort = short;
+            if (long > savedLong && long < VIEWPORT.TOO_MANY_PIXELS) savedLong = long;
+            if (short > savedShort && short < VIEWPORT.TOO_MANY_PIXELS) savedShort = short;
         });
-        localStorage.setItem('MAX_LONG', savedLong.toString());
-        localStorage.setItem('MAX_SHORT', savedShort.toString());
+        localStorage.setItem(STORAGE.MAX_LONG_KEY, savedLong.toString());
+        localStorage.setItem(STORAGE.MAX_SHORT_KEY, savedShort.toString());
     }
 
     onMount(() => {
         scanDimensions();
-        window.addEventListener('resize', scanDimensions);
-        window.addEventListener('orientationchange', scanDimensions);
-        window.visualViewport?.addEventListener('resize', scanDimensions);
+        window.addEventListener(EVENT.WINDOW_RESIZE, scanDimensions);
+        window.addEventListener(EVENT.WINDOW_ORIENTATION_CHANGE, scanDimensions);
+        window.visualViewport?.addEventListener(EVENT.WINDOW_RESIZE, scanDimensions);
         return () => {
-            window.removeEventListener('resize', scanDimensions);
-            window.removeEventListener('orientationchange', scanDimensions);
-            window.visualViewport?.removeEventListener('resize', scanDimensions);
+            window.removeEventListener(EVENT.WINDOW_RESIZE, scanDimensions);
+            window.removeEventListener(EVENT.WINDOW_ORIENTATION_CHANGE, scanDimensions);
+            window.visualViewport?.removeEventListener(EVENT.WINDOW_RESIZE, scanDimensions);
         };
     });
 </script>

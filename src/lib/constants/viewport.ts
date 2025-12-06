@@ -1,0 +1,1 @@
+export const TOO_MANY_PIXELS = 4000;
