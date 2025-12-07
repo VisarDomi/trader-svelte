@@ -42,5 +42,8 @@ this repo is a rewrite of the old repo from the beginning.
 - show position
 - close position
 
-# get help from this demo
+## get help from this demo
 https://github.com/alankrantas/svelteapp-typescript-go/tree/main
+
+## get all functionality from the backend
+* use the tdd thingy to do it

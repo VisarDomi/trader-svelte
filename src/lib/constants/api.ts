@@ -38,7 +38,11 @@ export const EPIC_KEY = "epic";
 export const DEAL_REFERENCE_PREFIX = "p_";
 export const MARKET_DATA_CORRELATION_ID = "1";
 export const PING_CORRELATION_ID = "5";
-export const RESOLUTION_MINUTE = "MINUTE";
 
-export const SWITCH_ACCOUNT_FUNCTION_ENDPOINT = "/.netlify/functions/switch-account";
-export const UPDATE_PREFERENCES_FUNCTION_ENDPOINT = "/.netlify/functions/update-preferences";
+export const RESOLUTION_MINUTE = "MINUTE";
+export const MAX_ROWS = "1000";
+
+export const RESOLUTION_KEY = 'resolution';
+export const MAX_KEY = 'max';
+export const FROM_KEY = 'from';
+export const TO_KEY = 'to';

@@ -1,56 +1,105 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { login } from './auth';
-import * as BACKEND from './constants/backend.js';
-import * as API from './constants/api.js';
-import * as AUTH from './constants/auth.js';
-import * as TEST from './constants/test.js';
+import * as API from '$lib/constants/api.js';
+import * as AUTH from '$lib/constants/auth.js';
+import * as TEST from '$lib/constants/test.js';
 
-// Mock the global fetch of the BROWSER
-const fetchMock = vi.fn();
-global.fetch = fetchMock;
+// We import the Class we are about to build
+import { CapitalAuthService } from '$lib/services/auth.js';
 
-describe('Frontend Auth Logic', () => {
+describe('CapitalAuthService', () => {
+    let fetchMock: any;
+    let authService: CapitalAuthService;
+
     beforeEach(() => {
-        fetchMock.mockReset();
+        // 1. We mock fetch locally, not globally.
+        // This is pure Dependency Injection.
+        fetchMock = vi.fn();
+
+        // 2. We inject the mock into the service
+        authService = new CapitalAuthService(fetchMock);
     });
 
-    it('calls the node backend with correct parameters', async () => {
-        // 1. Mock a successful response from your Node Server
-        const mockTokens = {
-            [API.CST_KEY]: TEST.MOCK_CST_DEMO,
-            [API.X_SECURITY_TOKEN_KEY]: TEST.MOCK_SEC_DEMO
-        };
+    const testCases = [
+        {
+            type: AUTH.DEMO_TYPE,
+            baseUrl: API.DEMO_BASE_URL,
+            cst: TEST.MOCK_CST_DEMO,
+            sec: TEST.MOCK_SEC_DEMO,
+        },
+        {
+            type: AUTH.REAL_TYPE,
+            baseUrl: API.REAL_BASE_URL,
+            cst: TEST.MOCK_CST_REAL,
+            sec: TEST.MOCK_SEC_REAL,
+        }
+    ];
 
-        fetchMock.mockResolvedValue({
-            ok: true,
-            json: async () => mockTokens
+    testCases.forEach((scenario) => {
+        it(`logs into ${scenario.type} and extracts tokens via injected fetcher`, async () => {
+            // ARRANGE
+            const mockResponseHeaders = new Headers();
+            mockResponseHeaders.append(API.CST_KEY, scenario.cst);
+            mockResponseHeaders.append(API.X_SECURITY_TOKEN_KEY, scenario.sec);
+
+            fetchMock.mockResolvedValue({
+                ok: true,
+                headers: mockResponseHeaders,
+                json: async () => ({})
+            });
+
+            const credentials = {
+                identifier: TEST.MOCK_USER,
+                password: TEST.MOCK_PASS,
+                apiKey: TEST.MOCK_API_KEY
+            };
+
+            // ACT
+            // We call the method on the instance
+            const result = await authService.login(
+                scenario.type,
+                credentials.identifier,
+                credentials.password,
+                credentials.apiKey
+            );
+
+            // ASSERT
+            // 1. Verify URL construction
+            const expectedUrl = `${scenario.baseUrl}${API.SESSION_ENDPOINT}`;
+
+            // 2. Verify the injected fetch was called correctly
+            expect(fetchMock).toHaveBeenCalledWith(
+                expectedUrl,
+                expect.objectContaining({
+                    method: API.POST_METHOD,
+                    headers: expect.objectContaining({
+                        [API.CONTENT_TYPE_KEY]: API.APPLICATION_JSON_CONTENT_TYPE,
+                        [API.X_CAP_API_KEY_KEY]: credentials.apiKey
+                    }),
+                    body: JSON.stringify({
+                        [API.IDENTIFIER_KEY]: credentials.identifier,
+                        [API.PASSWORD_KEY]: credentials.password
+                    })
+                })
+            );
+
+            // 3. Verify Parsing Logic
+            expect(result).toEqual({
+                [API.CST_KEY]: scenario.cst,
+                [API.X_SECURITY_TOKEN_KEY]: scenario.sec
+            });
         });
-
-        // 2. Call the function
-        const result = await login(AUTH.DEMO_TYPE);
-
-        // 3. Assert we called the backend
-        const expectedUrl = `${BACKEND.URL}${BACKEND.LOGIN}`;
-
-        expect(fetchMock).toHaveBeenCalledWith(expectedUrl, {
-            method: API.POST_METHOD,
-            headers: {
-                [API.CONTENT_TYPE_KEY]: API.APPLICATION_JSON_CONTENT_TYPE
-            },
-            body: JSON.stringify({ type: AUTH.DEMO_TYPE })
-        });
-
-        // 4. Assert we got the tokens back
-        expect(result).toEqual(mockTokens);
     });
 
-    it('handles backend errors gracefully', async () => {
+    it('throws when response is not OK', async () => {
+        const errorCode = "error.public-api.failure.login";
         fetchMock.mockResolvedValue({
             ok: false,
-            status: 500,
-            json: async () => ({ error: 'Backend failed' })
+            status: 401,
+            json: async () => ({ [API.ERROR_CODE_KEY]: errorCode })
         });
 
-        await expect(login(AUTH.REAL_TYPE)).rejects.toThrow('Backend failed');
+        await expect(
+            authService.login(AUTH.DEMO_TYPE, TEST.MOCK_USER, TEST.MOCK_PASS, TEST.MOCK_API_KEY)
+        ).rejects.toThrow(errorCode);
     });
 });

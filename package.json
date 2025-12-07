@@ -19,6 +19,7 @@
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.48.5",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@types/luxon": "^3.7.1",
 		"@types/node": "^24.10.1",
 		"@vitest/browser-playwright": "^4.0.10",
 		"playwright": "^1.56.1",
@@ -30,6 +31,7 @@
 		"vitest-browser-svelte": "^2.0.1"
 	},
 	"dependencies": {
-		"lightweight-charts": "^5.0.9"
+		"lightweight-charts": "^5.0.9",
+		"luxon": "^3.7.2"
 	}
 }
