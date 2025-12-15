@@ -102,4 +102,39 @@ describe('CapitalAuthService', () => {
             authService.login(AUTH.DEMO_TYPE, TEST.MOCK_USER, TEST.MOCK_PASS, TEST.MOCK_API_KEY)
         ).rejects.toThrow(errorCode);
     });
+
+    it('fetches encryption key and timestamp', async () => {
+        // ARRANGE
+        const mockKeyData = {
+            encryptionKey: "MIIBIjANBgkqhki...",
+            timeStamp: 1649058606014
+        };
+        // TODO: think slowly about the test
+        // slow and easy actually wins the race - it's all about NOT rewriting the code 100 times over and over again...
+
+        fetchMock.mockResolvedValue({
+            ok: true,
+            json: async () => mockKeyData
+        });
+
+        // ACT
+        const result = await authService.getEncryptionKey(AUTH.DEMO_TYPE, TEST.MOCK_API_KEY);
+
+        // ASSERT
+        // 1. Check URL construction: /api/v1/session/encryptionKey
+        const expectedUrl = `${API.DEMO_BASE_URL}${API.SESSION_ENDPOINT}/encryptionKey`;
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            expectedUrl,
+            expect.objectContaining({
+                method: API.GET_METHOD,
+                headers: expect.objectContaining({
+                    [API.X_CAP_API_KEY_KEY]: TEST.MOCK_API_KEY
+                })
+            })
+        );
+
+        // 2. Check Result
+        expect(result).toEqual(mockKeyData);
+    });
 });

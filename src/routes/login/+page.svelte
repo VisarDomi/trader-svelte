@@ -1,6 +1,6 @@
 <script lang="ts">
     import * as AUTH from '$lib/constants/auth.js';
-    import { login, type AuthTokens } from '$lib/auth.js';
+    import { CapitalAuthService, type AuthTokens } from '$lib/services/auth.js';
 
     let loginStatus = $state("Ready to login");
     let tokens = $state<AuthTokens | null>(null);
@@ -10,7 +10,8 @@
             loginStatus = `Logging into ${type}...`;
             tokens = null;
 
-            tokens = await login(type);
+            const authService = new CapitalAuthService();
+            tokens = await authService.login(type);
 
             loginStatus = `Success: Logged into ${type}`;
         } catch (e) {
