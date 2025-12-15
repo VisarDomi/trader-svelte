@@ -16,17 +16,13 @@ export const getDealReferenceEndpoint = (dealReference: string) => `/api/v1/conf
 export const WEBSOCKET_BASE_URL = "wss://api-streaming-capital.backend-capital.com";
 export const WEBSOCKET_PATH = "/connect";
 
-
 export const X_CAP_API_KEY_KEY = "X-CAP-API-KEY";
-export const CONTENT_TYPE_KEY = "Content-Type";
-
+export const IDENTIFIER_KEY = "identifier";
+export const PASSWORD_KEY = "password";
 export const X_SECURITY_TOKEN_KEY = "x-security-token";
 export const CST_KEY = "cst";
 
-export const IDENTIFIER_KEY = "identifier";
-export const PASSWORD_KEY = "password";
-export const ENCRYPTED_PASSWORD_KEY = "encryptedPassword";
-
+export const CONTENT_TYPE_KEY = "Content-Type";
 export const APPLICATION_JSON_CONTENT_TYPE = "application/json";
 
 export const EMPTY_STRING = "";

@@ -3,9 +3,6 @@ import * as EVENT from '../constants/events.js';
 import * as VIEWPORT from '../constants/viewport.js';
 
 function scanDimensions() {
-    // Guard against running on server
-    if (typeof window === 'undefined') return;
-
     const sources = [
         { name: 'window.inner', w: window.innerWidth, h: window.innerHeight },
         { name: 'window.outer', w: window.outerWidth, h: window.outerHeight },

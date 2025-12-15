@@ -1,0 +1,1 @@
+export const DEFAULT_ERROR = "yeah, no. add logs" // TODO: add logging, but not now
