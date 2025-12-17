@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount, onDestroy, tick } from 'svelte';
     import { goto } from '$app/navigation';
     import * as AUTH_CONST from '$lib/constants/auth.js';
     import * as STORAGE from '$lib/constants/storage.js';
@@ -14,26 +14,55 @@
     import { getHistoricalPrices } from "$lib/services/market";
     import { formatTimestampToLocalTime, formatChartTimeFull } from "$lib/utils/time";
     import { getTimeScaleHeight } from "$lib/utils/chart";
-    import {getStoredDimensions, removeTradingViewLogo} from "$lib/utils/helpers";
+    import { getStoredDimensions, removeTradingViewLogo } from "$lib/utils/helpers";
     import type { SessionTokens } from "$lib/types/auth";
-    import {DEFAULT_ERROR} from "$lib/constants/error";
+    import { DEFAULT_ERROR } from "$lib/constants/error";
 
     let chartContainer: HTMLDivElement;
+    let topBar: HTMLDivElement;
     let chart: IChartApi;
     let candleSeries: ISeriesApi<"Candlestick">;
+
+    let isDataLoaded = false;
+    const TOPBAR_HEIGHT = 200;
 
     const epic = page.url.searchParams.get('epic') || TRADING.NDX_EPIC;
 
     function updateChartDimensions() {
-        const { width, height } = getStoredDimensions();
+        if (!chartContainer || !chart) return;
 
-        if (chartContainer) {
-            chartContainer.style.width = `${width}px`;
-            chartContainer.style.height = `${height}px`;
+        let width: number;
+        let height: number;
+        const windowHeight = window.innerHeight;
+
+        if (!isDataLoaded) {
+            // Initial state: Fill the current window exactly
+            width = window.innerWidth;
+            height = windowHeight;
+        } else {
+            // Data loaded state: Use stored dimensions
+            const dims = getStoredDimensions();
+            width = dims.width;
+            height = dims.height;
         }
 
-        if (chart) {
-            chart.resize(width, height);
+        // Apply dimensions to DOM and Chart
+        chartContainer.style.width = `${width}px`;
+        chartContainer.style.height = `${height}px`;
+        chart.resize(width, height);
+
+        // Scroll Logic
+        if (isDataLoaded) {
+            // Formula: We scroll past the topbar, plus the difference between the
+            // chart's full height and the current window height.
+            // This effectively aligns the bottom of the chart with the bottom of the screen.
+            const heightDiff = height - windowHeight;
+            const scrollTarget = TOPBAR_HEIGHT + heightDiff;
+
+            window.scrollTo({
+                top: scrollTarget,
+                behavior: 'instant'
+            });
         }
     }
 
@@ -50,7 +79,9 @@
             await goto('/login');
         }
 
+        // 1. Initial set (Fullscreen)
         updateChartDimensions();
+
         window.addEventListener(EVENTS.WINDOW_RESIZE, updateChartDimensions);
         window.addEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, updateChartDimensions);
 
@@ -60,8 +91,6 @@
         }
 
         const tokens: SessionTokens = JSON.parse(tokensData);
-
-        const data = await getHistoricalPrices(tokens, epic);
 
         const timeScaleOptions: DeepPartial<TimeScaleOptions> = {
             tickMarkFormatter: (time: Time) => {
@@ -83,6 +112,9 @@
         };
 
         chart = createChart(chartContainer, {
+            // Initial size based on container (which is window size at this point)
+            width: chartContainer.clientWidth,
+            height: chartContainer.clientHeight,
             layout: {
                 background: { type: ColorType.Solid, color: CHART_CONST.BACKGROUND_COLOR },
                 textColor: CHART_CONST.TEXT_COLOR,
@@ -103,8 +135,21 @@
             wickDownColor: CHART_CONST.DOWN_COLOR,
         });
 
+        // 2. Fetch Data
+        const data = await getHistoricalPrices(tokens, epic);
+
+        // 3. Populate
         candleSeries.setData(data);
         removeTradingViewLogo();
+
+        // 4. Update State and Layout
+        isDataLoaded = true;
+
+        // Wait for Svelte to render the TopBar into DOM
+        await tick();
+
+        // Resize to stored dimensions and apply calculated scroll
+        updateChartDimensions();
     });
 
     onDestroy(() => {
@@ -117,5 +162,14 @@
         }
     });
 </script>
+
+{#if isDataLoaded}
+    <div
+            bind:this={topBar}
+            id="topbar"
+            style="height: {TOPBAR_HEIGHT}px; background-color: blue;"
+    >
+    </div>
+{/if}
 
 <div bind:this={chartContainer} id={CHART_CONST.CHART_CONTAINER_ID}></div>

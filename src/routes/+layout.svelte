@@ -4,8 +4,7 @@
 
     let { children } = $props();
 
-    $effect(() => viewportScanner());
-    import { type IChartApi } from 'lightweight-charts';
+    $effect(viewportScanner);
 </script>
 
 <svelte:head>
