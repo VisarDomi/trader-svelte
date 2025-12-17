@@ -1,6 +1,13 @@
-import { ColorType, CrosshairMode, LineStyle } from 'lightweight-charts';
+import {
+    ColorType,
+    CrosshairMode,
+    LineStyle,
+    type DeepPartial,
+    type ChartOptions,
+    type CandlestickSeriesOptions
+} from 'lightweight-charts';
 
-export function getOptions(width: number, height: number) {
+export function getChartOptions(width: number, height: number): DeepPartial<ChartOptions> {
     return {
         width,
         height,
@@ -32,6 +39,21 @@ export function getOptions(width: number, height: number) {
             borderColor: '#3e3e47',
             timeVisible: true,
             secondsVisible: false,
+        },
+    };
+}
+
+export function getSeriesOptions(precision: number): DeepPartial<CandlestickSeriesOptions> {
+    return {
+        upColor: '#26a69a',
+        downColor: '#ef5350',
+        borderVisible: false,
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
+        priceFormat: {
+            type: 'price',
+            precision: precision,
+            minMove: 1 / Math.pow(10, precision),
         },
     };
 }
