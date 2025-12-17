@@ -1,12 +1,42 @@
-<h1>Trader Svelte</h1>
+<script lang="ts">
+    import { onMount } from 'svelte';
+    import { goto } from '$app/navigation';
+    import * as AUTH_CONST from '$lib/constants/auth.js';
+    import * as STORAGE from '$lib/constants/storage.js';
+    import * as TRADING from '$lib/constants/trading.js';
+    import { login } from "$lib/services/auth";
+    import { getCredentials } from "$lib/services/credentials";
 
-<nav style="margin: 2rem 0;">
-    <ul style="display: flex; gap: 1rem; list-style: none; padding: 0;">
-        <li><a href="/login">Login</a></li>
-        <li><a href="/chart">Chart</a></li>
-        <li><a href="/hello">Backend Health</a></li>
-        <li><a href="/manga">Manga</a></li>
-    </ul>
-</nav>
+    let status = $state("Initializing...");
 
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+    onMount(async () => {
+        try {
+            // Check if credentials exist in storage first
+            getCredentials();
+
+            status = "Authenticating...";
+
+            // Parallel login to both environments
+            const [realTokens, demoTokens] = await Promise.all([
+                login(AUTH_CONST.REAL_TYPE),
+                login(AUTH_CONST.DEMO_TYPE)
+            ]);
+
+            // Store tokens
+            localStorage.setItem(STORAGE.TOKENS_REAL_KEY, JSON.stringify(realTokens));
+            localStorage.setItem(STORAGE.TOKENS_DEMO_KEY, JSON.stringify(demoTokens));
+
+            // Forward to chart
+            await goto(`/chart?epic=${TRADING.BTCUSD_EPIC}`);
+
+        } catch (error) {
+            console.error(error);
+            await goto('/login');
+        }
+    });
+</script>
+
+<div style="height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+    <h1>Trader Svelte</h1>
+    <p>{status}</p>
+</div>
