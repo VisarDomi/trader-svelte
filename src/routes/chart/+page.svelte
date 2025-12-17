@@ -11,6 +11,7 @@
     import { formatTimestampToLocalTime, formatChartTimeFull } from "$lib/utils/time";
     import { getTimeScaleHeight } from "$lib/utils/chart";
     import type { SessionTokens } from "$lib/types/auth";
+    import {removeTradingViewLogo} from "$lib/utils/helpers";
 
     let chartContainer: HTMLDivElement;
     let chart: IChartApi;
@@ -20,6 +21,7 @@
     const epic = page.url.searchParams.get('epic') || TRADING.BTCUSD_EPIC;
 
     onMount(async () => {
+        removeTradingViewLogo();
         const tokensData = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
         if (!tokensData) {
             errorMsg = "No Real tokens found";
