@@ -26,3 +26,26 @@ export interface ChartCandle {
     low: number;
     close: number;
 }
+
+// --- WebSocket Types ---
+
+export interface WebSocketPayload {
+    destination: string;
+    correlationId?: string;
+    cst?: string;
+    securityToken?: string;
+    payload?: any;
+}
+
+export interface QuoteMessage {
+    destination: string;
+    payload: {
+        epic: string;
+        product: string;
+        bid: number;
+        bidQty: number;
+        ofr: number;
+        ofrQty: number;
+        timestamp: number; // Milliseconds
+    }
+}

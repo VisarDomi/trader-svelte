@@ -12,20 +12,28 @@
     import { createChart, CandlestickSeries, ColorType } from 'lightweight-charts';
     import type { IChartApi, ISeriesApi, TimeScaleOptions, LocalizationOptions, DeepPartial, Time, UTCTimestamp } from 'lightweight-charts';
     import { getHistoricalPrices } from "$lib/services/market";
+    import { connectToStream } from "$lib/services/stream";
     import { formatTimestampToLocalTime, formatChartTimeFull } from "$lib/utils/time";
     import { getTimeScaleHeight } from "$lib/utils/chart";
     import { getStoredDimensions, removeTradingViewLogo } from "$lib/utils/helpers";
     import type { SessionTokens } from "$lib/types/auth";
+    import type { ChartCandle, QuoteMessage } from "$lib/types/market";
     import { DEFAULT_ERROR } from "$lib/constants/error";
 
     let chartContainer: HTMLDivElement;
     let topBar: HTMLDivElement;
     let chart: IChartApi;
     let candleSeries: ISeriesApi<"Candlestick">;
+    let streamConnection: { destroy: () => void } | null = null;
 
     let isDataLoaded = false;
-    const TOPBAR_HEIGHT = 200;
+    let historicalLoaded = false;
 
+    // Live Data Management
+    let liveBuffer: QuoteMessage[] = [];
+    let currentCandle: ChartCandle | null = null;
+
+    const TOPBAR_HEIGHT = 200;
     const epic = page.url.searchParams.get('epic') || TRADING.NDX_EPIC;
 
     function updateChartDimensions() {
@@ -36,34 +44,56 @@
         const windowHeight = window.innerHeight;
 
         if (!isDataLoaded) {
-            // Initial state: Fill the current window exactly
             width = window.innerWidth;
             height = windowHeight;
         } else {
-            // Data loaded state: Use stored dimensions
             const dims = getStoredDimensions();
             width = dims.width;
             height = dims.height;
         }
 
-        // Apply dimensions to DOM and Chart
         chartContainer.style.width = `${width}px`;
         chartContainer.style.height = `${height}px`;
         chart.resize(width, height);
 
-        // Scroll Logic
         if (isDataLoaded) {
-            // Formula: We scroll past the topbar, plus the difference between the
-            // chart's full height and the current window height.
-            // This effectively aligns the bottom of the chart with the bottom of the screen.
             const heightDiff = height - windowHeight;
             const scrollTarget = TOPBAR_HEIGHT + heightDiff;
-
             window.scrollTo({
                 top: scrollTarget,
                 behavior: 'instant'
             });
         }
+    }
+
+    // Handles a single price update tick
+    // Can be called from the buffer loop or live stream
+    function processTick(price: number, timestampMs: number) {
+        if (!candleSeries) return;
+
+        // Convert ms to seconds (UTC Timestamp) and floor to minute
+        const time = (Math.floor(timestampMs / 1000 / 60) * 60) as UTCTimestamp;
+
+        if (!currentCandle) {
+            // Should not happen if history loaded correctly, but fail-safe
+            currentCandle = { time, open: price, high: price, low: price, close: price };
+        } else if (time === currentCandle.time) {
+            // Update existing candle
+            currentCandle.high = Math.max(currentCandle.high, price);
+            currentCandle.low = Math.min(currentCandle.low, price);
+            currentCandle.close = price;
+        } else if (time > currentCandle.time) {
+            // New minute started
+            currentCandle = {
+                time,
+                open: price,
+                high: price,
+                low: price,
+                close: price
+            };
+        }
+
+        candleSeries.update(currentCandle);
     }
 
     onMount(async () => {
@@ -79,23 +109,18 @@
             await goto('/login');
         }
 
-        // 1. Initial set (Fullscreen)
         updateChartDimensions();
 
         window.addEventListener(EVENTS.WINDOW_RESIZE, updateChartDimensions);
         window.addEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, updateChartDimensions);
 
         const tokensData = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
-        if (!tokensData) {
-            throw new Error(DEFAULT_ERROR)
-        }
-
+        if (!tokensData) throw new Error(DEFAULT_ERROR);
         const tokens: SessionTokens = JSON.parse(tokensData);
 
+        // --- Chart Init ---
         const timeScaleOptions: DeepPartial<TimeScaleOptions> = {
-            tickMarkFormatter: (time: Time) => {
-                return formatTimestampToLocalTime(time as UTCTimestamp);
-            },
+            tickMarkFormatter: (time: Time) => formatTimestampToLocalTime(time as UTCTimestamp),
             rightOffset: CHART_CONST.RIGHT_OFFSET,
             barSpacing: CHART_CONST.BAR_SPACING,
             minBarSpacing: CHART_CONST.MIN_BAR_SPACING,
@@ -106,13 +131,10 @@
         };
 
         const localizationOptions: DeepPartial<LocalizationOptions<Time>> = {
-            timeFormatter: (time: Time) => {
-                return formatChartTimeFull(time as UTCTimestamp);
-            },
+            timeFormatter: (time: Time) => formatChartTimeFull(time as UTCTimestamp),
         };
 
         chart = createChart(chartContainer, {
-            // Initial size based on container (which is window size at this point)
             width: chartContainer.clientWidth,
             height: chartContainer.clientHeight,
             layout: {
@@ -135,20 +157,43 @@
             wickDownColor: CHART_CONST.DOWN_COLOR,
         });
 
-        // 2. Fetch Data
+        // --- 1. Start WebSocket (Parallel) ---
+        // We start listening immediately. If history isn't ready, we buffer.
+        streamConnection = connectToStream(tokens, epic, (msg: QuoteMessage) => {
+            if (!historicalLoaded) {
+                liveBuffer.push(msg);
+            } else {
+                // Direct update
+                // Use BID to match historical data consistency
+                processTick(msg.payload.bid, msg.payload.timestamp);
+            }
+        });
+
+        // --- 2. Fetch Historical Data ---
         const data = await getHistoricalPrices(tokens, epic);
 
-        // 3. Populate
+        // --- 3. Populate Chart ---
         candleSeries.setData(data);
+
+        // Initialize currentCandle from the last historical entry
+        if (data.length > 0) {
+            currentCandle = data[data.length - 1];
+        }
+
+        historicalLoaded = true;
+
+        // --- 4. Process Buffer (Smooth Transition) ---
+        // Replay any ticks we missed while waiting for history
+        for (const msg of liveBuffer) {
+            processTick(msg.payload.bid, msg.payload.timestamp);
+        }
+        liveBuffer = []; // Clear buffer
+
         removeTradingViewLogo();
 
-        // 4. Update State and Layout
+        // --- 5. UI Layout Transition ---
         isDataLoaded = true;
-
-        // Wait for Svelte to render the TopBar into DOM
         await tick();
-
-        // Resize to stored dimensions and apply calculated scroll
         updateChartDimensions();
     });
 
@@ -156,6 +201,9 @@
         if (typeof window !== 'undefined') {
             window.removeEventListener(EVENTS.WINDOW_RESIZE, updateChartDimensions);
             window.removeEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, updateChartDimensions);
+        }
+        if (streamConnection) {
+            streamConnection.destroy();
         }
         if (chart) {
             chart.remove();
