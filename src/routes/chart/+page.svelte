@@ -2,12 +2,14 @@
     import { onMount, onDestroy } from 'svelte';
     import { page } from '$app/state';
     import { createChart, CandlestickSeries, ColorType } from 'lightweight-charts';
-    import type { IChartApi, ISeriesApi } from 'lightweight-charts';
+    import type { IChartApi, ISeriesApi, TimeScaleOptions, LocalizationOptions, DeepPartial, Time, UTCTimestamp } from 'lightweight-charts';
 
     import * as CHART_CONST from '$lib/constants/chart.js';
     import * as STORAGE from '$lib/constants/storage.js';
     import * as TRADING from '$lib/constants/trading.js';
     import { getHistoricalPrices } from "$lib/services/market";
+    import { formatTimestampToLocalTime, formatChartTimeFull } from "$lib/utils/time";
+    import { getTimeScaleHeight } from "$lib/utils/chart";
     import type { SessionTokens } from "$lib/types/auth";
 
     let chartContainer: HTMLDivElement;
@@ -29,6 +31,25 @@
         try {
             const data = await getHistoricalPrices(tokens, epic);
 
+            const timeScaleOptions: DeepPartial<TimeScaleOptions> = {
+                tickMarkFormatter: (time: Time) => {
+                    return formatTimestampToLocalTime(time as UTCTimestamp);
+                },
+                rightOffset: CHART_CONST.RIGHT_OFFSET,
+                barSpacing: CHART_CONST.BAR_SPACING,
+                minBarSpacing: CHART_CONST.MIN_BAR_SPACING,
+                borderColor: CHART_CONST.TIME_SCALE_BORDER_COLOR,
+                minimumHeight: getTimeScaleHeight(),
+                timeVisible: true,
+                secondsVisible: false,
+            };
+
+            const localizationOptions: DeepPartial<LocalizationOptions<Time>> = {
+                timeFormatter: (time: Time) => {
+                    return formatChartTimeFull(time as UTCTimestamp);
+                },
+            };
+
             chart = createChart(chartContainer, {
                 autoSize: true,
                 layout: {
@@ -39,10 +60,8 @@
                     vertLines: { color: CHART_CONST.GRID_COLOR },
                     horzLines: { color: CHART_CONST.GRID_COLOR },
                 },
-                timeScale: {
-                    timeVisible: true,
-                    secondsVisible: false,
-                }
+                timeScale: timeScaleOptions,
+                localization: localizationOptions
             });
 
             candleSeries = chart.addSeries(CandlestickSeries, {
