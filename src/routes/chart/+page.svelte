@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { page } from '$app/stores';
+    import { page } from '$app/state';
     import { createChart, CandlestickSeries, ColorType } from 'lightweight-charts';
     import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 
@@ -15,7 +15,7 @@
     let candleSeries: ISeriesApi<"Candlestick">;
     let errorMsg = $state("");
 
-    const epic = $page.url.searchParams.get('epic') || TRADING.BTCUSD_EPIC;
+    const epic = page.url.searchParams.get('epic') || TRADING.BTCUSD_EPIC;
 
     onMount(async () => {
         const tokensData = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);

@@ -1,3 +1,5 @@
+import type { UTCTimestamp } from 'lightweight-charts';
+
 export interface PriceComponent {
     bid: number;
     ask: number;
@@ -18,7 +20,7 @@ export interface MarketPriceResponse {
 }
 
 export interface ChartCandle {
-    time: number; // Unix timestamp in seconds
+    time: UTCTimestamp;
     open: number;
     high: number;
     low: number;

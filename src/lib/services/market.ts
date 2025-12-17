@@ -4,6 +4,7 @@ import { REAL_TYPE } from "$lib/constants/auth";
 import type { SessionTokens } from "$lib/types/auth";
 import type { MarketPriceResponse, ChartCandle } from "$lib/types/market";
 import { DEFAULT_ERROR } from "$lib/constants/error";
+import type { UTCTimestamp } from 'lightweight-charts';
 
 export async function getHistoricalPrices(
     tokens: SessionTokens,
@@ -33,10 +34,10 @@ export async function getHistoricalPrices(
     const data: MarketPriceResponse = await response.json();
 
     return data.prices.map(p => ({
-        time: new Date(p.snapshotTimeUTC).getTime() / 1000,
+        time: (new Date(p.snapshotTimeUTC).getTime() / 1000) as UTCTimestamp,
         open: p.openPrice.bid,
         high: p.highPrice.bid,
         low: p.lowPrice.bid,
         close: p.closePrice.bid
-    })).sort((a, b) => a.time - b.time);
+    })).sort((a, b) => (a.time as number) - (b.time as number));
 }
