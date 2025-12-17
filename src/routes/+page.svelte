@@ -3,6 +3,7 @@
 <nav style="margin: 2rem 0;">
     <ul style="display: flex; gap: 1rem; list-style: none; padding: 0;">
         <li><a href="/login">Login</a></li>
+        <li><a href="/chart">Chart</a></li>
         <li><a href="/hello">Backend Health</a></li>
         <li><a href="/manga">Manga</a></li>
     </ul>
