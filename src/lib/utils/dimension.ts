@@ -28,7 +28,7 @@ function scanDimensions() {
     localStorage.setItem(STORAGE.MAX_SHORT_KEY, savedShort.toString());
 }
 
-export function initViewportScanner() {
+export function viewportScanner() {
     if (typeof window === 'undefined') return () => {};
 
     // Run immediately

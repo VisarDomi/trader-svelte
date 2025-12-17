@@ -1,10 +1,10 @@
 <script lang="ts">
     import '$lib/styles.css';
-    import {initViewportScanner} from '$lib/dimensions/scanner.js';
+    import {viewportScanner} from '$lib/utils/dimension.js';
 
     let { children } = $props();
 
-    $effect(() => initViewportScanner());
+    $effect(() => viewportScanner());
 </script>
 
 <svelte:head>

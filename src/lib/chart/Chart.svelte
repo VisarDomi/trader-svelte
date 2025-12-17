@@ -25,7 +25,7 @@
 
         HELPER.removeTradingViewLogo();
 
-        series = null; // how to add this in chart v5? search google for how
+        series = null; // TODO: how to add this in chart v5? search google for how
 
         const res = await fetch(CHART.CHART_CANDLES_ENDPOINT);
         const data = await res.json() as { prices: CandlestickData[]};
