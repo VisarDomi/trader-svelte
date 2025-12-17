@@ -18,7 +18,7 @@
     let candleSeries: ISeriesApi<"Candlestick">;
     let errorMsg = $state("");
 
-    const epic = page.url.searchParams.get('epic') || TRADING.BTCUSD_EPIC;
+    const epic = page.url.searchParams.get('epic') || TRADING.NDX_EPIC;
 
     onMount(async () => {
         removeTradingViewLogo();
