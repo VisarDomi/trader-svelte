@@ -6,16 +6,30 @@
     import type { URL_TYPE } from "$lib/types/url";
     import { login } from "$lib/services/auth";
 
-    // 1. Single source of truth for Inputs
+    // Single source of truth for Inputs
     let identifier = $state("");
     let password = $state("");
     let apiKey = $state("");
 
-    // 2. Separate states for outputs
+    // Separate states for outputs
     let demoStatus = $state("Not Logged In");
     let realStatus = $state("Not Logged In");
     let demoTokens = $state<SessionTokens | null>(null);
     let realTokens = $state<SessionTokens | null>(null);
+
+    // Define the config map
+    const ENV_CONFIG = {
+        [AUTH_CONST.DEMO_TYPE]: {
+            storageKey: STORAGE.TOKENS_DEMO_KEY,
+            setStatus: (msg: string) => demoStatus = msg,
+            setTokens: (sessionTokens: SessionTokens | null) => demoTokens = sessionTokens
+        },
+        [AUTH_CONST.REAL_TYPE]: {
+            storageKey: STORAGE.TOKENS_REAL_KEY,
+            setStatus: (msg: string) => realStatus = msg,
+            setTokens: (sessionTokens: SessionTokens | null) => realTokens = sessionTokens
+        }
+    };
 
     onMount(() => {
         const storedCredentials = localStorage.getItem(STORAGE.USER_CREDENTIALS_KEY);
@@ -40,25 +54,16 @@
 
     async function performLogin(type: URL_TYPE) {
         saveInputs();
-
+        const config = ENV_CONFIG[type];
         try {
-            if (type === AUTH_CONST.DEMO_TYPE) {
-                demoStatus = "Logging in...";
-                const t = await login(type);
-                localStorage.setItem(STORAGE.TOKENS_DEMO_KEY, JSON.stringify(t));
-                demoTokens = t;
-                demoStatus = "Connected";
-            } else {
-                realStatus = "Logging in...";
-                const t = await login(type);
-                localStorage.setItem(STORAGE.TOKENS_REAL_KEY, JSON.stringify(t));
-                realTokens = t;
-                realStatus = "Connected";
-            }
+            config.setStatus("Logging in...");
+            const sessionTokens = await login(type);
+            localStorage.setItem(config.storageKey, JSON.stringify(sessionTokens));
+            config.setTokens(sessionTokens);
+            config.setStatus("Connected");
         } catch (e) {
             const msg = `Error: ${e instanceof Error ? e.message : String(e)}`;
-            if (type === AUTH_CONST.DEMO_TYPE) demoStatus = msg;
-            else realStatus = msg;
+            config.setStatus(msg);
             console.error(e);
         }
     }
@@ -102,7 +107,7 @@
         <h3>REAL (Charts)</h3>
         <p>Status: <strong>{realStatus}</strong></p>
         <button onclick={() => performLogin(AUTH_CONST.REAL_TYPE)}>Retry Real</button>
-        {#if realTokens}<div style="font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: green;">Token: {realTokens.cst.substring(0,10)}...</div>{/if}
+        {#if realTokens}<div style="font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: green;">Token: {realTokens.cst.substring(0,100)}...</div>{/if}
     </div>
 
     <!-- DEMO STATUS -->
@@ -110,7 +115,7 @@
         <h3>DEMO (Trading)</h3>
         <p>Status: <strong>{demoStatus}</strong></p>
         <button onclick={() => performLogin(AUTH_CONST.DEMO_TYPE)}>Retry Demo</button>
-        {#if demoTokens}<div style="font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: green;">Token: {demoTokens.cst.substring(0,10)}...</div>{/if}
+        {#if demoTokens}<div style="font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: green;">Token: {demoTokens.cst.substring(0,100)}...</div>{/if}
     </div>
 </div>
 
