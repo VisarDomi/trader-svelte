@@ -1,15 +1,19 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import * as STORAGE from '$lib/constants/storage.js';
+    import * as ENV from '$lib/constants/env.js';
     import * as AUTH_CONST from '$lib/constants/auth.js';
     import type { SessionTokens, UserCredentials } from "$lib/types/auth";
     import type { URL_TYPE } from "$lib/types/url";
     import { login } from "$lib/services/auth";
 
     // Single source of truth for Inputs
+    let apiKey = $state("");
     let identifier = $state("");
     let password = $state("");
-    let apiKey = $state("");
+    apiKey = ENV.ENV_APIKEY;
+    identifier = ENV.ENV_IDENTIFIER;
+    password = ENV.ENV_PASSWORD;
 
     // Separate states for outputs
     let demoStatus = $state("Not Logged In");
