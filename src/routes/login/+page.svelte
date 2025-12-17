@@ -1,87 +1,117 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { CREDENTIALS_KEY } from '$lib/constants/storage.js';
-    import type {AuthTokens, Credentials} from "$lib/types/auth";
+    import * as STORAGE from '$lib/constants/storage.js';
+    import * as AUTH_CONST from '$lib/constants/auth.js';
+    import type { SessionTokens, UserCredentials } from "$lib/types/auth";
     import type { URL_TYPE } from "$lib/types/url";
     import { login } from "$lib/services/auth";
-    import {DEMO_TYPE, REAL_TYPE} from "$lib/constants/auth";
 
-    let apiKey = $state("");
+    // 1. Single source of truth for Inputs
     let identifier = $state("");
     let password = $state("");
+    let apiKey = $state("");
 
-    let loginStatus = $state("Ready to login");
-    let tokens = $state<AuthTokens | null>(null);
+    // 2. Separate states for outputs
+    let demoStatus = $state("Not Logged In");
+    let realStatus = $state("Not Logged In");
+    let demoTokens = $state<SessionTokens | null>(null);
+    let realTokens = $state<SessionTokens | null>(null);
 
-    // Load credentials from LocalStorage on mount
     onMount(() => {
-        const stored = localStorage.getItem(CREDENTIALS_KEY);
-        if (stored) {
-            const creds = JSON.parse(stored);
-            apiKey = creds.apiKey || "";
-            identifier = creds.identifier || "";
-            password = creds.password || "";
-            loginStatus = "Credentials loaded from storage.";
+        const storedCredentials = localStorage.getItem(STORAGE.USER_CREDENTIALS_KEY);
+        if (storedCredentials) {
+            const c = JSON.parse(storedCredentials) as UserCredentials;
+            identifier = c.identifier;
+            password = c.password;
+            apiKey = c.apiKey;
         }
+
+        const demoTokensData = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
+        if (demoTokensData) demoTokens = JSON.parse(demoTokensData);
+
+        const realTokensData = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
+        if (realTokensData) realTokens = JSON.parse(realTokensData);
     });
 
-    function saveCredentials() {
-        const credentials: Credentials = {
-            apiKey,
-            identifier,
-            password
-        };
-        localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(credentials));
+    function saveInputs() {
+        const credentials: UserCredentials = { identifier, password, apiKey };
+        localStorage.setItem(STORAGE.USER_CREDENTIALS_KEY, JSON.stringify(credentials));
     }
 
-    async function handleLogin(type: URL_TYPE) {
-        saveCredentials();
+    async function performLogin(type: URL_TYPE) {
+        saveInputs();
 
         try {
-            loginStatus = `Logging into ${type}...`;
-            tokens = await login(type);
-            loginStatus = `Success: Logged into ${type}`;
+            if (type === AUTH_CONST.DEMO_TYPE) {
+                demoStatus = "Logging in...";
+                const t = await login(type);
+                localStorage.setItem(STORAGE.TOKENS_DEMO_KEY, JSON.stringify(t));
+                demoTokens = t;
+                demoStatus = "Connected";
+            } else {
+                realStatus = "Logging in...";
+                const t = await login(type);
+                localStorage.setItem(STORAGE.TOKENS_REAL_KEY, JSON.stringify(t));
+                realTokens = t;
+                realStatus = "Connected";
+            }
         } catch (e) {
+            const msg = `Error: ${e instanceof Error ? e.message : String(e)}`;
+            if (type === AUTH_CONST.DEMO_TYPE) demoStatus = msg;
+            else realStatus = msg;
             console.error(e);
-            loginStatus = `Error: ${e instanceof Error ? e.message : String(e)}`;
         }
+    }
+
+    async function loginBoth() {
+        await Promise.all([
+            performLogin(AUTH_CONST.REAL_TYPE),
+            performLogin(AUTH_CONST.DEMO_TYPE)
+        ]);
     }
 </script>
 
 <h1>Authentication</h1>
 
 <div style="max-width: 400px; display: flex; flex-direction: column; gap: 0.5rem;">
+    <p style="font-size: 0.8rem; color: #666;">
+        Enter your credentials once. These will be used to authenticate against both Real (for charts) and Demo (for trading).
+    </p>
+
     <label>
         API Key
-        <input type="text" bind:value={apiKey} placeholder="the apikey" style="width: 100%; padding: 8px;" />
+        <input type="text" bind:value={apiKey} placeholder="X-CAP-API-KEY" style="width: 100%; padding: 8px;" />
     </label>
     <label>
-        Identifier (User/Login ID/email)
-        <input type="text" bind:value={identifier} placeholder="e.g. user@example.com" style="width: 100%; padding: 8px;" />
+        Identifier
+        <input type="text" bind:value={identifier} placeholder="user@example.com" style="width: 100%; padding: 8px;" />
     </label>
-
     <label>
         Password
-        <input type="password" bind:value={password} placeholder="password of the key" style="width: 100%; padding: 8px;" />
+        <input type="password" bind:value={password} placeholder="password" style="width: 100%; padding: 8px;" />
     </label>
 
+    <button onclick={loginBoth} style="padding: 1rem; background-color: #26a69a; color: white; border: none; font-weight: bold; cursor: pointer;">
+        LOGIN TO BOTH
+    </button>
 </div>
 
-<div style="border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; border-radius: 8px;">
-    <p>Status: <strong>{loginStatus}</strong></p>
-
-    <div style="margin-top: 1rem; display: flex; gap: 1rem;">
-        <!-- These buttons now save credentials implicitly before logging in -->
-        <button onclick={() => handleLogin(DEMO_TYPE)}>Login DEMO</button>
-        <button onclick={() => handleLogin(REAL_TYPE)}>Login REAL</button>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2rem;">
+    <!-- REAL STATUS -->
+    <div style="border: 1px solid #26a69a; padding: 1rem; border-radius: 8px;">
+        <h3>REAL (Charts)</h3>
+        <p>Status: <strong>{realStatus}</strong></p>
+        <button onclick={() => performLogin(AUTH_CONST.REAL_TYPE)}>Retry Real</button>
+        {#if realTokens}<div style="font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: green;">Token: {realTokens.cst.substring(0,10)}...</div>{/if}
     </div>
 
-    {#if tokens}
-        <div style="margin-top: 1rem; background: #eee; padding: 1rem; border-radius: 4px; overflow-x: auto;">
-            <h3>Received Tokens:</h3>
-            <pre>{JSON.stringify(tokens, null, 2)}</pre>
-        </div>
-    {/if}
+    <!-- DEMO STATUS -->
+    <div style="border: 1px solid #ef5350; padding: 1rem; border-radius: 8px;">
+        <h3>DEMO (Trading)</h3>
+        <p>Status: <strong>{demoStatus}</strong></p>
+        <button onclick={() => performLogin(AUTH_CONST.DEMO_TYPE)}>Retry Demo</button>
+        {#if demoTokens}<div style="font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: green;">Token: {demoTokens.cst.substring(0,10)}...</div>{/if}
+    </div>
 </div>
 
 <p style="margin-top: 1rem;"><a href="/">← Back Home</a></p>

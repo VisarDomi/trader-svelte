@@ -1,12 +1,14 @@
 import * as API from "$lib/constants/api";
 
-export interface AuthTokens {
-    [API.CST_KEY]: string;
-    [API.X_SECURITY_TOKEN_KEY]: string;
+// What the user types in the UI
+export interface UserCredentials {
+    identifier: string;
+    password: string;
+    apiKey: string;
 }
 
-export interface Credentials {
-    apiKey:string;
-    password:string;
-    identifier:string;
+// What the API returns after login
+export interface SessionTokens {
+    [API.CST_KEY]: string;
+    [API.X_SECURITY_TOKEN_KEY]: string;
 }

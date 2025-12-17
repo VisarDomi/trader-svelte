@@ -1,6 +1,6 @@
-import * as STORAGE from '../constants/storage.js';
-import * as EVENT from '../constants/events.js';
-import * as VIEWPORT from '../constants/viewport.js';
+import {MAX_LONG_KEY, MAX_SHORT_KEY} from "$lib/constants/storage";
+import {TOO_MANY_PIXELS} from "$lib/constants/viewport";
+import {WINDOW_ORIENTATION_CHANGE, WINDOW_RESIZE} from "$lib/constants/events";
 
 function scanDimensions() {
     const sources = [
@@ -11,8 +11,8 @@ function scanDimensions() {
         { name: 'visualViewport', w: window.visualViewport?.width || 0, h: window.visualViewport?.height || 0 }
     ];
 
-    let savedLong = parseFloat(localStorage.getItem(STORAGE.MAX_LONG_KEY) || '0');
-    let savedShort = parseFloat(localStorage.getItem(STORAGE.MAX_SHORT_KEY) || '0');
+    let savedLong = parseFloat(localStorage.getItem(MAX_LONG_KEY) || '0');
+    let savedShort = parseFloat(localStorage.getItem(MAX_SHORT_KEY) || '0');
 
     sources.forEach(s => {
         if (!s.w || !s.h) return;
@@ -20,12 +20,12 @@ function scanDimensions() {
         const long = Math.max(s.w, s.h);
         const short = Math.min(s.w, s.h);
 
-        if (long > savedLong && long < VIEWPORT.TOO_MANY_PIXELS) savedLong = long;
-        if (short > savedShort && short < VIEWPORT.TOO_MANY_PIXELS) savedShort = short;
+        if (long > savedLong && long < TOO_MANY_PIXELS) savedLong = long;
+        if (short > savedShort && short < TOO_MANY_PIXELS) savedShort = short;
     });
 
-    localStorage.setItem(STORAGE.MAX_LONG_KEY, savedLong.toString());
-    localStorage.setItem(STORAGE.MAX_SHORT_KEY, savedShort.toString());
+    localStorage.setItem(MAX_LONG_KEY, savedLong.toString());
+    localStorage.setItem(MAX_SHORT_KEY, savedShort.toString());
 }
 
 export function viewportScanner() {
@@ -35,14 +35,14 @@ export function viewportScanner() {
     scanDimensions();
 
     // Attach listeners
-    window.addEventListener(EVENT.WINDOW_RESIZE, scanDimensions);
-    window.addEventListener(EVENT.WINDOW_ORIENTATION_CHANGE, scanDimensions);
-    window.visualViewport?.addEventListener(EVENT.WINDOW_RESIZE, scanDimensions);
+    window.addEventListener(WINDOW_RESIZE, scanDimensions);
+    window.addEventListener(WINDOW_ORIENTATION_CHANGE, scanDimensions);
+    window.visualViewport?.addEventListener(WINDOW_RESIZE, scanDimensions);
 
     // Return Cleanup Function
     return () => {
-        window.removeEventListener(EVENT.WINDOW_RESIZE, scanDimensions);
-        window.removeEventListener(EVENT.WINDOW_ORIENTATION_CHANGE, scanDimensions);
-        window.visualViewport?.removeEventListener(EVENT.WINDOW_RESIZE, scanDimensions);
+        window.removeEventListener(WINDOW_RESIZE, scanDimensions);
+        window.removeEventListener(WINDOW_ORIENTATION_CHANGE, scanDimensions);
+        window.visualViewport?.removeEventListener(WINDOW_RESIZE, scanDimensions);
     };
 }

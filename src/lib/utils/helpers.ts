@@ -1,8 +1,9 @@
-import * as CHART from '$lib/constants/chart.js';
-import * as STORAGE from "$lib/constants/storage.js";
-import * as AUTH from '$lib/constants/auth.js';
-import * as API from '$lib/constants/api.js';
 import type {URL_TYPE} from "$lib/types/url";
+import {DEFAULT_ERROR} from "$lib/constants/error";
+import {CHART_CONTAINER_ID} from "$lib/constants/chart";
+import {MAX_LONG_KEY, MAX_SHORT_KEY} from "$lib/constants/storage";
+import {DEMO_TYPE, REAL_TYPE} from "$lib/constants/auth";
+import {DEMO_BASE_URL, REAL_BASE_URL} from "$lib/constants/api";
 
 export function removeTradingViewLogo() {
     const delay = 100;
@@ -11,7 +12,7 @@ export function removeTradingViewLogo() {
 
     const tryToRemove = () => {
         attempts++;
-        const logo = document.getElementById(CHART.CHART_CONTAINER_ID)?.querySelector('a[href*="tradingview"]');
+        const logo = document.getElementById(CHART_CONTAINER_ID)?.querySelector('a[href*="tradingview"]');
         if (logo && logo.parentNode) {
             logo.parentNode.removeChild(logo);
             return;
@@ -27,8 +28,8 @@ export function getStoredDimensions() {
     const winW = window.innerWidth;
     const winH = window.innerHeight;
 
-    const storedLong = localStorage.getItem(STORAGE.MAX_LONG_KEY);
-    const storedShort = localStorage.getItem(STORAGE.MAX_SHORT_KEY);
+    const storedLong = localStorage.getItem(MAX_LONG_KEY);
+    const storedShort = localStorage.getItem(MAX_SHORT_KEY);
 
     if (!storedLong || !storedShort) {
         return { width: winW, height: winH };
@@ -48,11 +49,11 @@ export function getStoredDimensions() {
 
 export function getBaseUrl(type: URL_TYPE): string {
     switch (type) {
-        case AUTH.DEMO_TYPE:
-            return API.DEMO_BASE_URL;
-        case AUTH.REAL_TYPE:
-            return API.REAL_BASE_URL;
+        case DEMO_TYPE:
+            return DEMO_BASE_URL;
+        case REAL_TYPE:
+            return REAL_BASE_URL;
         default:
-            throw new Error(`Unsupported account type: ${type}`);
+            throw new Error(DEFAULT_ERROR);
     }
 }

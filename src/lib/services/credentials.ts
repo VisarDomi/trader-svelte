@@ -1,11 +1,11 @@
 import {DEFAULT_ERROR} from "$lib/constants/error";
-import type {Credentials} from "$lib/types/auth";
-import {CREDENTIALS_KEY} from "$lib/constants/storage";
+import type {UserCredentials} from "$lib/types/auth";
+import {USER_CREDENTIALS_KEY} from "$lib/constants/storage";
 
-export function getCredentials(): Credentials {
-    const credentialsData = localStorage.getItem(CREDENTIALS_KEY);
+export function getCredentials(): UserCredentials {
+    const credentialsData = localStorage.getItem(USER_CREDENTIALS_KEY);
     if (credentialsData) {
-        const credentials: Credentials = JSON.parse(credentialsData);
+        const credentials: UserCredentials = JSON.parse(credentialsData);
         if (credentials?.apiKey && credentials?.password && credentials?.identifier) {
             return credentials;
         }

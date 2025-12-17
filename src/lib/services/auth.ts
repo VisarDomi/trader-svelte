@@ -1,12 +1,12 @@
 import * as API from '$lib/constants/api.js';
-import {getBaseUrl} from "$lib/utils/helpers";
-import type {URL_TYPE} from "$lib/types/url";
-import type {AuthTokens} from "$lib/types/auth";
-import {DEFAULT_ERROR} from "$lib/constants/error";
+import { getBaseUrl } from "$lib/utils/helpers";
+import type { URL_TYPE } from "$lib/types/url";
+import type { SessionTokens, UserCredentials } from "$lib/types/auth";
+import { DEFAULT_ERROR } from "$lib/constants/error";
 import {getCredentials} from "$lib/services/credentials";
 
-export async function login(type: URL_TYPE): Promise<AuthTokens> {
-    const credentials = getCredentials();
+export async function login(type: URL_TYPE): Promise<SessionTokens> {
+    const credentials: UserCredentials = getCredentials();
     const baseUrl = getBaseUrl(type);
     const url = `${baseUrl}${API.SESSION_ENDPOINT}`;
 
