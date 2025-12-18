@@ -1,9 +1,10 @@
 import { goto } from '$app/navigation';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
-import { getAccounts } from '$lib/services/account.js';
+import { getAccounts, switchAccount } from '$lib/services/account.js';
 import type { Account } from '$lib/types/account.js';
 import type { SessionTokens } from '$lib/types/auth.js';
+import type { URL_TYPE } from '$lib/types/url.js';
 
 export class Accounts {
     realAccounts = $state<Account[]>([]);
@@ -14,7 +15,10 @@ export class Accounts {
     async init() {
         this.isLoading = true;
         this.error = '';
+        await this.loadData();
+    }
 
+    private async loadData() {
         const realTokensStr = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
         const demoTokensStr = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
 
@@ -37,6 +41,33 @@ export class Accounts {
         } catch (e) {
             this.error = e instanceof Error ? e.message : String(e);
         } finally {
+            this.isLoading = false;
+        }
+    }
+
+    async switchTo(account: Account, type: URL_TYPE) {
+        this.isLoading = true;
+        this.error = '';
+
+        const storageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
+        const tokensStr = localStorage.getItem(storageKey);
+
+        if (!tokensStr) {
+            this.error = "No session tokens found.";
+            this.isLoading = false;
+            return;
+        }
+
+        try {
+            const currentTokens: SessionTokens = JSON.parse(tokensStr);
+            const newTokens = await switchAccount(type, currentTokens, account.accountId);
+
+            localStorage.setItem(storageKey, JSON.stringify(newTokens));
+
+            await this.loadData();
+            alert(`Switched to ${account.accountName}`);
+        } catch (e) {
+            this.error = e instanceof Error ? e.message : String(e);
             this.isLoading = false;
         }
     }

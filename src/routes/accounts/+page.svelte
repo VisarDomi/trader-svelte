@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { Accounts } from './logic.svelte.js';
+    import * as AUTH from '$lib/constants/auth.js';
 
     const accounts = new Accounts();
 
@@ -12,11 +13,14 @@
 <div style="padding: 1rem; max-width: 800px; margin: 0 auto;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h1>Accounts</h1>
-        <a href="/" style="color: #d1d4dc;">← Back</a>
+        <div style="display: flex; gap: 1rem;">
+            <a href="/preferences" style="color: #26a69a;">Preferences</a>
+            <a href="/" style="color: #d1d4dc;">← Back</a>
+        </div>
     </div>
 
     {#if accounts.isLoading}
-        <p>Loading accounts...</p>
+        <p>Loading...</p>
     {:else if accounts.error}
         <div style="color: #ef5350; border: 1px solid #ef5350; padding: 1rem; border-radius: 4px;">
             {accounts.error}
@@ -33,10 +37,22 @@
                 {:else}
                     <div style="display: grid; gap: 1rem;">
                         {#each accounts.realAccounts as account}
-                            <div style="background: #1a1a1a; padding: 1rem; border-radius: 8px; border: 1px solid #333;">
+                            <div style="background: #1a1a1a; padding: 1rem; border-radius: 8px; border: 1px solid #333; {account.preferred ? 'border-color: #26a69a;' : ''}">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
                                     <span style="font-weight: bold;">{account.accountName} ({account.currency})</span>
-                                    <span style="font-size: 0.8em; color: #888;">{account.status}</span>
+                                    <div style="display: flex; gap: 1rem; align-items: center;">
+                                        <span style="font-size: 0.8em; color: #888;">{account.status}</span>
+                                        {#if !account.preferred}
+                                            <button
+                                                    onclick={() => accounts.switchTo(account, AUTH.REAL_TYPE)}
+                                                    style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
+                                            >
+                                                Switch
+                                            </button>
+                                        {:else}
+                                            <span style="font-size: 0.8rem; color: #26a69a;">Active</span>
+                                        {/if}
+                                    </div>
                                 </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9rem;">
                                     <div>
@@ -73,10 +89,22 @@
                 {:else}
                     <div style="display: grid; gap: 1rem;">
                         {#each accounts.demoAccounts as account}
-                            <div style="background: #1a1a1a; padding: 1rem; border-radius: 8px; border: 1px solid #333;">
+                            <div style="background: #1a1a1a; padding: 1rem; border-radius: 8px; border: 1px solid #333; {account.preferred ? 'border-color: #ef5350;' : ''}">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
                                     <span style="font-weight: bold;">{account.accountName} ({account.currency})</span>
-                                    <span style="font-size: 0.8em; color: #888;">{account.status}</span>
+                                    <div style="display: flex; gap: 1rem; align-items: center;">
+                                        <span style="font-size: 0.8em; color: #888;">{account.status}</span>
+                                        {#if !account.preferred}
+                                            <button
+                                                    onclick={() => accounts.switchTo(account, AUTH.DEMO_TYPE)}
+                                                    style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
+                                            >
+                                                Switch
+                                            </button>
+                                        {:else}
+                                            <span style="font-size: 0.8rem; color: #ef5350;">Active</span>
+                                        {/if}
+                                    </div>
                                 </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9rem;">
                                     <div>
