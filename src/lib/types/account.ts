@@ -1,4 +1,11 @@
-export type LeverageCategory = 'SHARES' | 'CURRENCIES' | 'INDICES' | 'CRYPTOCURRENCIES' | 'COMMODITIES';
+export type LeverageCategory =
+    | 'SHARES'
+    | 'CURRENCIES'
+    | 'INDICES'
+    | 'CRYPTOCURRENCIES'
+    | 'COMMODITIES'
+    | 'INTEREST_RATES'
+    | 'BONDS';
 
 export interface Account {
     accountId: string;
