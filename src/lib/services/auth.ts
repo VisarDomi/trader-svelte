@@ -1,5 +1,5 @@
 import * as API from '$lib/constants/api.js';
-import * as AUTH_CONST from '$lib/constants/auth.js';
+import * as AUTH from '$lib/constants/auth.js';
 import * as STORAGE from '$lib/constants/storage.js';
 import { getBaseUrl } from "$lib/utils/helpers.js";
 import type { URL_TYPE } from "$lib/types/url.js";
@@ -56,8 +56,8 @@ export async function authenticateAndStoreSession(): Promise<void> {
     }
 
     const [realTokens, demoTokens] = await Promise.all([
-        login(AUTH_CONST.REAL_TYPE),
-        login(AUTH_CONST.DEMO_TYPE)
+        login(AUTH.REAL_TYPE),
+        login(AUTH.DEMO_TYPE)
     ]);
 
     localStorage.setItem(STORAGE.TOKENS_REAL_KEY, JSON.stringify(realTokens));
@@ -89,17 +89,17 @@ export function startRestHeartbeat() {
 
         if (realTokensStr) {
             const tokens = JSON.parse(realTokensStr);
-            promises.push(ping(AUTH_CONST.REAL_TYPE, tokens).catch(console.error));
+            promises.push(ping(AUTH.REAL_TYPE, tokens).catch(console.error));
         }
 
         if (demoTokensStr) {
             const tokens = JSON.parse(demoTokensStr);
-            promises.push(ping(AUTH_CONST.DEMO_TYPE, tokens).catch(console.error));
+            promises.push(ping(AUTH.DEMO_TYPE, tokens).catch(console.error));
         }
 
         await Promise.all(promises);
 
-    }, 300000);
+    }, AUTH.PING_INTERVAL);
 
     return () => clearInterval(intervalId);
 }
