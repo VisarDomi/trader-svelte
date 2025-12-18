@@ -17,6 +17,7 @@ import {
 import { DateTime } from "luxon";
 import * as CHART_CONST from "$lib/constants/chart.js";
 import { formatTimestampToLocalTime } from "$lib/utils/time.js";
+import {RIGHT_OFFSET} from "$lib/constants/chart.js";
 
 export function getTimeScaleHeight(): number {
     if (typeof window === 'undefined') return 50;
@@ -56,7 +57,7 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
         tickMarkFormatter: (time: Time) => {
             return formatTimestampToLocalTime(time as UTCTimestamp);
         },
-        rightOffset: 0,
+        rightOffset: RIGHT_OFFSET,
         barSpacing: isMobile ? CHART_CONST.MOBILE_BAR_SPACING : CHART_CONST.BAR_SPACING,
         minBarSpacing: CHART_CONST.MIN_BAR_SPACING,
         borderColor: CHART_CONST.BORDER_COLOR,

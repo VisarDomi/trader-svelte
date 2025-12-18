@@ -11,7 +11,6 @@ export const CROSSHAIR_COLOR = '#808080';
 export const CROSSHAIR_LABEL_BG = '#696969';
 export const BORDER_COLOR = '#3e3e47';
 
-export const TIME_SCALE_HEIGHT = 26;
 export const RIGHT_OFFSET = 5;
 export const BAR_SPACING = 10;
 export const MIN_BAR_SPACING = 1;
