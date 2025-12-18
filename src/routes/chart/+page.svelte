@@ -1,132 +1,44 @@
 <script lang="ts">
-    import { onMount, onDestroy, tick } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { goto } from '$app/navigation';
+    import { page } from '$app/state';
+
+    // Logic Classes
+    import { ChartUI } from './ui.svelte.js';
+    import { ChartFeed } from './feed.svelte.js';
+
+    // Lib Services/Constants
     import * as STORAGE from '$lib/constants/storage.js';
     import * as TRADING from '$lib/constants/trading.js';
     import * as CHART_CONST from '$lib/constants/chart.js';
-    import * as EVENTS from '$lib/constants/events.js';
     import { authenticateAndStoreSession } from "$lib/services/auth";
-    import { page } from '$app/state';
-    import { createChart, CandlestickSeries } from 'lightweight-charts';
-    import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
-    import { getHistoricalPrices } from "$lib/services/market";
-    import { connectToStream } from "$lib/services/stream";
-    import { getChartOptions, getBaseSeriesOptions, getTimeScaleHeight } from "$lib/utils/chart";
-    import { getStoredDimensions, removeTradingViewLogo } from "$lib/utils/helpers";
-    import { isIOS } from "$lib/utils/platform";
-    import type { SessionTokens } from "$lib/types/auth";
-    import type { ChartCandle, QuoteMessage } from "$lib/types/market";
     import { DEFAULT_ERROR } from "$lib/constants/error";
+    import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart";
+    import type { SessionTokens } from "$lib/types/auth";
 
+    // Charting Lib
+    import { createChart, CandlestickSeries } from 'lightweight-charts';
+    import type { IChartApi } from 'lightweight-charts';
+
+    // State & Config
     let chartContainer: HTMLDivElement;
     let chart: IChartApi;
-    let candleSeries: ISeriesApi<"Candlestick">;
-    let streamConnection: { destroy: () => void } | null = null;
 
-    let isDataLoaded = false;
-    let historicalLoaded = false;
-
-    let isIosDevice = false;
-
-    let liveBuffer: QuoteMessage[] = [];
-    let currentCandle: ChartCandle | null = null;
-
-    const TOPBAR_HEIGHT = 200;
+    const layout = new ChartUI();
+    const feed = new ChartFeed();
 
     const paramEpic = page.url.searchParams.get('epic');
     const epic = paramEpic || TRADING.NDX_EPIC;
 
-    function getScrollTarget(chartH: number, winH: number): number {
-        return TOPBAR_HEIGHT + (chartH - winH);
-    }
-
-    function updateChartDimensions() {
-        if (!chartContainer || !chart) return;
-
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight;
-
-        let width: number;
-        let height: number;
-
-        if (isIosDevice && isDataLoaded) {
-            const dims = getStoredDimensions();
-            width = dims.width;
-            height = dims.height;
-        } else {
-            width = windowWidth;
-            height = windowHeight;
-        }
-
-        chartContainer.style.width = `${width}px`;
-        chartContainer.style.height = `${height}px`;
-        chart.resize(width, height);
-
-        const isMobile = windowWidth <= 768;
-        chart.applyOptions({
-            timeScale: {
-                minimumHeight: getTimeScaleHeight(),
-                barSpacing: isMobile ? CHART_CONST.MOBILE_BAR_SPACING : CHART_CONST.BAR_SPACING
-            }
-        });
-
-        if (isIosDevice && isDataLoaded) {
-            const scrollTarget = getScrollTarget(height, windowHeight);
-            window.scrollTo({
-                top: scrollTarget,
-                behavior: 'instant'
-            });
-        }
-    }
-
-    function handleScroll() {
-        if (!isIosDevice || !isDataLoaded) return;
-
-        const chartH = chartContainer.clientHeight;
-        const winH = window.innerHeight;
-        const target = getScrollTarget(chartH, winH);
-
-        if (window.scrollY < target) {
-            window.scrollTo({
-                top: target,
-                behavior: 'smooth'
-            });
-        }
-    }
-
-    function processTick(price: number, timestampMs: number) {
-        if (!candleSeries) return;
-
-        const time = (Math.floor(timestampMs / 1000 / 60) * 60) as UTCTimestamp;
-
-        if (!currentCandle) {
-            currentCandle = { time, open: price, high: price, low: price, close: price };
-        } else if (time === currentCandle.time) {
-            currentCandle.high = Math.max(currentCandle.high, price);
-            currentCandle.low = Math.min(currentCandle.low, price);
-            currentCandle.close = price;
-        } else if (time > currentCandle.time) {
-            currentCandle = {
-                time,
-                open: price,
-                high: price,
-                low: price,
-                close: price
-            };
-        }
-
-        candleSeries.update(currentCandle);
-    }
-
     onMount(async () => {
-        isIosDevice = isIOS();
-
+        // 1. URL Consistency
         if (!paramEpic) {
             const newUrl = new URL(page.url);
             newUrl.searchParams.set('epic', epic);
-            void goto(newUrl, { replaceState: true });
+            goto(newUrl, { replaceState: true });
         }
 
+        // 2. Auth Gate
         try {
             await authenticateAndStoreSession();
         } catch (ignore) {
@@ -134,76 +46,37 @@
             return;
         }
 
-        const initialWidth = window.innerWidth;
-        const initialHeight = window.innerHeight;
+        // 3. Initialize Chart
+        // Use window dims for initial render, layout class will adjust later
+        const w = window.innerWidth;
+        const h = window.innerHeight;
 
-        chartContainer.style.width = `${initialWidth}px`;
-        chartContainer.style.height = `${initialHeight}px`;
+        chart = createChart(chartContainer, getChartOptions(w, h));
+        const series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(TRADING.NDX_PRICE_PRECISION));
 
-        window.addEventListener(EVENTS.WINDOW_RESIZE, updateChartDimensions);
-        window.addEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, updateChartDimensions);
-
-        if (isIosDevice) {
-            window.addEventListener('scroll', handleScroll);
-        }
+        // 4. Initialize Logic Controllers
+        layout.init(chart, chartContainer);
 
         const tokensData = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
         if (!tokensData) throw new Error(DEFAULT_ERROR);
         const tokens: SessionTokens = JSON.parse(tokensData);
 
-        const chartOptions = getChartOptions(initialWidth, initialHeight);
-        chart = createChart(chartContainer, chartOptions);
+        await feed.init(tokens, epic, series);
 
-        const seriesOptions = getBaseSeriesOptions(TRADING.NDX_PRICE_PRECISION);
-        candleSeries = chart.addSeries(CandlestickSeries, seriesOptions);
-
-        streamConnection = connectToStream(tokens, epic, (msg: QuoteMessage) => {
-            if (!historicalLoaded) {
-                liveBuffer.push(msg);
-            } else {
-                processTick(msg.payload.bid, msg.payload.timestamp);
-            }
-        });
-
-        const data = await getHistoricalPrices(tokens, epic);
-
-        candleSeries.setData(data);
-
-        if (data.length > 0) {
-            currentCandle = data[data.length - 1];
-        }
-
-        historicalLoaded = true;
-
-        for (const msg of liveBuffer) {
-            processTick(msg.payload.bid, msg.payload.timestamp);
-        }
-        liveBuffer = [];
-
-        removeTradingViewLogo();
-
-        isDataLoaded = true;
-        await tick();
-
-        updateChartDimensions();
+        // 5. Signal Ready
+        layout.setDataLoaded(true);
     });
 
     onDestroy(() => {
-        if (typeof window !== 'undefined') {
-            window.removeEventListener(EVENTS.WINDOW_RESIZE, updateChartDimensions);
-            window.removeEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, updateChartDimensions);
-            window.removeEventListener('scroll', handleScroll);
-        }
-        if (streamConnection) {
-            streamConnection.destroy();
-        }
+        layout.destroy();
+        feed.destroy();
         if (chart) {
             chart.remove();
         }
     });
 </script>
 
-{#if isDataLoaded && isIosDevice}
+{#if layout.isDataLoaded && layout.isIosDevice}
     <div
             id={CHART_CONST.TOPBAR_ID}
             style="height: {CHART_CONST.TOPBAR_HEIGHT}px; background-color: {CHART_CONST.BACKGROUND_COLOR};"
@@ -211,4 +84,8 @@
     </div>
 {/if}
 
+<!--
+    We bind chartContainer so the logic classes can manipulate it.
+    The ID is kept for global CSS/Hack references if needed
+-->
 <div bind:this={chartContainer} id={CHART_CONST.CHART_CONTAINER_ID}></div>
