@@ -1,5 +1,3 @@
-<h1>Manga Reader</h1>
-
 <div>
     <img src="/1.png" alt="manga page 1">
     <img src="/2.png" alt="manga page 2">
