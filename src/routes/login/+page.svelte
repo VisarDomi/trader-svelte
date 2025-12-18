@@ -2,7 +2,9 @@
     import { onMount } from 'svelte';
     import { Login } from './logic.svelte.js';
     const login = new Login();
-    onMount(login.init);
+    onMount(() => {
+        login.init();
+    });
 </script>
 
 <h1>Authentication</h1>

@@ -5,7 +5,7 @@ import { getAccounts } from '$lib/services/account';
 import type { Account } from '$lib/types/account';
 import type { SessionTokens } from '$lib/types/auth';
 
-export class AccountsLogic {
+export class Accounts {
     realAccounts = $state<Account[]>([]);
     demoAccounts = $state<Account[]>([]);
     isLoading = $state(true);

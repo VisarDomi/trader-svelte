@@ -1,11 +1,11 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { AccountsLogic } from './logic.svelte.js';
+    import { Accounts } from './logic.svelte.js';
 
-    const logic = new AccountsLogic();
+    const accounts = new Accounts();
 
     onMount(() => {
-        logic.init();
+        accounts.init();
     });
 </script>
 
@@ -15,11 +15,11 @@
         <a href="/" style="color: #d1d4dc;">← Back</a>
     </div>
 
-    {#if logic.isLoading}
+    {#if accounts.isLoading}
         <p>Loading accounts...</p>
-    {:else if logic.error}
+    {:else if accounts.error}
         <div style="color: #ef5350; border: 1px solid #ef5350; padding: 1rem; border-radius: 4px;">
-            {logic.error}
+            {accounts.error}
         </div>
     {:else}
         <div style="display: flex; flex-direction: column; gap: 2rem;">
@@ -28,11 +28,11 @@
                 <h2 style="color: #26a69a; border-bottom: 1px solid #26a69a; padding-bottom: 0.5rem; margin-bottom: 1rem;">
                     Real Accounts
                 </h2>
-                {#if logic.realAccounts.length === 0}
+                {#if accounts.realAccounts.length === 0}
                     <p>No real accounts found.</p>
                 {:else}
                     <div style="display: grid; gap: 1rem;">
-                        {#each logic.realAccounts as account}
+                        {#each accounts.realAccounts as account}
                             <div style="background: #1a1a1a; padding: 1rem; border-radius: 8px; border: 1px solid #333;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
                                     <span style="font-weight: bold;">{account.accountName} ({account.currency})</span>
@@ -68,11 +68,11 @@
                 <h2 style="color: #ef5350; border-bottom: 1px solid #ef5350; padding-bottom: 0.5rem; margin-bottom: 1rem;">
                     Demo Accounts
                 </h2>
-                {#if logic.demoAccounts.length === 0}
+                {#if accounts.demoAccounts.length === 0}
                     <p>No demo accounts found.</p>
                 {:else}
                     <div style="display: grid; gap: 1rem;">
-                        {#each logic.demoAccounts as account}
+                        {#each accounts.demoAccounts as account}
                             <div style="background: #1a1a1a; padding: 1rem; border-radius: 8px; border: 1px solid #333;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
                                     <span style="font-weight: bold;">{account.accountName} ({account.currency})</span>
