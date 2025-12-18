@@ -1,6 +1,5 @@
 import type {URL_TYPE} from "$lib/types/url.js";
 import {DEFAULT_ERROR} from "$lib/constants/error.js";
-import {CHART_CONTAINER_ID} from "$lib/constants/chart.js";
 import {MAX_LONG_KEY, MAX_SHORT_KEY} from "$lib/constants/storage.js";
 import {DEMO_TYPE, REAL_TYPE} from "$lib/constants/auth.js";
 import {DEMO_BASE_URL, REAL_BASE_URL} from "$lib/constants/api.js";
@@ -12,7 +11,7 @@ export function removeTradingViewLogo() {
 
     const tryToRemove = () => {
         attempts++;
-        const logo = document.getElementById(CHART_CONTAINER_ID)?.querySelector('a[href*="tradingview"]');
+        const logo = document.querySelector('a[href*="tradingview"]');
         if (logo && logo.parentNode) {
             logo.parentNode.removeChild(logo);
             return;
@@ -38,9 +37,7 @@ export function getStoredDimensions() {
     const maxLong = parseFloat(storedLong);
     const maxShort = parseFloat(storedShort);
 
-    // Determine orientation based on current window state
     const isLandscape = winW > winH;
-
     return {
         width: isLandscape ? maxLong : maxShort,
         height: isLandscape ? maxShort : maxLong

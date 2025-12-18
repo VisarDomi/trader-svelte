@@ -7,6 +7,7 @@
     import { ChartUI } from './ui.svelte.js';
     import { ChartFeed } from './feed.svelte.js';
     import * as STORAGE from '$lib/constants/storage.js';
+    import * as API from '$lib/constants/api.js';
     import * as TRADING from '$lib/constants/trading.js';
     import * as CHART_CONST from '$lib/constants/chart.js';
     import { authenticateAndStoreSession } from "$lib/services/auth.js";
@@ -20,13 +21,13 @@
     const layout = new ChartUI();
     const feed = new ChartFeed();
 
-    const paramEpic = page.url.searchParams.get('epic');
+    const paramEpic = page.url.searchParams.get(API.EPIC_KEY);
     const epic = paramEpic || TRADING.NDX_EPIC;
 
     onMount(async () => {
         if (!paramEpic) {
             const newUrl = new URL(page.url);
-            newUrl.searchParams.set('epic', epic);
+            newUrl.searchParams.set(API.EPIC_KEY, epic);
             void goto(newUrl, { replaceState: true });
         }
 

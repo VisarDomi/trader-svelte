@@ -50,7 +50,7 @@ export async function authenticateAndStoreSession(): Promise<void> {
     if (timestampStr && realTokensStr && demoTokensStr) {
         const timestamp = parseInt(timestampStr, 10);
         const now = Date.now();
-        if (now - timestamp < 60000) {
+        if (now - timestamp < AUTH.REST_PING_INTERVAL) {
             return;
         }
     }
@@ -99,7 +99,7 @@ export function startRestHeartbeat() {
 
         await Promise.all(promises);
 
-    }, AUTH.PING_INTERVAL);
+    }, AUTH.REST_PING_INTERVAL);
 
     return () => clearInterval(intervalId);
 }

@@ -15,9 +15,9 @@ import {
     type CrosshairOptions
 } from "lightweight-charts";
 import { DateTime } from "luxon";
-import * as CHART_CONST from "$lib/constants/chart.js";
 import { formatTimestampToLocalTime } from "$lib/utils/time.js";
-import {RIGHT_OFFSET} from "$lib/constants/chart.js";
+import * as CHART from "$lib/constants/chart.js";
+import * as TIME from "$lib/constants/time";
 
 export function getTimeScaleHeight(): number {
     if (typeof window === 'undefined') return 50;
@@ -39,14 +39,14 @@ export function getBaseSeriesOptions(pricePrecision: number): CandlestickSeriesP
         priceFormat: {
             minMove: 1 / pricePrecision,
             precision: Math.log10(pricePrecision),
-            type: 'price'
+            type: CHART.PRICE_FORMAT_TYPE
         },
-        upColor: CHART_CONST.UP_COLOR,
-        downColor: CHART_CONST.DOWN_COLOR,
+        upColor: CHART.UP_COLOR,
+        downColor: CHART.DOWN_COLOR,
         borderVisible: false,
-        wickUpColor: CHART_CONST.UP_COLOR,
-        wickDownColor: CHART_CONST.DOWN_COLOR,
-        title: "Current Price",
+        wickUpColor: CHART.UP_COLOR,
+        wickDownColor: CHART.DOWN_COLOR,
+        title: CHART.BASE_SERIES_TITLE,
     };
 }
 
@@ -57,10 +57,10 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
         tickMarkFormatter: (time: Time) => {
             return formatTimestampToLocalTime(time as UTCTimestamp);
         },
-        rightOffset: RIGHT_OFFSET,
-        barSpacing: isMobile ? CHART_CONST.MOBILE_BAR_SPACING : CHART_CONST.BAR_SPACING,
-        minBarSpacing: CHART_CONST.MIN_BAR_SPACING,
-        borderColor: CHART_CONST.BORDER_COLOR,
+        rightOffset: CHART.RIGHT_OFFSET,
+        barSpacing: isMobile ? CHART.MOBILE_BAR_SPACING : CHART.BAR_SPACING,
+        minBarSpacing: CHART.MIN_BAR_SPACING,
+        borderColor: CHART.BORDER_COLOR,
         minimumHeight: getTimeScaleHeight(),
         timeVisible: true,
         secondsVisible: false,
@@ -69,44 +69,44 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
     const localization: DeepPartial<LocalizationOptions<Time>> = {
         timeFormatter: (time: Time) => {
             const wsTime = DateTime.fromSeconds(time as number, { zone: "system" });
-            return wsTime.toFormat("yyyy-MM-dd HH:mm");
+            return wsTime.toFormat(TIME.DATETIME_FORMAT);
         },
     };
 
     const rightPriceScale: DeepPartial<VisiblePriceScaleOptions> = {
-        borderColor: CHART_CONST.BORDER_COLOR,
+        borderColor: CHART.BORDER_COLOR,
         visible: true,
     };
 
     const crosshair: DeepPartial<CrosshairOptions> = {
         mode: CrosshairMode.Normal,
         vertLine: {
-            color: CHART_CONST.CROSSHAIR_COLOR,
+            color: CHART.CROSSHAIR_COLOR,
             style: LineStyle.LargeDashed,
-            labelBackgroundColor: CHART_CONST.CROSSHAIR_LABEL_BG,
+            labelBackgroundColor: CHART.CROSSHAIR_LABEL_BG,
         },
         horzLine: {
-            color: CHART_CONST.CROSSHAIR_COLOR,
+            color: CHART.CROSSHAIR_COLOR,
             style: LineStyle.LargeDashed,
-            labelBackgroundColor: CHART_CONST.CROSSHAIR_LABEL_BG,
+            labelBackgroundColor: CHART.CROSSHAIR_LABEL_BG,
         },
     };
 
     const grid: DeepPartial<GridOptions> = {
         vertLines: {
-            color: CHART_CONST.GRID_COLOR,
+            color: CHART.GRID_COLOR,
         },
         horzLines: {
-            color: CHART_CONST.GRID_COLOR,
+            color: CHART.GRID_COLOR,
         },
     };
 
     const layout: DeepPartial<LayoutOptions> = {
         background: {
             type: ColorType.Solid,
-            color: CHART_CONST.BACKGROUND_COLOR,
+            color: CHART.BACKGROUND_COLOR,
         },
-        textColor: CHART_CONST.TEXT_COLOR,
+        textColor: CHART.TEXT_COLOR,
     };
 
     return {

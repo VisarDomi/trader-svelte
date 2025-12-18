@@ -1,4 +1,5 @@
 import * as API from '$lib/constants/api.js';
+import * as AUTH from "$lib/constants/auth";
 import type { SessionTokens } from "$lib/types/auth.js";
 import type { QuoteMessage, WebSocketPayload } from "$lib/types/market.js";
 
@@ -14,19 +15,17 @@ export function connectToStream(
     let pingInterval: ReturnType<typeof setInterval>;
 
     ws.onopen = () => {
-        // 1. Subscribe to Market Data
         const subscribeRequest: WebSocketPayload = {
             destination: API.MARKET_DATA_DESTINATION,
             correlationId: API.MARKET_DATA_CORRELATION_ID,
             cst: tokens[API.CST_KEY],
             securityToken: tokens[API.X_SECURITY_TOKEN_KEY],
             payload: {
-                epics: [epic]
+                [API.EPICS_KEY]: [epic]
             }
         };
         ws.send(JSON.stringify(subscribeRequest));
 
-        // 2. Setup Heartbeat (every 60s)
         pingInterval = setInterval(() => {
             const pingRequest: WebSocketPayload = {
                 destination: API.PING_DESTINATION,
@@ -37,7 +36,7 @@ export function connectToStream(
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify(pingRequest));
             }
-        }, 60000);
+        }, AUTH.SESSION_PING_INTERVAL);
     };
 
     ws.onmessage = (event) => {
@@ -45,7 +44,7 @@ export function connectToStream(
             const data = JSON.parse(event.data);
 
             // Filter for actual price quotes
-            if (data.destination === 'quote' && data.payload && data.payload.epic === epic) {
+            if (data.destination === API.DATA_DESTINATION_QUOTE && data.payload && data.payload[API.EPIC_KEY] === epic) {
                 onPriceUpdate(data as QuoteMessage);
             }
         } catch (err) {

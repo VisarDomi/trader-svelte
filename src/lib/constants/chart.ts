@@ -15,3 +15,6 @@ export const RIGHT_OFFSET = 5;
 export const BAR_SPACING = 10;
 export const MIN_BAR_SPACING = 1;
 export const MOBILE_BAR_SPACING = 6;
+
+export const PRICE_FORMAT_TYPE = "price";
+export const BASE_SERIES_TITLE = "Current Price";

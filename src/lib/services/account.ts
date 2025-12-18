@@ -29,7 +29,6 @@ export async function getAccounts(type: URL_TYPE, tokens: SessionTokens): Promis
 export async function switchAccount(type: URL_TYPE, tokens: SessionTokens, accountId: string): Promise<SessionTokens> {
     const brokerUrl = `${getBaseUrl(type)}${API.SESSION_ENDPOINT}`;
 
-    // Payload for the Node Backend Proxy
     const payload = {
         url: brokerUrl,
         sessionTokens: tokens,
@@ -39,7 +38,7 @@ export async function switchAccount(type: URL_TYPE, tokens: SessionTokens, accou
     const response = await fetch(`${BACKEND.URL}${BACKEND.ACCOUNTS_PROXY}`, {
         method: API.PUT_METHOD,
         headers: {
-            'Content-Type': 'application/json'
+            [API.CONTENT_TYPE_KEY]: API.APPLICATION_JSON_CONTENT_TYPE
         },
         body: JSON.stringify(payload)
     });
@@ -79,8 +78,6 @@ export async function updatePreferences(
 ): Promise<PreferencesUpdateResponse> {
     const brokerUrl = `${getBaseUrl(type)}${API.PREFERENCES_ENDPOINT}`;
 
-    // Payload for the Node Backend Proxy
-    // The Proxy unpacks this and constructs the Broker Payload: { leverages: {...}, hedgingMode: bool }
     const payload = {
         url: brokerUrl,
         sessionTokens: tokens,
@@ -91,7 +88,7 @@ export async function updatePreferences(
     const response = await fetch(`${BACKEND.URL}${BACKEND.PREFERENCES_PROXY}`, {
         method: API.PUT_METHOD,
         headers: {
-            'Content-Type': 'application/json'
+            [API.CONTENT_TYPE_KEY]: API.APPLICATION_JSON_CONTENT_TYPE
         },
         body: JSON.stringify(payload)
     });

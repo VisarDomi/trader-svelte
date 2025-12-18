@@ -1,4 +1,5 @@
 export const DEMO_TYPE = "DEMO";
 export const REAL_TYPE = "REAL";
 
-export const PING_INTERVAL = 5 * 60 * 1000;
+export const REST_PING_INTERVAL = 5 * 60 * 1000;
+export const SESSION_PING_INTERVAL = 60 * 1000;

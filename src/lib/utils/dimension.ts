@@ -30,16 +30,11 @@ function scanDimensions() {
 
 export function viewportScanner() {
     if (typeof window === 'undefined') return () => {};
-
-    // Run immediately
     scanDimensions();
-
-    // Attach listeners
     window.addEventListener(WINDOW_RESIZE, scanDimensions);
     window.addEventListener(WINDOW_ORIENTATION_CHANGE, scanDimensions);
     window.visualViewport?.addEventListener(WINDOW_RESIZE, scanDimensions);
 
-    // Return Cleanup Function
     return () => {
         window.removeEventListener(WINDOW_RESIZE, scanDimensions);
         window.removeEventListener(WINDOW_ORIENTATION_CHANGE, scanDimensions);

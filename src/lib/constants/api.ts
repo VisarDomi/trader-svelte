@@ -8,9 +8,9 @@ export const SESSION_ENDPOINT = "/api/v1/session";
 export const ACCOUNTS_ENDPOINT = "/api/v1/accounts";
 export const PING_ENDPOINT = "/api/v1/ping";
 export const PREFERENCES_ENDPOINT = "/api/v1/accounts/preferences";
+export const PRICES_ENDPOINT = "/api/v1/prices";
 export const POSITIONS_ENDPOINT = "/api/v1/positions";
 export const WORKING_ORDERS_ENDPOINT = "/api/v1/workingorders";
-export const PRICES_ENDPOINT = "/api/v1/prices";
 export const getDealReferenceEndpoint = (dealReference: string) => `/api/v1/confirms/${dealReference}`;
 
 export const WEBSOCKET_BASE_URL = "wss://api-streaming-capital.backend-capital.com";
@@ -28,8 +28,9 @@ export const APPLICATION_JSON_CONTENT_TYPE = "application/json";
 export const MARKET_DATA_DESTINATION = "marketData.subscribe";
 export const PING_DESTINATION = "ping";
 
-export const ERROR_CODE_KEY = "errorCode";
 export const EPIC_KEY = "epic";
+export const EPICS_KEY = "epics";
+export const DATA_DESTINATION_QUOTE = "quote";
 
 export const DEAL_REFERENCE_PREFIX = "p_";
 export const MARKET_DATA_CORRELATION_ID = "1";

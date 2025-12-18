@@ -27,8 +27,6 @@ export interface ChartCandle {
     close: number;
 }
 
-// --- WebSocket Types ---
-
 export interface WebSocketPayload {
     destination: string;
     correlationId?: string;
