@@ -1,11 +1,11 @@
 import * as API from '$lib/constants/api.js';
 import * as AUTH_CONST from '$lib/constants/auth.js';
 import * as STORAGE from '$lib/constants/storage.js';
-import { getBaseUrl } from "$lib/utils/helpers";
-import type { URL_TYPE } from "$lib/types/url";
-import type { SessionTokens, UserCredentials } from "$lib/types/auth";
-import { DEFAULT_ERROR } from "$lib/constants/error";
-import { getCredentials } from "$lib/services/credentials";
+import { getBaseUrl } from "$lib/utils/helpers.js";
+import type { URL_TYPE } from "$lib/types/url.js";
+import type { SessionTokens, UserCredentials } from "$lib/types/auth.js";
+import { DEFAULT_ERROR } from "$lib/constants/error.js";
+import { getCredentials } from "$lib/services/credentials.js";
 
 export async function login(type: URL_TYPE): Promise<SessionTokens> {
     const credentials: UserCredentials = getCredentials();

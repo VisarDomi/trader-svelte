@@ -1,9 +1,9 @@
 import * as API from '$lib/constants/api.js';
-import {getBaseUrl} from "$lib/utils/helpers";
-import type {URL_TYPE} from "$lib/types/url";
-import type {Account} from "$lib/types/account";
-import {DEFAULT_ERROR} from "$lib/constants/error";
-import type {SessionTokens} from "$lib/types/auth";
+import {getBaseUrl} from "$lib/utils/helpers.js";
+import type {URL_TYPE} from "$lib/types/url.js";
+import type {Account} from "$lib/types/account.js";
+import {DEFAULT_ERROR} from "$lib/constants/error.js";
+import type {SessionTokens} from "$lib/types/auth.js";
 
 export async function getAccounts(type: URL_TYPE, tokens: SessionTokens): Promise<Account[]> {
     const baseUrl = getBaseUrl(type);

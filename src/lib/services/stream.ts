@@ -1,6 +1,6 @@
-import * as API from '$lib/constants/api';
-import type { SessionTokens } from "$lib/types/auth";
-import type { QuoteMessage, WebSocketPayload } from "$lib/types/market";
+import * as API from '$lib/constants/api.js';
+import type { SessionTokens } from "$lib/types/auth.js";
+import type { QuoteMessage, WebSocketPayload } from "$lib/types/market.js";
 
 type PriceUpdateCallback = (msg: QuoteMessage) => void;
 

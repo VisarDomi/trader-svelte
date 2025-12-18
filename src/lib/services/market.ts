@@ -1,10 +1,11 @@
-import * as API from '$lib/constants/api.js';
-import { getBaseUrl } from "$lib/utils/helpers";
-import { REAL_TYPE } from "$lib/constants/auth";
-import type { SessionTokens } from "$lib/types/auth";
-import type { MarketPriceResponse, ChartCandle } from "$lib/types/market";
-import { DEFAULT_ERROR } from "$lib/constants/error";
 import type { UTCTimestamp } from 'lightweight-charts';
+import {DateTime} from "luxon";
+import * as API from '$lib/constants/api.js';
+import { getBaseUrl } from "$lib/utils/helpers.js";
+import { REAL_TYPE } from "$lib/constants/auth.js";
+import type { SessionTokens } from "$lib/types/auth.js";
+import type { MarketPriceResponse, ChartCandle } from "$lib/types/market.js";
+import { DEFAULT_ERROR } from "$lib/constants/error.js";
 
 export async function getHistoricalPrices(
     tokens: SessionTokens,
@@ -12,9 +13,15 @@ export async function getHistoricalPrices(
 ): Promise<ChartCandle[]> {
     const baseUrl = getBaseUrl(REAL_TYPE);
 
+    const endDateTime = DateTime.utc();
+    const fromUTCDateTime = endDateTime.minus({minutes: 999});
+    const fromUTC = fromUTCDateTime.startOf("second").toISO({suppressMilliseconds: true}).slice(0, -1);
+    const toUTC = endDateTime.startOf("second").toISO({suppressMilliseconds: true}).slice(0, -1);
     const params = new URLSearchParams({
         [API.RESOLUTION_KEY]: API.RESOLUTION_MINUTE,
-        [API.MAX_KEY]: API.MAX_ROWS
+        [API.MAX_KEY]: API.MAX_ROWS,
+        [API.FROM_KEY]: fromUTC,
+        [API.TO_KEY]: toUTC,
     });
 
     const url = `${baseUrl}${API.PRICES_ENDPOINT}/${epic}?${params.toString()}`;

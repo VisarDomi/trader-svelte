@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { createChart, CandlestickSeries } from 'lightweight-charts';
+    import type { IChartApi } from 'lightweight-charts';
     import { onMount, onDestroy } from 'svelte';
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
@@ -7,12 +9,10 @@
     import * as STORAGE from '$lib/constants/storage.js';
     import * as TRADING from '$lib/constants/trading.js';
     import * as CHART_CONST from '$lib/constants/chart.js';
-    import { authenticateAndStoreSession } from "$lib/services/auth";
-    import { DEFAULT_ERROR } from "$lib/constants/error";
-    import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart";
-    import type { SessionTokens } from "$lib/types/auth";
-    import { createChart, CandlestickSeries } from 'lightweight-charts';
-    import type { IChartApi } from 'lightweight-charts';
+    import { authenticateAndStoreSession } from "$lib/services/auth.js";
+    import { DEFAULT_ERROR } from "$lib/constants/error.js";
+    import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
+    import type { SessionTokens } from "$lib/types/auth.js";
 
     let chartContainer: HTMLDivElement;
     let chart: IChartApi;

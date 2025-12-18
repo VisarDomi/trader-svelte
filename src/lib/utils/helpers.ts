@@ -1,9 +1,9 @@
-import type {URL_TYPE} from "$lib/types/url";
-import {DEFAULT_ERROR} from "$lib/constants/error";
-import {CHART_CONTAINER_ID} from "$lib/constants/chart";
-import {MAX_LONG_KEY, MAX_SHORT_KEY} from "$lib/constants/storage";
-import {DEMO_TYPE, REAL_TYPE} from "$lib/constants/auth";
-import {DEMO_BASE_URL, REAL_BASE_URL} from "$lib/constants/api";
+import type {URL_TYPE} from "$lib/types/url.js";
+import {DEFAULT_ERROR} from "$lib/constants/error.js";
+import {CHART_CONTAINER_ID} from "$lib/constants/chart.js";
+import {MAX_LONG_KEY, MAX_SHORT_KEY} from "$lib/constants/storage.js";
+import {DEMO_TYPE, REAL_TYPE} from "$lib/constants/auth.js";
+import {DEMO_BASE_URL, REAL_BASE_URL} from "$lib/constants/api.js";
 
 export function removeTradingViewLogo() {
     const delay = 100;

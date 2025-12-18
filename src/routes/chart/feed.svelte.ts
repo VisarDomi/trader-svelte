@@ -1,8 +1,8 @@
-import { connectToStream } from "$lib/services/stream";
-import { getHistoricalPrices } from "$lib/services/market";
-import type { SessionTokens } from "$lib/types/auth";
-import type { QuoteMessage, ChartCandle } from "$lib/types/market";
 import type { ISeriesApi, UTCTimestamp } from "lightweight-charts";
+import { connectToStream } from "$lib/services/stream.js";
+import { getHistoricalPrices } from "$lib/services/market.js";
+import type { SessionTokens } from "$lib/types/auth.js";
+import type { QuoteMessage, ChartCandle } from "$lib/types/market.js";
 
 export class ChartFeed {
     private series: ISeriesApi<"Candlestick"> | null = null;

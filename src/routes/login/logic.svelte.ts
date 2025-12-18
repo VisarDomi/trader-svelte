@@ -1,9 +1,9 @@
 import * as STORAGE from '$lib/constants/storage.js';
 import * as ENV from '$lib/constants/env.js';
 import * as AUTH_CONST from '$lib/constants/auth.js';
-import { login } from "$lib/services/auth";
-import type { SessionTokens, UserCredentials } from "$lib/types/auth";
-import type { URL_TYPE } from "$lib/types/url";
+import { login } from "$lib/services/auth.js";
+import type { SessionTokens, UserCredentials } from "$lib/types/auth.js";
+import type { URL_TYPE } from "$lib/types/url.js";
 
 export class Login {
     apiKey = $state("");

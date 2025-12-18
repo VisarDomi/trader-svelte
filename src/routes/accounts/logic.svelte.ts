@@ -1,9 +1,9 @@
 import { goto } from '$app/navigation';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
-import { getAccounts } from '$lib/services/account';
-import type { Account } from '$lib/types/account';
-import type { SessionTokens } from '$lib/types/auth';
+import { getAccounts } from '$lib/services/account.js';
+import type { Account } from '$lib/types/account.js';
+import type { SessionTokens } from '$lib/types/auth.js';
 
 export class Accounts {
     realAccounts = $state<Account[]>([]);

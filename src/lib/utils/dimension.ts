@@ -1,6 +1,6 @@
-import {MAX_LONG_KEY, MAX_SHORT_KEY} from "$lib/constants/storage";
-import {TOO_MANY_PIXELS} from "$lib/constants/viewport";
-import {WINDOW_ORIENTATION_CHANGE, WINDOW_RESIZE} from "$lib/constants/events";
+import {MAX_LONG_KEY, MAX_SHORT_KEY} from "$lib/constants/storage.js";
+import {TOO_MANY_PIXELS} from "$lib/constants/viewport.js";
+import {WINDOW_ORIENTATION_CHANGE, WINDOW_RESIZE} from "$lib/constants/events.js";
 
 function scanDimensions() {
     const sources = [

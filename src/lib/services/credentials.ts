@@ -1,6 +1,6 @@
-import {DEFAULT_ERROR} from "$lib/constants/error";
-import type {UserCredentials} from "$lib/types/auth";
-import {USER_CREDENTIALS_KEY} from "$lib/constants/storage";
+import {DEFAULT_ERROR} from "$lib/constants/error.js";
+import type {UserCredentials} from "$lib/types/auth.js";
+import {USER_CREDENTIALS_KEY} from "$lib/constants/storage.js";
 
 export function getCredentials(): UserCredentials {
     const credentialsData = localStorage.getItem(USER_CREDENTIALS_KEY);

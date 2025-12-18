@@ -15,8 +15,8 @@ import {
     type CrosshairOptions
 } from "lightweight-charts";
 import { DateTime } from "luxon";
-import * as CHART_CONST from "$lib/constants/chart";
-import { formatTimestampToLocalTime } from "$lib/utils/time";
+import * as CHART_CONST from "$lib/constants/chart.js";
+import { formatTimestampToLocalTime } from "$lib/utils/time.js";
 
 export function getTimeScaleHeight(): number {
     if (typeof window === 'undefined') return 50;

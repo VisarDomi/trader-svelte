@@ -25,8 +25,6 @@ export const CST_KEY = "cst";
 export const CONTENT_TYPE_KEY = "Content-Type";
 export const APPLICATION_JSON_CONTENT_TYPE = "application/json";
 
-export const EMPTY_STRING = "";
-
 export const MARKET_DATA_DESTINATION = "marketData.subscribe";
 export const PING_DESTINATION = "ping";
 

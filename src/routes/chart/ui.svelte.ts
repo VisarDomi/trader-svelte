@@ -1,9 +1,9 @@
-import { isIOS } from "$lib/utils/platform";
-import { getStoredDimensions, removeTradingViewLogo } from "$lib/utils/helpers";
-import { getTimeScaleHeight } from "$lib/utils/chart";
+import type { IChartApi } from "lightweight-charts";
+import { isIOS } from "$lib/utils/platform.js";
+import { getStoredDimensions, removeTradingViewLogo } from "$lib/utils/helpers.js";
+import { getTimeScaleHeight } from "$lib/utils/chart.js";
 import * as EVENTS from '$lib/constants/events.js';
 import * as CHART_CONST from '$lib/constants/chart.js';
-import type { IChartApi } from "lightweight-charts";
 
 export class ChartUI {
     isIosDevice = $state(false);

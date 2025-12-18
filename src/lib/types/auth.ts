@@ -1,4 +1,4 @@
-import * as API from "$lib/constants/api";
+import * as API from "$lib/constants/api.js";
 
 // What the user types in the UI
 export interface UserCredentials {
