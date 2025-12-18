@@ -7,6 +7,7 @@
     onMount(async () => {
         try {
             await authenticateAndStoreSession();
+
             const search = page.url.search;
             await goto(`/chart${search}`);
         } catch (e) {

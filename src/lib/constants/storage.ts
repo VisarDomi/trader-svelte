@@ -8,3 +8,6 @@ export const TOKENS_REAL_KEY = 'TOKENS_REAL';
 // Chart config
 export const MAX_LONG_KEY = 'MAX_LONG';
 export const MAX_SHORT_KEY = 'MAX_SHORT';
+
+// Auth Throttling
+export const LOGIN_TIMESTAMP_KEY = 'LOGIN_TIMESTAMP';

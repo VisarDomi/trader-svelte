@@ -34,7 +34,6 @@ export async function login(type: URL_TYPE): Promise<SessionTokens> {
     if (!cst || !sec) {
         throw new Error(DEFAULT_ERROR);
     }
-
     return {
         [API.CST_KEY]: cst,
         [API.X_SECURITY_TOKEN_KEY]: sec
@@ -44,6 +43,18 @@ export async function login(type: URL_TYPE): Promise<SessionTokens> {
 export async function authenticateAndStoreSession(): Promise<void> {
     getCredentials();
 
+    const timestampStr = localStorage.getItem(STORAGE.LOGIN_TIMESTAMP_KEY);
+    const realTokensStr = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
+    const demoTokensStr = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
+
+    if (timestampStr && realTokensStr && demoTokensStr) {
+        const timestamp = parseInt(timestampStr, 10);
+        const now = Date.now();
+        if (now - timestamp < 60000) {
+            return;
+        }
+    }
+
     const [realTokens, demoTokens] = await Promise.all([
         login(AUTH_CONST.REAL_TYPE),
         login(AUTH_CONST.DEMO_TYPE)
@@ -51,4 +62,5 @@ export async function authenticateAndStoreSession(): Promise<void> {
 
     localStorage.setItem(STORAGE.TOKENS_REAL_KEY, JSON.stringify(realTokens));
     localStorage.setItem(STORAGE.TOKENS_DEMO_KEY, JSON.stringify(demoTokens));
+    localStorage.setItem(STORAGE.LOGIN_TIMESTAMP_KEY, Date.now().toString());
 }

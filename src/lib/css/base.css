@@ -19,4 +19,5 @@ body {
     text-rendering: optimizeSpeed;
     line-height: 1.5;
     background-color: black;
+    font-family: -apple-system, sans-serif;
 }

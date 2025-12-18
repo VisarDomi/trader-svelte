@@ -1,13 +1,11 @@
 <script lang="ts">
     import { onMount, onDestroy, tick } from 'svelte';
     import { goto } from '$app/navigation';
-    import * as AUTH_CONST from '$lib/constants/auth.js';
     import * as STORAGE from '$lib/constants/storage.js';
     import * as TRADING from '$lib/constants/trading.js';
     import * as CHART_CONST from '$lib/constants/chart.js';
     import * as EVENTS from '$lib/constants/events.js';
-    import { login } from "$lib/services/auth";
-    import { getCredentials } from "$lib/services/credentials";
+    import { authenticateAndStoreSession } from "$lib/services/auth";
     import { page } from '$app/state';
     import { createChart, CandlestickSeries } from 'lightweight-charts';
     import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
@@ -122,15 +120,10 @@
         isIosDevice = isIOS();
 
         try {
-            getCredentials();
-            const [realTokens, demoTokens] = await Promise.all([
-                login(AUTH_CONST.REAL_TYPE),
-                login(AUTH_CONST.DEMO_TYPE)
-            ]);
-            localStorage.setItem(STORAGE.TOKENS_REAL_KEY, JSON.stringify(realTokens));
-            localStorage.setItem(STORAGE.TOKENS_DEMO_KEY, JSON.stringify(demoTokens));
-        } catch (ignore) {
+            await authenticateAndStoreSession();
+        } catch (e) {
             await goto('/login');
+            return;
         }
 
         const initialWidth = window.innerWidth;
