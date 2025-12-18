@@ -64,3 +64,42 @@ export async function authenticateAndStoreSession(): Promise<void> {
     localStorage.setItem(STORAGE.TOKENS_DEMO_KEY, JSON.stringify(demoTokens));
     localStorage.setItem(STORAGE.LOGIN_TIMESTAMP_KEY, Date.now().toString());
 }
+
+async function ping(type: URL_TYPE, tokens: SessionTokens): Promise<void> {
+    const baseUrl = getBaseUrl(type);
+    const url = `${baseUrl}${API.PING_ENDPOINT}`;
+
+    await fetch(url, {
+        method: API.GET_METHOD,
+        headers: {
+            [API.CST_KEY]: tokens[API.CST_KEY],
+            [API.X_SECURITY_TOKEN_KEY]: tokens[API.X_SECURITY_TOKEN_KEY]
+        }
+    });
+}
+
+export function startRestHeartbeat() {
+    if (typeof window === 'undefined') return () => {};
+
+    const intervalId = setInterval(async () => {
+        const realTokensStr = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
+        const demoTokensStr = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
+
+        const promises = [];
+
+        if (realTokensStr) {
+            const tokens = JSON.parse(realTokensStr);
+            promises.push(ping(AUTH_CONST.REAL_TYPE, tokens).catch(console.error));
+        }
+
+        if (demoTokensStr) {
+            const tokens = JSON.parse(demoTokensStr);
+            promises.push(ping(AUTH_CONST.DEMO_TYPE, tokens).catch(console.error));
+        }
+
+        await Promise.all(promises);
+
+    }, 300000);
+
+    return () => clearInterval(intervalId);
+}
