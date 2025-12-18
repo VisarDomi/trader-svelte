@@ -37,7 +37,7 @@ this repo is a rewrite of the old repo from the beginning.
 
 ## more
 - get a pwa up and running - done
-- show a chart
+- show a chart - done
 - open a position
 - show position
 - close position
