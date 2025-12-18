@@ -13,7 +13,6 @@ export function connectToStream(
     const wsUrl = `${API.WEBSOCKET_BASE_URL}${API.WEBSOCKET_PATH}`;
     const ws = new WebSocket(wsUrl);
     let pingInterval: ReturnType<typeof setInterval>;
-
     ws.onopen = () => {
         const subscribeRequest: WebSocketPayload = {
             destination: API.MARKET_DATA_DESTINATION,
@@ -25,7 +24,6 @@ export function connectToStream(
             }
         };
         ws.send(JSON.stringify(subscribeRequest));
-
         pingInterval = setInterval(() => {
             const pingRequest: WebSocketPayload = {
                 destination: API.PING_DESTINATION,
@@ -38,12 +36,9 @@ export function connectToStream(
             }
         }, AUTH.SESSION_PING_INTERVAL);
     };
-
     ws.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-
-            // Filter for actual price quotes
             if (data.destination === API.DATA_DESTINATION_QUOTE && data.payload && data.payload[API.EPIC_KEY] === epic) {
                 onPriceUpdate(data as QuoteMessage);
             }
@@ -51,11 +46,9 @@ export function connectToStream(
             console.error("WS Parse Error", err);
         }
     };
-
     ws.onerror = (err) => {
         console.error("WS Error", err);
     };
-
     return {
         destroy: () => {
             if (pingInterval) clearInterval(pingInterval);

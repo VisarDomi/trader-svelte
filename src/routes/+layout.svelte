@@ -2,9 +2,7 @@
     import '$lib/styles.css';
     import { viewportScanner } from '$lib/utils/dimension.js';
     import { startRestHeartbeat } from '$lib/services/auth.js';
-
     let { children } = $props();
-
     $effect(viewportScanner);
     $effect(startRestHeartbeat);
 </script>

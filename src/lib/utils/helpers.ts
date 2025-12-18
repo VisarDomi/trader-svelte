@@ -8,7 +8,6 @@ export function removeTradingViewLogo() {
     const delay = 100;
     const maxAttempts = 20;
     let attempts = 0;
-
     const tryToRemove = () => {
         attempts++;
         const logo = document.querySelector('a[href*="tradingview"]');
@@ -26,17 +25,13 @@ export function removeTradingViewLogo() {
 export function getStoredDimensions() {
     const winW = window.innerWidth;
     const winH = window.innerHeight;
-
     const storedLong = localStorage.getItem(MAX_LONG_KEY);
     const storedShort = localStorage.getItem(MAX_SHORT_KEY);
-
     if (!storedLong || !storedShort) {
         return { width: winW, height: winH };
     }
-
     const maxLong = parseFloat(storedLong);
     const maxShort = parseFloat(storedShort);
-
     const isLandscape = winW > winH;
     return {
         width: isLandscape ? maxLong : maxShort,

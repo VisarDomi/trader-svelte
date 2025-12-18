@@ -21,21 +21,17 @@ export class Accounts {
     private async loadData() {
         const realTokensStr = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
         const demoTokensStr = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
-
         if (!realTokensStr || !demoTokensStr) {
             await goto('/login');
             return;
         }
-
         try {
             const realTokens: SessionTokens = JSON.parse(realTokensStr);
             const demoTokens: SessionTokens = JSON.parse(demoTokensStr);
-
             const [real, demo] = await Promise.all([
                 getAccounts(AUTH.REAL_TYPE, realTokens),
                 getAccounts(AUTH.DEMO_TYPE, demoTokens)
             ]);
-
             this.realAccounts = real;
             this.demoAccounts = demo;
         } catch (e) {
@@ -48,22 +44,17 @@ export class Accounts {
     async switchTo(account: Account, type: URL_TYPE) {
         this.isLoading = true;
         this.error = '';
-
         const storageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
         const tokensStr = localStorage.getItem(storageKey);
-
         if (!tokensStr) {
             this.error = "No session tokens found.";
             this.isLoading = false;
             return;
         }
-
         try {
             const currentTokens: SessionTokens = JSON.parse(tokensStr);
             const newTokens = await switchAccount(type, currentTokens, account.accountId);
-
             localStorage.setItem(storageKey, JSON.stringify(newTokens));
-
             await this.loadData();
             alert(`Switched to ${account.accountName}`);
         } catch (e) {

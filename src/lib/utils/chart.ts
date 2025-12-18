@@ -21,15 +21,12 @@ import * as TIME from "$lib/constants/time";
 
 export function getTimeScaleHeight(): number {
     if (typeof window === 'undefined') return 50;
-
     const isPWA = window.matchMedia("(display-mode: standalone)").matches;
     const isLandscape = window.innerHeight < window.innerWidth;
     let timeScaleHeight = isPWA ? 60 : 90;
-
     if (isLandscape) {
         timeScaleHeight /= 2;
     }
-
     return timeScaleHeight;
 }
 
@@ -52,7 +49,6 @@ export function getBaseSeriesOptions(pricePrecision: number): CandlestickSeriesP
 
 export function getChartOptions(width: number, height: number): DeepPartial<ChartOptions> {
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
-
     const timeScale: DeepPartial<TimeScaleOptions> = {
         tickMarkFormatter: (time: Time) => {
             return formatTimestampToLocalTime(time as UTCTimestamp);
@@ -65,19 +61,16 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
         timeVisible: true,
         secondsVisible: false,
     };
-
     const localization: DeepPartial<LocalizationOptions<Time>> = {
         timeFormatter: (time: Time) => {
             const wsTime = DateTime.fromSeconds(time as number, { zone: "system" });
             return wsTime.toFormat(TIME.DATETIME_FORMAT);
         },
     };
-
     const rightPriceScale: DeepPartial<VisiblePriceScaleOptions> = {
         borderColor: CHART.BORDER_COLOR,
         visible: true,
     };
-
     const crosshair: DeepPartial<CrosshairOptions> = {
         mode: CrosshairMode.Normal,
         vertLine: {
@@ -91,7 +84,6 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
             labelBackgroundColor: CHART.CROSSHAIR_LABEL_BG,
         },
     };
-
     const grid: DeepPartial<GridOptions> = {
         vertLines: {
             color: CHART.GRID_COLOR,
@@ -100,7 +92,6 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
             color: CHART.GRID_COLOR,
         },
     };
-
     const layout: DeepPartial<LayoutOptions> = {
         background: {
             type: ColorType.Solid,
@@ -108,7 +99,6 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
         },
         textColor: CHART.TEXT_COLOR,
     };
-
     return {
         width,
         height,

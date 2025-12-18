@@ -2,9 +2,7 @@
     import { onMount } from 'svelte';
     import { PreferencesLogic } from './logic.svelte.js';
     import * as AUTH from '$lib/constants/auth.js';
-
     const logic = new PreferencesLogic();
-
     onMount(() => {
         logic.init();
     });

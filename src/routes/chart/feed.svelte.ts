@@ -47,9 +47,7 @@ export class ChartFeed {
 
     private processTick(price: number, timestampMs: number) {
         if (!this.series) return;
-
         const time = (Math.floor(timestampMs / 1000 / 60) * 60) as UTCTimestamp;
-
         if (!this.currentCandle) {
             this.currentCandle = { time, open: price, high: price, low: price, close: price };
         } else if (time === this.currentCandle.time) {
@@ -65,7 +63,6 @@ export class ChartFeed {
                 close: price
             };
         }
-
         this.series.update(this.currentCandle);
     }
 }

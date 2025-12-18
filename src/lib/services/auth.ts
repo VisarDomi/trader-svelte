@@ -11,7 +11,6 @@ export async function login(type: URL_TYPE): Promise<SessionTokens> {
     const credentials: UserCredentials = getCredentials();
     const baseUrl = getBaseUrl(type);
     const url = `${baseUrl}${API.SESSION_ENDPOINT}`;
-
     const response = await fetch(url, {
         method: API.POST_METHOD,
         headers: {
@@ -23,14 +22,11 @@ export async function login(type: URL_TYPE): Promise<SessionTokens> {
             [API.PASSWORD_KEY]: credentials.password
         })
     });
-
     if (!response.ok) {
         throw new Error(DEFAULT_ERROR);
     }
-
     const cst = response.headers.get(API.CST_KEY);
     const sec = response.headers.get(API.X_SECURITY_TOKEN_KEY);
-
     if (!cst || !sec) {
         throw new Error(DEFAULT_ERROR);
     }
@@ -42,11 +38,9 @@ export async function login(type: URL_TYPE): Promise<SessionTokens> {
 
 export async function authenticateAndStoreSession(): Promise<void> {
     getCredentials();
-
     const timestampStr = localStorage.getItem(STORAGE.LOGIN_TIMESTAMP_KEY);
     const realTokensStr = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
     const demoTokensStr = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
-
     if (timestampStr && realTokensStr && demoTokensStr) {
         const timestamp = parseInt(timestampStr, 10);
         const now = Date.now();
@@ -54,12 +48,10 @@ export async function authenticateAndStoreSession(): Promise<void> {
             return;
         }
     }
-
     const [realTokens, demoTokens] = await Promise.all([
         login(AUTH.REAL_TYPE),
         login(AUTH.DEMO_TYPE)
     ]);
-
     localStorage.setItem(STORAGE.TOKENS_REAL_KEY, JSON.stringify(realTokens));
     localStorage.setItem(STORAGE.TOKENS_DEMO_KEY, JSON.stringify(demoTokens));
     localStorage.setItem(STORAGE.LOGIN_TIMESTAMP_KEY, Date.now().toString());
@@ -68,7 +60,6 @@ export async function authenticateAndStoreSession(): Promise<void> {
 async function ping(type: URL_TYPE, tokens: SessionTokens): Promise<void> {
     const baseUrl = getBaseUrl(type);
     const url = `${baseUrl}${API.PING_ENDPOINT}`;
-
     await fetch(url, {
         method: API.GET_METHOD,
         headers: {
@@ -80,26 +71,19 @@ async function ping(type: URL_TYPE, tokens: SessionTokens): Promise<void> {
 
 export function startRestHeartbeat() {
     if (typeof window === 'undefined') return () => {};
-
     const intervalId = setInterval(async () => {
         const realTokensStr = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
         const demoTokensStr = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
-
         const promises = [];
-
         if (realTokensStr) {
             const tokens = JSON.parse(realTokensStr);
             promises.push(ping(AUTH.REAL_TYPE, tokens).catch(console.error));
         }
-
         if (demoTokensStr) {
             const tokens = JSON.parse(demoTokensStr);
             promises.push(ping(AUTH.DEMO_TYPE, tokens).catch(console.error));
         }
-
         await Promise.all(promises);
-
     }, AUTH.REST_PING_INTERVAL);
-
     return () => clearInterval(intervalId);
 }

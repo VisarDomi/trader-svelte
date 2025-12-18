@@ -30,14 +30,12 @@
             newUrl.searchParams.set(API.EPIC_KEY, epic);
             void goto(newUrl, { replaceState: true });
         }
-
         try {
             await authenticateAndStoreSession();
         } catch (ignore) {
             await goto('/login');
             return;
         }
-
         const w = window.innerWidth;
         const h = window.innerHeight;
         chart = createChart(chartContainer, getChartOptions(w, h));

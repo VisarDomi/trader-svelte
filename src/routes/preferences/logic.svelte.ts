@@ -8,15 +8,12 @@ import type { URL_TYPE } from '$lib/types/url.js';
 
 export class PreferencesLogic {
     activeType = $state<URL_TYPE>(AUTH.REAL_TYPE);
-
     isLoading = $state(true);
     isSaving = $state(false);
     error = $state('');
     message = $state('');
-
     data = $state<AccountPreferences | null>(null);
     currentAccount = $state<Account | null>(null);
-
     hedging = $state(false);
     leverages = $state<Partial<Record<LeverageCategory, number>>>({});
 
@@ -33,31 +30,22 @@ export class PreferencesLogic {
         this.isLoading = true;
         this.error = '';
         this.message = '';
-        this.currentAccount = null; // Reset while loading
-
+        this.currentAccount = null;
         const storageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
         const tokensStr = localStorage.getItem(storageKey);
-
         if (!tokensStr) {
             await goto('/login');
             return;
         }
-
         try {
             const tokens: SessionTokens = JSON.parse(tokensStr);
-
-            // Fetch both preferences and accounts list to find the active one
             const [prefs, accounts] = await Promise.all([
                 getPreferences(type, tokens),
                 getAccounts(type, tokens)
             ]);
-
             this.data = prefs;
             this.hedging = prefs.hedgingMode;
-
-            // The API usually marks the active session account as 'preferred'
             this.currentAccount = accounts.find(a => a.preferred) || accounts[0] || null;
-
             this.leverages = {};
             for (const [key, val] of Object.entries(prefs.leverages)) {
                 this.leverages[key as LeverageCategory] = val.current;
@@ -74,16 +62,13 @@ export class PreferencesLogic {
         this.isSaving = true;
         this.error = '';
         this.message = '';
-
         const storageKey = this.activeType === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
         const tokensStr = localStorage.getItem(storageKey);
-
         if (!tokensStr) {
             this.error = "Session expired";
             this.isSaving = false;
             return;
         }
-
         try {
             const tokens: SessionTokens = JSON.parse(tokensStr);
 

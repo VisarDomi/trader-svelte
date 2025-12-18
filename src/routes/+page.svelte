@@ -3,11 +3,9 @@
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import { authenticateAndStoreSession } from "$lib/services/auth.js";
-
     onMount(async () => {
         try {
             await authenticateAndStoreSession();
-
             const search = page.url.search;
             await goto(`/chart${search}`);
         } catch (e) {

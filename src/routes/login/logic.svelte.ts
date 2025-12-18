@@ -28,11 +28,8 @@ export class Login {
             this.password = c.password;
             this.apiKey = c.apiKey;
         }
-
-        // Load stored tokens
         const demoTokensData = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
         if (demoTokensData) this.demoTokens = JSON.parse(demoTokensData);
-
         const realTokensData = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
         if (realTokensData) this.realTokens = JSON.parse(realTokensData);
     }
@@ -63,7 +60,6 @@ export class Login {
 
     private async performLogin(type: URL_TYPE) {
         this.saveInputs();
-
         const isReal = type === AUTH_CONST.REAL_TYPE;
         const setStatus = (msg: string) => {
             if (isReal) this.realStatus = msg;
@@ -74,7 +70,6 @@ export class Login {
             else this.demoTokens = t;
         };
         const storageKey = isReal ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
-
         try {
             setStatus("Logging in...");
             const sessionTokens = await login(type);

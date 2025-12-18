@@ -2,9 +2,7 @@
     import { onMount } from 'svelte';
     import { Accounts } from './logic.svelte.js';
     import * as AUTH from '$lib/constants/auth.js';
-
     const accounts = new Accounts();
-
     onMount(() => {
         accounts.init();
     });

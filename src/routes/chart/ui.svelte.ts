@@ -34,10 +34,8 @@ export class ChartUI {
 
     private attachListeners() {
         if (typeof window === 'undefined') return;
-
         window.addEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
         window.addEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
-
         if (this.isIosDevice) {
             window.addEventListener('scroll', this.handleScroll);
         }
@@ -45,7 +43,6 @@ export class ChartUI {
 
     destroy() {
         if (typeof window === 'undefined') return;
-
         window.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
         window.removeEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
         window.removeEventListener('scroll', this.handleScroll);
@@ -61,11 +58,9 @@ export class ChartUI {
 
     private handleScroll = () => {
         if (!this.isIosDevice || !this.isDataLoaded || !this.container) return;
-
         const chartH = this.container.clientHeight;
         const winH = window.innerHeight;
         const target = this.getScrollTarget(chartH, winH);
-
         if (window.scrollY < target) {
             window.scrollTo({
                 top: target,
@@ -76,13 +71,10 @@ export class ChartUI {
 
     private updateDimensions() {
         if (!this.container || !this.chart) return;
-
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
-
         let width: number;
         let height: number;
-
         if (this.isIosDevice && this.isDataLoaded) {
             const dims = getStoredDimensions();
             width = dims.width;
@@ -91,12 +83,9 @@ export class ChartUI {
             width = windowWidth;
             height = windowHeight;
         }
-
         this.container.style.width = `${width}px`;
         this.container.style.height = `${height}px`;
-
         this.chart.resize(width, height);
-
         const isMobile = windowWidth <= 768;
         this.chart.applyOptions({
             timeScale: {
@@ -104,7 +93,6 @@ export class ChartUI {
                 barSpacing: isMobile ? CHART_CONST.MOBILE_BAR_SPACING : CHART_CONST.BAR_SPACING
             }
         });
-
         if (this.isIosDevice && this.isDataLoaded) {
             const scrollTarget = this.getScrollTarget(height, windowHeight);
             window.scrollTo({

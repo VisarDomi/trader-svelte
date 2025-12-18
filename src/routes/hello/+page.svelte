@@ -1,9 +1,7 @@
 <script lang="ts">
     import * as BACKEND from '$lib/constants/backend.js';
-
     let message = $state("Connecting to backend...");
     let time = $state<number | null>(null);
-
     $effect(() => {
         async function fetchData() {
             try {
