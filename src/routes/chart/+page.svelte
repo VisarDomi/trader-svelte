@@ -32,7 +32,9 @@
     let currentCandle: ChartCandle | null = null;
 
     const TOPBAR_HEIGHT = 200;
-    const epic = page.url.searchParams.get('epic') || TRADING.NDX_EPIC;
+
+    const paramEpic = page.url.searchParams.get('epic');
+    const epic = paramEpic || TRADING.NDX_EPIC;
 
     function getScrollTarget(chartH: number, winH: number): number {
         return TOPBAR_HEIGHT + (chartH - winH);
@@ -119,9 +121,15 @@
     onMount(async () => {
         isIosDevice = isIOS();
 
+        if (!paramEpic) {
+            const newUrl = new URL(page.url);
+            newUrl.searchParams.set('epic', epic);
+            void goto(newUrl, { replaceState: true });
+        }
+
         try {
             await authenticateAndStoreSession();
-        } catch (e) {
+        } catch (ignore) {
             await goto('/login');
             return;
         }
