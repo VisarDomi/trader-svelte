@@ -4,6 +4,10 @@
     import * as AUTH from '$lib/constants/auth.js';
 
     let { overlay }: { overlay: ChartOverlay } = $props();
+
+    function stopEvents(e: Event) {
+        e.stopPropagation();
+    }
 </script>
 
 {#if overlay.account}
@@ -15,22 +19,53 @@
         display: flex;
         align-items: stretch;
     ">
+        <!-- The Toggle Arrow (Always Fixed at Left) -->
+        <button
+                onclick={(e) => {
+                stopEvents(e);
+                overlay.toggle();
+            }}
+                onmousedown={stopEvents}
+                style="
+                background: rgba(40, 40, 40, 0.9);
+                border: 1px solid #333;
+                border-left: none; /* flush with screen edge */
+                border-top-right-radius: {overlay.isOpen ? '0' : '8px'};
+                border-bottom-right-radius: {overlay.isOpen ? '0' : '8px'};
+                padding: 0 0.5rem;
+                color: #d1d4dc;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 40px;
+                /* Add the color indicator here so user knows context even when collapsed */
+                border-left: 4px solid {overlay.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
+            "
+        >
+            {#if overlay.isOpen}
+                <span style="font-size: 0.8rem;">◀</span>
+            {:else}
+                <span style="font-size: 0.8rem;">▶</span>
+            {/if}
+        </button>
+
         <!-- The Data Card (Navigates to accounts) -->
         {#if overlay.isOpen}
-            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
             <div
                     role="button"
                     tabindex="0"
                     onclick={(e) => {
-                    e.stopPropagation();
+                    stopEvents(e);
                     goto('/accounts');
                 }}
                     onkeydown={(e) => {
                     if (e.key === 'Enter') {
-                        e.stopPropagation();
+                        stopEvents(e);
                         goto('/accounts');
                     }
                 }}
+                    onmousedown={stopEvents}
                     style="
                     background: rgba(20, 20, 20, 0.9);
                     backdrop-filter: blur(4px);
@@ -43,7 +78,6 @@
                     text-align: left;
                     cursor: pointer;
                     box-shadow: 4px 0 10px rgba(0,0,0,0.5);
-                    border-left: 4px solid {overlay.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
                     display: flex;
                     align-items: center;
                     gap: 1rem;
@@ -68,34 +102,5 @@
                 </div>
             </div>
         {/if}
-
-        <!-- The Toggle Arrow -->
-        <button
-                onclick={(e) => {
-                e.stopPropagation();
-                overlay.toggle();
-            }}
-                style="
-                background: rgba(40, 40, 40, 0.9);
-                border: 1px solid #333;
-                border-left: none;
-                border-top-right-radius: 8px;
-                border-bottom-right-radius: 8px;
-                padding: 0 0.5rem;
-                color: #d1d4dc;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-left: -1px; /* Overlap border */
-                min-height: 40px; /* Ensure touch target size */
-            "
-        >
-            {#if overlay.isOpen}
-                <span style="font-size: 0.8rem;">◀</span>
-            {:else}
-                <span style="font-size: 0.8rem;">▶</span>
-            {/if}
-        </button>
     </div>
 {/if}
