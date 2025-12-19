@@ -14,3 +14,7 @@ export const LOGIN_TIMESTAMP_KEY = 'LOGIN_TIMESTAMP';
 
 // App Logic
 export const TRADING_MODE_KEY = 'TRADING_MODE';
+
+// Account Persistence
+export const LAST_REAL_ACCOUNT_ID_KEY = 'LAST_REAL_ACCOUNT_ID';
+export const LAST_DEMO_ACCOUNT_ID_KEY = 'LAST_DEMO_ACCOUNT_ID';

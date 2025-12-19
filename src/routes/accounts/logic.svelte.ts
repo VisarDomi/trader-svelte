@@ -22,7 +22,6 @@ export class Accounts {
             if (storedMode) {
                 this.tradingMode = storedMode;
             } else {
-                // Default: Trading on Demo
                 this.tradingMode = AUTH.DEMO_TYPE;
                 localStorage.setItem(STORAGE.TRADING_MODE_KEY, AUTH.DEMO_TYPE);
             }
@@ -40,18 +39,70 @@ export class Accounts {
         try {
             const realTokens: SessionTokens = JSON.parse(realTokensStr);
             const demoTokens: SessionTokens = JSON.parse(demoTokensStr);
+
+            // 1. Fetch current state
             const [real, demo] = await Promise.all([
                 getAccounts(AUTH.REAL_TYPE, realTokens),
                 getAccounts(AUTH.DEMO_TYPE, demoTokens)
             ]);
-            this.realAccounts = real;
-            this.demoAccounts = demo;
+
+            // 2. Check for Account Mismatches & Auto-Restore
+            const updatedReal = await this.restorePreferredAccount(AUTH.REAL_TYPE, real, realTokens);
+            const updatedDemo = await this.restorePreferredAccount(AUTH.DEMO_TYPE, demo, demoTokens);
+
+            this.realAccounts = updatedReal;
+            this.demoAccounts = updatedDemo;
+
         } catch (e) {
             this.error = e instanceof Error ? e.message : String(e);
         } finally {
             this.isLoading = false;
         }
     }
+
+    // Helper to check if we are on the wrong account and switch back if necessary
+    private async restorePreferredAccount(type: URL_TYPE, accounts: Account[], tokens: SessionTokens): Promise<Account[]> {
+        if (typeof window === 'undefined') return accounts;
+
+        const storageKey = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
+        const lastUsedId = localStorage.getItem(storageKey);
+        const activeAccount = accounts.find(a => a.preferred);
+
+        // If we have a saved preference, and the current active account is NOT that one
+        if (lastUsedId && activeAccount && activeAccount.accountId !== lastUsedId) {
+            // Check if the saved ID actually exists in the list (account wasn't deleted)
+            const targetAccount = accounts.find(a => a.accountId === lastUsedId);
+
+            if (targetAccount) {
+                console.log(`Auto-switching ${type} from ${activeAccount.accountId} to saved ${lastUsedId}`);
+                try {
+                    // Perform the switch
+                    const newTokens = await switchAccount(type, tokens, lastUsedId);
+
+                    // Update tokens in storage
+                    const tokenStorageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
+                    localStorage.setItem(tokenStorageKey, JSON.stringify(newTokens));
+
+                    // Return refreshed list (simulated by manually flipping preferred flag to avoid another network call if we trust the operation)
+                    // But for safety, let's just return the list with flags flipped locally for UI rendering
+                    return accounts.map(a => ({
+                        ...a,
+                        preferred: a.accountId === lastUsedId
+                    }));
+                } catch (e) {
+                    console.warn(`Failed to auto-restore ${type} account:`, e);
+                }
+            }
+        }
+
+        // If no restoration needed or possible, verify we save the *current* active one as the new baseline
+        if (activeAccount) {
+            localStorage.setItem(storageKey, activeAccount.accountId);
+        }
+
+        return accounts;
+    }
+
 
     async switchTo(account: Account, type: URL_TYPE) {
         this.isLoading = true;
@@ -64,14 +115,16 @@ export class Accounts {
             return;
         }
         try {
-            // Only perform the API PUT if the account is NOT already the preferred one.
             if (!account.preferred) {
                 const currentTokens: SessionTokens = JSON.parse(tokensStr);
                 const newTokens = await switchAccount(type, currentTokens, account.accountId);
                 localStorage.setItem(storageKey, JSON.stringify(newTokens));
+
+                // Save this choice as the new default
+                const lastIdKey = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
+                localStorage.setItem(lastIdKey, account.accountId);
             }
 
-            // Always update the local trading mode state
             this.tradingMode = type;
             localStorage.setItem(STORAGE.TRADING_MODE_KEY, type);
 
