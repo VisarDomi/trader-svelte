@@ -17,7 +17,6 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h1>Accounts</h1>
         <div style="display: flex; gap: 1rem;">
-            <a href="/preferences" style="color: #26a69a;">Preferences</a>
             <a href="/" style="color: #d1d4dc;">← Back</a>
         </div>
     </div>
