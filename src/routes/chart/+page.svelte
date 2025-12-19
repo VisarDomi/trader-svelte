@@ -4,9 +4,17 @@
     import { onMount, onDestroy } from 'svelte';
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
+
+    // Logic
     import { ChartUI } from './ui.svelte.js';
     import { ChartFeed } from './feed.svelte.js';
     import { ChartOverlay } from './overlay.svelte.js';
+
+    // Components
+    import TopBar from './TopBar.svelte';
+    import Overlay from './Overlay.svelte';
+
+    // Constants & Utils
     import * as STORAGE from '$lib/constants/storage.js';
     import * as API from '$lib/constants/api.js';
     import * as TRADING from '$lib/constants/trading.js';
@@ -43,6 +51,7 @@
 
         await overlay.init(epic);
 
+        // Determine Feed Source (Opposite of Trading Mode)
         const tradingMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE || AUTH.DEMO_TYPE;
         const feedMode = tradingMode === AUTH.REAL_TYPE ? AUTH.DEMO_TYPE : AUTH.REAL_TYPE;
         const tokensKey = feedMode === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
@@ -70,107 +79,7 @@
     });
 </script>
 
-{#if layout.isDataLoaded && layout.isIosDevice}
-    <div
-            id={CHART_CONST.TOPBAR_ID}
-            style="height: {CHART_CONST.TOPBAR_HEIGHT}px; background-color: {CHART_CONST.BACKGROUND_COLOR};"
-    >
-    </div>
-{/if}
-
-<!-- Account Overlay -->
-{#if overlay.account}
-    <div style="
-        position: fixed;
-        left: 0;
-        top: 1%;
-        z-index: 50;
-        display: flex;
-        align-items: stretch;
-    ">
-        <!-- The Data Card (Navigates to accounts) -->
-        {#if overlay.isOpen}
-            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-            <div
-                    role="button"
-                    tabindex="0"
-                    onclick={(e) => {
-                    e.stopPropagation();
-                    goto('/accounts');
-                }}
-                    onkeydown={(e) => {
-                    if (e.key === 'Enter') {
-                        e.stopPropagation();
-                        goto('/accounts');
-                    }
-                }}
-                    style="
-                    background: rgba(20, 20, 20, 0.9);
-                    backdrop-filter: blur(4px);
-                    border: 1px solid #333;
-                    border-left: none;
-                    border-top-right-radius: 8px;
-                    border-bottom-right-radius: 8px;
-                    padding: 0.75rem 1rem;
-                    color: white;
-                    text-align: left;
-                    cursor: pointer;
-                    box-shadow: 4px 0 10px rgba(0,0,0,0.5);
-                    border-left: 4px solid {overlay.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                "
-            >
-                <!-- Market Name -->
-                <div style="font-size: 1rem; font-weight: bold; white-space: nowrap;">
-                    {overlay.marketName}
-                </div>
-
-                <!-- Vertical Separator -->
-                <div style="width: 1px; height: 24px; background: #444;"></div>
-
-                <!-- Account Info -->
-                <div style="display: flex; flex-direction: column; justify-content: center; line-height: 1.2;">
-                    <div style="font-size: 0.75rem; color: #ddd;">
-                        {overlay.account.accountName} <span style="font-size: 0.65rem; color: #aaa;">({overlay.mode})</span>
-                    </div>
-                    <div style="font-size: 0.9rem; font-weight: bold;">
-                        {overlay.account.symbol}{overlay.account.balance.balance.toFixed(2)}
-                    </div>
-                </div>
-            </div>
-        {/if}
-
-        <!-- The Toggle Arrow -->
-        <button
-                onclick={(e) => {
-                e.stopPropagation();
-                overlay.toggle();
-            }}
-                style="
-                background: rgba(40, 40, 40, 0.9);
-                border: 1px solid #333;
-                border-left: none;
-                border-top-right-radius: 8px;
-                border-bottom-right-radius: 8px;
-                padding: 0 0.5rem;
-                color: #d1d4dc;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-left: -1px; /* Overlap border */
-                min-height: 40px; /* Ensure touch target size */
-            "
-        >
-            {#if overlay.isOpen}
-                <span style="font-size: 0.8rem;">◀</span>
-            {:else}
-                <span style="font-size: 0.8rem;">▶</span>
-            {/if}
-        </button>
-    </div>
-{/if}
+<TopBar {layout} />
+<Overlay {overlay} />
 
 <div bind:this={chartContainer} id={CHART_CONST.CHART_CONTAINER_ID}></div>
