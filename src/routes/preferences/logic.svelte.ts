@@ -18,6 +18,13 @@ export class PreferencesLogic {
     leverages = $state<Partial<Record<LeverageCategory, number>>>({});
 
     async init() {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const type = params.get('type') as URL_TYPE | null;
+            if (type === AUTH.REAL_TYPE || type === AUTH.DEMO_TYPE) {
+                this.activeType = type;
+            }
+        }
         await this.load(this.activeType);
     }
 
@@ -50,7 +57,6 @@ export class PreferencesLogic {
             for (const [key, val] of Object.entries(prefs.leverages)) {
                 this.leverages[key as LeverageCategory] = val.current;
             }
-
         } catch (e) {
             this.error = e instanceof Error ? e.message : String(e);
         } finally {
@@ -71,11 +77,8 @@ export class PreferencesLogic {
         }
         try {
             const tokens: SessionTokens = JSON.parse(tokensStr);
-
             const leverageUpdate = { ...this.leverages } as LeverageUpdate;
-
             const response = await updatePreferences(this.activeType, tokens, leverageUpdate, this.hedging);
-
             if (response.status === 'SUCCESS') {
                 this.message = "Preferences updated successfully";
                 await this.load(this.activeType);

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import { goto } from '$app/navigation';
     import { Accounts } from './logic.svelte.js';
     import * as AUTH from '$lib/constants/auth.js';
     const accounts = new Accounts();
@@ -35,18 +36,50 @@
                 {:else}
                     <div style="display: grid; gap: 1rem;">
                         {#each accounts.realAccounts as account}
-                            <div style="background: #1a1a1a; padding: 1rem; border-radius: 8px; border: 1px solid #333; {account.preferred ? 'border-color: #26a69a;' : ''}">
+                            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+                            <div
+                                    role={account.preferred ? "button" : undefined}
+                                    tabindex={account.preferred ? 0 : undefined}
+                                    onclick={() => account.preferred && goto(`/preferences?type=${AUTH.REAL_TYPE}`)}
+                                    onkeydown={(e) => {
+                                    if (account.preferred && e.key === 'Enter') {
+                                        goto(`/preferences?type=${AUTH.REAL_TYPE}`);
+                                    }
+                                }}
+                                    style="
+                                    background: #1a1a1a;
+                                    padding: 1rem;
+                                    border-radius: 8px;
+                                    border: 1px solid #333;
+                                    text-align: left;
+                                    width: 100%;
+                                    cursor: {account.preferred ? 'pointer' : 'default'};
+                                    {account.preferred ? 'border-color: #26a69a;' : ''}
+                                "
+                            >
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                                    <span style="font-weight: bold;">{account.accountName} ({account.currency})</span>
+                                    <span style="font-weight: bold; color: white; font-size: 1rem;">{account.accountName} ({account.currency})</span>
                                     <div style="display: flex; gap: 1rem; align-items: center;">
                                         <span style="font-size: 0.8em; color: #888;">{account.status}</span>
                                         {#if !account.preferred}
-                                            <button
-                                                    onclick={() => accounts.switchTo(account, AUTH.REAL_TYPE)}
+                                            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+                                            <div
+                                                    role="button"
+                                                    tabindex="0"
+                                                    onclick={(e) => {
+                                                    e.stopPropagation();
+                                                    accounts.switchTo(account, AUTH.REAL_TYPE);
+                                                }}
+                                                    onkeydown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.stopPropagation();
+                                                        accounts.switchTo(account, AUTH.REAL_TYPE);
+                                                    }
+                                                }}
                                                     style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
                                             >
                                                 Switch
-                                            </button>
+                                            </div>
                                         {:else}
                                             <span style="font-size: 0.8rem; color: #26a69a;">Active</span>
                                         {/if}
@@ -55,11 +88,11 @@
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9rem;">
                                     <div>
                                         <div style="color: #888;">Balance</div>
-                                        <div>{account.symbol}{account.balance.balance.toFixed(2)}</div>
+                                        <div style="color: white;">{account.symbol}{account.balance.balance.toFixed(2)}</div>
                                     </div>
                                     <div>
                                         <div style="color: #888;">Available</div>
-                                        <div>{account.symbol}{account.balance.available.toFixed(2)}</div>
+                                        <div style="color: white;">{account.symbol}{account.balance.available.toFixed(2)}</div>
                                     </div>
                                     <div>
                                         <div style="color: #888;">P&L</div>
@@ -69,7 +102,7 @@
                                     </div>
                                     <div>
                                         <div style="color: #888;">Deposit</div>
-                                        <div>{account.symbol}{account.balance.deposit.toFixed(2)}</div>
+                                        <div style="color: white;">{account.symbol}{account.balance.deposit.toFixed(2)}</div>
                                     </div>
                                 </div>
                             </div>
@@ -87,18 +120,50 @@
                 {:else}
                     <div style="display: grid; gap: 1rem;">
                         {#each accounts.demoAccounts as account}
-                            <div style="background: #1a1a1a; padding: 1rem; border-radius: 8px; border: 1px solid #333; {account.preferred ? 'border-color: #ef5350;' : ''}">
+                            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+                            <div
+                                    role={account.preferred ? "button" : undefined}
+                                    tabindex={account.preferred ? 0 : undefined}
+                                    onclick={() => account.preferred && goto(`/preferences?type=${AUTH.DEMO_TYPE}`)}
+                                    onkeydown={(e) => {
+                                    if (account.preferred && e.key === 'Enter') {
+                                        goto(`/preferences?type=${AUTH.DEMO_TYPE}`);
+                                    }
+                                }}
+                                    style="
+                                    background: #1a1a1a;
+                                    padding: 1rem;
+                                    border-radius: 8px;
+                                    border: 1px solid #333;
+                                    text-align: left;
+                                    width: 100%;
+                                    cursor: {account.preferred ? 'pointer' : 'default'};
+                                    {account.preferred ? 'border-color: #ef5350;' : ''}
+                                "
+                            >
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                                    <span style="font-weight: bold;">{account.accountName} ({account.currency})</span>
+                                    <span style="font-weight: bold; color: white; font-size: 1rem;">{account.accountName} ({account.currency})</span>
                                     <div style="display: flex; gap: 1rem; align-items: center;">
                                         <span style="font-size: 0.8em; color: #888;">{account.status}</span>
                                         {#if !account.preferred}
-                                            <button
-                                                    onclick={() => accounts.switchTo(account, AUTH.DEMO_TYPE)}
+                                            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+                                            <div
+                                                    role="button"
+                                                    tabindex="0"
+                                                    onclick={(e) => {
+                                                    e.stopPropagation();
+                                                    accounts.switchTo(account, AUTH.DEMO_TYPE);
+                                                }}
+                                                    onkeydown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.stopPropagation();
+                                                        accounts.switchTo(account, AUTH.DEMO_TYPE);
+                                                    }
+                                                }}
                                                     style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
                                             >
                                                 Switch
-                                            </button>
+                                            </div>
                                         {:else}
                                             <span style="font-size: 0.8rem; color: #ef5350;">Active</span>
                                         {/if}
@@ -107,11 +172,11 @@
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9rem;">
                                     <div>
                                         <div style="color: #888;">Balance</div>
-                                        <div>{account.symbol}{account.balance.balance.toFixed(2)}</div>
+                                        <div style="color: white;">{account.symbol}{account.balance.balance.toFixed(2)}</div>
                                     </div>
                                     <div>
                                         <div style="color: #888;">Available</div>
-                                        <div>{account.symbol}{account.balance.available.toFixed(2)}</div>
+                                        <div style="color: white;">{account.symbol}{account.balance.available.toFixed(2)}</div>
                                     </div>
                                     <div>
                                         <div style="color: #888;">P&L</div>
@@ -121,7 +186,7 @@
                                     </div>
                                     <div>
                                         <div style="color: #888;">Deposit</div>
-                                        <div>{account.symbol}{account.balance.deposit.toFixed(2)}</div>
+                                        <div style="color: white;">{account.symbol}{account.balance.deposit.toFixed(2)}</div>
                                     </div>
                                 </div>
                             </div>
@@ -132,4 +197,33 @@
 
         </div>
     {/if}
+
+    {#if accounts.toastMessage}
+        <div style="
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            border: 1px solid #26a69a;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 1000;
+            font-weight: bold;
+            animation: fadeInOut 3s forwards;
+        ">
+            {accounts.toastMessage}
+        </div>
+    {/if}
 </div>
+
+<style>
+    @keyframes fadeInOut {
+        0% { opacity: 0; transform: translate(-50%, 1rem); }
+        10% { opacity: 1; transform: translate(-50%, 0); }
+        90% { opacity: 1; transform: translate(-50%, 0); }
+        100% { opacity: 0; transform: translate(-50%, -1rem); }
+    }
+</style>

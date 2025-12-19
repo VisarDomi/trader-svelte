@@ -11,6 +11,7 @@ export class Accounts {
     demoAccounts = $state<Account[]>([]);
     isLoading = $state(true);
     error = $state('');
+    toastMessage = $state('');
 
     async init() {
         this.isLoading = true;
@@ -56,7 +57,12 @@ export class Accounts {
             const newTokens = await switchAccount(type, currentTokens, account.accountId);
             localStorage.setItem(storageKey, JSON.stringify(newTokens));
             await this.loadData();
-            alert(`Switched to ${account.accountName}`);
+
+            this.toastMessage = `Switched to ${account.accountName}`;
+            setTimeout(() => {
+                this.toastMessage = '';
+            }, 3000);
+
         } catch (e) {
             this.error = e instanceof Error ? e.message : String(e);
             this.isLoading = false;
