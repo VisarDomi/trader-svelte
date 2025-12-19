@@ -47,7 +47,13 @@ export class PreferencesLogic {
             ]);
             this.data = prefs;
             this.hedging = prefs.hedgingMode;
-            this.currentAccount = accounts.find(a => a.preferred) || accounts[0] || null;
+
+            const accountIdKey = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
+            const storedId = localStorage.getItem(accountIdKey);
+            const explicitAccount = accounts.find(a => a.accountId === storedId);
+
+            this.currentAccount = explicitAccount || accounts.find(a => a.preferred) || accounts[0] || null;
+
             this.leverages = {};
             for (const [key, val] of Object.entries(prefs.leverages)) {
                 this.leverages[key as LeverageCategory] = val.current;

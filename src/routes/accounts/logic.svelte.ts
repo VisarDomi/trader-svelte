@@ -22,6 +22,7 @@ export class Accounts {
             if (storedMode) {
                 this.tradingMode = storedMode;
             } else {
+                // Default: Trading on Demo
                 this.tradingMode = AUTH.DEMO_TYPE;
                 localStorage.setItem(STORAGE.TRADING_MODE_KEY, AUTH.DEMO_TYPE);
             }
@@ -40,13 +41,13 @@ export class Accounts {
             const realTokens: SessionTokens = JSON.parse(realTokensStr);
             const demoTokens: SessionTokens = JSON.parse(demoTokensStr);
 
-            // 1. Fetch current state
+            // 1. Fetch current state from Broker
             const [real, demo] = await Promise.all([
                 getAccounts(AUTH.REAL_TYPE, realTokens),
                 getAccounts(AUTH.DEMO_TYPE, demoTokens)
             ]);
 
-            // 2. Check for Account Mismatches & Auto-Restore
+            // 2. Check for Account Mismatches against our LocalStorage preference & Auto-Restore
             const updatedReal = await this.restorePreferredAccount(AUTH.REAL_TYPE, real, realTokens);
             const updatedDemo = await this.restorePreferredAccount(AUTH.DEMO_TYPE, demo, demoTokens);
 
@@ -68,7 +69,7 @@ export class Accounts {
         const lastUsedId = localStorage.getItem(storageKey);
         const activeAccount = accounts.find(a => a.preferred);
 
-        // If we have a saved preference, and the current active account is NOT that one
+        // ONLY attempt restore if we have an explicit user preference saved
         if (lastUsedId && activeAccount && activeAccount.accountId !== lastUsedId) {
             // Check if the saved ID actually exists in the list (account wasn't deleted)
             const targetAccount = accounts.find(a => a.accountId === lastUsedId);
@@ -83,8 +84,7 @@ export class Accounts {
                     const tokenStorageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
                     localStorage.setItem(tokenStorageKey, JSON.stringify(newTokens));
 
-                    // Return refreshed list (simulated by manually flipping preferred flag to avoid another network call if we trust the operation)
-                    // But for safety, let's just return the list with flags flipped locally for UI rendering
+                    // Return the list with flags flipped locally to reflect the switch we just made
                     return accounts.map(a => ({
                         ...a,
                         preferred: a.accountId === lastUsedId
@@ -95,11 +95,8 @@ export class Accounts {
             }
         }
 
-        // If no restoration needed or possible, verify we save the *current* active one as the new baseline
-        if (activeAccount) {
-            localStorage.setItem(storageKey, activeAccount.accountId);
-        }
-
+        // If no saved preference exists, or we are already on the correct account, return list as-is.
+        // We DO NOT overwrite the LocalStorage key here.
         return accounts;
     }
 
@@ -120,7 +117,7 @@ export class Accounts {
                 const newTokens = await switchAccount(type, currentTokens, account.accountId);
                 localStorage.setItem(storageKey, JSON.stringify(newTokens));
 
-                // Save this choice as the new default
+                // CRITICAL: This is the ONLY place we write the user's account preference
                 const lastIdKey = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
                 localStorage.setItem(lastIdKey, account.accountId);
             }
