@@ -4,10 +4,6 @@
     import * as AUTH from '$lib/constants/auth.js';
 
     let { overlay }: { overlay: ChartOverlay } = $props();
-
-    function stopEvents(e: Event) {
-        e.stopPropagation();
-    }
 </script>
 
 {#if overlay.account}
@@ -21,11 +17,7 @@
     ">
         <!-- The Toggle Arrow (Always Fixed at Left) -->
         <button
-                onclick={(e) => {
-                stopEvents(e);
-                overlay.toggle();
-            }}
-                onmousedown={stopEvents}
+                onclick={() => overlay.toggle()}
                 style="
                 background: rgba(40, 40, 40, 0.9);
                 border: 1px solid #333;
@@ -38,7 +30,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 40px;
+                min-height: 3.5rem; /* Enforce consistent height matching the content */
                 /* Add the color indicator here so user knows context even when collapsed */
                 border-left: 4px solid {overlay.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
             "
@@ -55,17 +47,12 @@
             <div
                     role="button"
                     tabindex="0"
-                    onclick={(e) => {
-                    stopEvents(e);
-                    goto('/accounts');
-                }}
+                    onclick={() => goto('/accounts')}
                     onkeydown={(e) => {
                     if (e.key === 'Enter') {
-                        stopEvents(e);
                         goto('/accounts');
                     }
                 }}
-                    onmousedown={stopEvents}
                     style="
                     background: rgba(20, 20, 20, 0.9);
                     backdrop-filter: blur(4px);
@@ -81,6 +68,7 @@
                     display: flex;
                     align-items: center;
                     gap: 1rem;
+                    min-height: 3.5rem; /* Match arrow height */
                 "
             >
                 <!-- Market Name -->
