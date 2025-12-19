@@ -64,12 +64,14 @@ export class Accounts {
             return;
         }
         try {
-            const currentTokens: SessionTokens = JSON.parse(tokensStr);
-            // 1. Switch Preference on Backend
-            const newTokens = await switchAccount(type, currentTokens, account.accountId);
-            localStorage.setItem(storageKey, JSON.stringify(newTokens));
+            // Only perform the API PUT if the account is NOT already the preferred one.
+            if (!account.preferred) {
+                const currentTokens: SessionTokens = JSON.parse(tokensStr);
+                const newTokens = await switchAccount(type, currentTokens, account.accountId);
+                localStorage.setItem(storageKey, JSON.stringify(newTokens));
+            }
 
-            // 2. Set Trading Mode locally
+            // Always update the local trading mode state
             this.tradingMode = type;
             localStorage.setItem(STORAGE.TRADING_MODE_KEY, type);
 
