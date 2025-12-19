@@ -1,5 +1,7 @@
 import * as API from '$lib/constants/api.js';
 import * as BACKEND from '$lib/constants/backend.js';
+import * as STORAGE from '$lib/constants/storage.js';
+import * as AUTH from '$lib/constants/auth.js';
 import {getBaseUrl} from "$lib/utils/helpers.js";
 import type {URL_TYPE} from "$lib/types/url.js";
 import type {Account, AccountPreferences, LeverageUpdate, PreferencesUpdateResponse} from "$lib/types/account.js";
@@ -42,6 +44,38 @@ export async function switchAccount(type: URL_TYPE, tokens: SessionTokens, accou
         throw new Error(err.error || DEFAULT_ERROR);
     }
     return await response.json() as SessionTokens;
+}
+
+export async function getSyncedAccounts(type: URL_TYPE, tokens: SessionTokens): Promise<Account[]> {
+    const accounts = await getAccounts(type, tokens);
+
+    if (typeof window === 'undefined') return accounts;
+
+    const storageKey = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
+    const lastUsedId = localStorage.getItem(storageKey);
+    const activeAccount = accounts.find(a => a.preferred);
+
+    if (lastUsedId && activeAccount && activeAccount.accountId !== lastUsedId) {
+        const targetAccount = accounts.find(a => a.accountId === lastUsedId);
+
+        if (targetAccount) {
+            try {
+                const newTokens = await switchAccount(type, tokens, lastUsedId);
+
+                const tokenStorageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
+                localStorage.setItem(tokenStorageKey, JSON.stringify(newTokens));
+
+                return accounts.map(a => ({
+                    ...a,
+                    preferred: a.accountId === lastUsedId
+                }));
+            } catch (e) {
+                console.warn(`Failed to auto-restore ${type} account:`, e);
+            }
+        }
+    }
+
+    return accounts;
 }
 
 export async function getPreferences(type: URL_TYPE, tokens: SessionTokens): Promise<AccountPreferences> {

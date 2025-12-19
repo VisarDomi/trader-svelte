@@ -2,7 +2,7 @@ import { goto } from '$app/navigation';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
-import { getAccounts } from '$lib/services/account.js';
+import { getSyncedAccounts } from '$lib/services/account.js';
 import { getPositions, createPosition } from '$lib/services/trading.js';
 import type { Account } from '$lib/types/account.js';
 import type { SessionTokens } from '$lib/types/auth.js';
@@ -10,7 +10,6 @@ import type { URL_TYPE } from '$lib/types/url.js';
 import type { PositionResponse, Direction } from '$lib/types/trading.js';
 
 export class PositionLogic {
-    // We now use the global trading mode instead of a local toggle
     activeType = $state<URL_TYPE>(AUTH.DEMO_TYPE);
     isLoading = $state(true);
     isTrading = $state(false);
@@ -20,7 +19,6 @@ export class PositionLogic {
     currentAccount = $state<Account | null>(null);
     currentPosition = $state<PositionResponse | null>(null);
 
-    // Hardcoded for now per assumptions
     targetEpic = TRADING.NDX_EPIC;
     defaultSize = 0.1;
 
@@ -58,13 +56,12 @@ export class PositionLogic {
 
         try {
             const [accounts, positionsData] = await Promise.all([
-                getAccounts(this.activeType, tokens),
+                getSyncedAccounts(this.activeType, tokens),
                 getPositions(this.activeType, tokens)
             ]);
 
             this.currentAccount = accounts.find(a => a.preferred) || accounts[0] || null;
 
-            // Find position for current Epic
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);
             this.currentPosition = found || null;
 
@@ -82,7 +79,6 @@ export class PositionLogic {
     async closePosition() {
         if (!this.currentPosition) return;
 
-        // Simulate DELETE by POSTing opposite direction
         const currentDir = this.currentPosition.position.direction;
         const oppositeDir = currentDir === TRADING.BUY_DIRECTION ? TRADING.SELL_DIRECTION : TRADING.BUY_DIRECTION;
         const size = this.currentPosition.position.size;
@@ -110,7 +106,6 @@ export class PositionLogic {
             });
 
             this.message = "Order executed successfully";
-            // Refresh data to update UI to show position or clear it
             await this.load();
 
         } catch (e) {

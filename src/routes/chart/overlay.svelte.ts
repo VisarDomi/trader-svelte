@@ -1,4 +1,4 @@
-import { getAccounts } from '$lib/services/account.js';
+import { getSyncedAccounts } from '$lib/services/account.js';
 import { getMarketInfo } from '$lib/services/market.js';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
@@ -17,13 +17,11 @@ export class ChartOverlay {
         if (typeof window === 'undefined') return;
 
         this.loading = true;
-        this.marketName = epic; // Default to ticker until loaded
+        this.marketName = epic;
 
-        // 1. Determine Trading Mode
         const storedMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE;
         this.mode = storedMode || AUTH.DEMO_TYPE;
 
-        // 2. Get Tokens for that mode
         const storageKey = this.mode === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
         const tokensStr = localStorage.getItem(storageKey);
 
@@ -31,9 +29,8 @@ export class ChartOverlay {
             try {
                 const tokens: SessionTokens = JSON.parse(tokensStr);
 
-                // Fetch Account and Market Info in parallel
                 const [accounts, name] = await Promise.all([
-                    getAccounts(this.mode, tokens),
+                    getSyncedAccounts(this.mode, tokens),
                     getMarketInfo(this.mode, tokens, epic)
                 ]);
 
