@@ -41,7 +41,7 @@
             return;
         }
 
-        await overlay.init();
+        await overlay.init(epic);
 
         const tradingMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE || AUTH.DEMO_TYPE;
         const feedMode = tradingMode === AUTH.REAL_TYPE ? AUTH.DEMO_TYPE : AUTH.REAL_TYPE;
@@ -112,10 +112,15 @@
                     border-left: 4px solid {overlay.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
                 "
             >
-                <div style="font-size: 0.7rem; color: #aaa; margin-bottom: 0.25rem;">ACTIVE {overlay.mode}</div>
-                <div style="font-weight: bold; margin-bottom: 0.25rem;">{overlay.account.accountName}</div>
-                <div style="font-size: 0.9rem;">
-                    {overlay.account.symbol}{overlay.account.balance.balance.toFixed(2)}
+                <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 0.5rem; color: #fff;">
+                    {overlay.marketName}
+                </div>
+                <div style="border-top: 1px solid #444; padding-top: 0.5rem;">
+                    <div style="font-size: 0.7rem; color: #aaa; margin-bottom: 0.25rem;">ACTIVE {overlay.mode}</div>
+                    <div style="font-weight: bold; margin-bottom: 0.25rem;">{overlay.account.accountName}</div>
+                    <div style="font-size: 0.9rem;">
+                        {overlay.account.symbol}{overlay.account.balance.balance.toFixed(2)}
+                    </div>
                 </div>
             </div>
         {/if}

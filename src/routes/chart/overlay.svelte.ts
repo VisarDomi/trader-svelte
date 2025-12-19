@@ -1,4 +1,5 @@
 import { getAccounts } from '$lib/services/account.js';
+import { getMarketInfo } from '$lib/services/market.js';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
 import type { Account } from '$lib/types/account.js';
@@ -10,11 +11,13 @@ export class ChartOverlay {
     account = $state<Account | null>(null);
     loading = $state(false);
     mode = $state<URL_TYPE>(AUTH.DEMO_TYPE);
+    marketName = $state('');
 
-    async init() {
+    async init(epic: string) {
         if (typeof window === 'undefined') return;
 
         this.loading = true;
+        this.marketName = epic; // Default to ticker until loaded
 
         // 1. Determine Trading Mode
         const storedMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE;
@@ -27,10 +30,18 @@ export class ChartOverlay {
         if (tokensStr) {
             try {
                 const tokens: SessionTokens = JSON.parse(tokensStr);
-                const accounts = await getAccounts(this.mode, tokens);
+
+                // Fetch Account and Market Info in parallel
+                const [accounts, name] = await Promise.all([
+                    getAccounts(this.mode, tokens),
+                    getMarketInfo(this.mode, tokens, epic)
+                ]);
+
                 this.account = accounts.find(a => a.preferred) || accounts[0] || null;
+                this.marketName = name;
+
             } catch (e) {
-                console.error("Failed to load overlay account", e);
+                console.error("Failed to load overlay data", e);
             }
         }
 

@@ -47,3 +47,20 @@ export interface QuoteMessage {
         timestamp: number; // Milliseconds
     }
 }
+
+export interface SingleMarketResponse {
+    instrument: {
+        epic: string;
+        name: string;
+        symbol: string;
+        expiry: string;
+        type: string;
+    };
+    snapshot: {
+        marketStatus: string;
+        netChange: number;
+        percentageChange: number;
+        bid: number;
+        offer: number;
+    };
+}

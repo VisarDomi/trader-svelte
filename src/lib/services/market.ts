@@ -5,8 +5,9 @@ import * as TIME from '$lib/constants/time.js';
 import { getBaseUrl } from "$lib/utils/helpers.js";
 import { REAL_TYPE } from "$lib/constants/auth.js";
 import type { SessionTokens } from "$lib/types/auth.js";
-import type { MarketPriceResponse, ChartCandle } from "$lib/types/market.js";
+import type { MarketPriceResponse, ChartCandle, SingleMarketResponse } from "$lib/types/market.js";
 import { DEFAULT_ERROR } from "$lib/constants/error.js";
+import type { URL_TYPE } from "$lib/types/url.js";
 
 export async function getHistoricalPrices(
     tokens: SessionTokens,
@@ -42,4 +43,33 @@ export async function getHistoricalPrices(
         low: p.lowPrice.bid,
         close: p.closePrice.bid
     })).sort((a, b) => (a.time as number) - (b.time as number));
+}
+
+export async function getMarketInfo(
+    type: URL_TYPE,
+    tokens: SessionTokens,
+    epic: string
+): Promise<string> {
+    const baseUrl = getBaseUrl(type);
+    // Correct Endpoint: /api/v1/markets/{epic}
+    const url = `${baseUrl}${API.MARKETS_ENDPOINT}/${epic}`;
+
+    const response = await fetch(url, {
+        method: API.GET_METHOD,
+        headers: {
+            [API.CST_KEY]: tokens[API.CST_KEY],
+            [API.X_SECURITY_TOKEN_KEY]: tokens[API.X_SECURITY_TOKEN_KEY]
+        }
+    });
+
+    if (!response.ok) {
+        return epic; // Fallback to epic if fetch fails
+    }
+
+    const data: SingleMarketResponse = await response.json();
+    if (data.instrument && data.instrument.name) {
+        return data.instrument.name;
+    }
+
+    return epic;
 }
