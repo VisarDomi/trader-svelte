@@ -11,3 +11,6 @@ export const MAX_SHORT_KEY = 'MAX_SHORT';
 
 // Auth Throttling
 export const LOGIN_TIMESTAMP_KEY = 'LOGIN_TIMESTAMP';
+
+// App Logic
+export const TRADING_MODE_KEY = 'TRADING_MODE';

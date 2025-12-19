@@ -12,10 +12,21 @@ export class Accounts {
     isLoading = $state(true);
     error = $state('');
     toastMessage = $state('');
+    tradingMode = $state<URL_TYPE>(AUTH.DEMO_TYPE);
 
     async init() {
         this.isLoading = true;
         this.error = '';
+        if (typeof window !== 'undefined') {
+            const storedMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE;
+            if (storedMode) {
+                this.tradingMode = storedMode;
+            } else {
+                // Default: Trading on Demo
+                this.tradingMode = AUTH.DEMO_TYPE;
+                localStorage.setItem(STORAGE.TRADING_MODE_KEY, AUTH.DEMO_TYPE);
+            }
+        }
         await this.loadData();
     }
 
@@ -54,8 +65,14 @@ export class Accounts {
         }
         try {
             const currentTokens: SessionTokens = JSON.parse(tokensStr);
+            // 1. Switch Preference on Backend
             const newTokens = await switchAccount(type, currentTokens, account.accountId);
             localStorage.setItem(storageKey, JSON.stringify(newTokens));
+
+            // 2. Set Trading Mode locally
+            this.tradingMode = type;
+            localStorage.setItem(STORAGE.TRADING_MODE_KEY, type);
+
             await this.loadData();
 
             this.toastMessage = `Switched to ${account.accountName}`;

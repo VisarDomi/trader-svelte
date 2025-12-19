@@ -10,7 +10,8 @@ import type { URL_TYPE } from '$lib/types/url.js';
 import type { PositionResponse, Direction } from '$lib/types/trading.js';
 
 export class PositionLogic {
-    activeType = $state<URL_TYPE>(AUTH.REAL_TYPE);
+    // We now use the global trading mode instead of a local toggle
+    activeType = $state<URL_TYPE>(AUTH.DEMO_TYPE);
     isLoading = $state(true);
     isTrading = $state(false);
     error = $state('');
@@ -24,12 +25,15 @@ export class PositionLogic {
     defaultSize = 0.1;
 
     async init() {
-        await this.load(this.activeType);
-    }
-
-    async switchType(type: URL_TYPE) {
-        this.activeType = type;
-        await this.load(type);
+        if (typeof window !== 'undefined') {
+            const storedMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE;
+            if (storedMode) {
+                this.activeType = storedMode;
+            } else {
+                this.activeType = AUTH.DEMO_TYPE;
+            }
+        }
+        await this.load();
     }
 
     private getTokens(type: URL_TYPE): SessionTokens | null {
@@ -39,14 +43,14 @@ export class PositionLogic {
         return JSON.parse(tokensStr);
     }
 
-    async load(type: URL_TYPE) {
+    async load() {
         this.isLoading = true;
         this.error = '';
         this.message = '';
         this.currentAccount = null;
         this.currentPosition = null;
 
-        const tokens = this.getTokens(type);
+        const tokens = this.getTokens(this.activeType);
         if (!tokens) {
             await goto('/login');
             return;
@@ -54,8 +58,8 @@ export class PositionLogic {
 
         try {
             const [accounts, positionsData] = await Promise.all([
-                getAccounts(type, tokens),
-                getPositions(type, tokens)
+                getAccounts(this.activeType, tokens),
+                getPositions(this.activeType, tokens)
             ]);
 
             this.currentAccount = accounts.find(a => a.preferred) || accounts[0] || null;
@@ -107,7 +111,7 @@ export class PositionLogic {
 
             this.message = "Order executed successfully";
             // Refresh data to update UI to show position or clear it
-            await this.load(this.activeType);
+            await this.load();
 
         } catch (e) {
             this.error = e instanceof Error ? e.message : String(e);

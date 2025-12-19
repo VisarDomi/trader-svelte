@@ -17,19 +17,6 @@
         <a href="/" style="color: #d1d4dc;">← Back</a>
     </div>
 
-    <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-        <button
-                onclick={() => logic.switchType(AUTH.REAL_TYPE)}
-                style="padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; background: {logic.activeType === AUTH.REAL_TYPE ? '#26a69a' : '#333'}; color: white;">
-            REAL
-        </button>
-        <button
-                onclick={() => logic.switchType(AUTH.DEMO_TYPE)}
-                style="padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; background: {logic.activeType === AUTH.DEMO_TYPE ? '#ef5350' : '#333'}; color: white;">
-            DEMO
-        </button>
-    </div>
-
     <!-- Active Account Banner -->
     {#if logic.currentAccount}
         <div style="
@@ -48,6 +35,9 @@
                 </div>
                 <div style="font-size: 0.85rem; color: #aaa; margin-top: 0.25rem;">
                     ID: {logic.currentAccount.accountId}
+                </div>
+                <div style="font-size: 0.8rem; margin-top: 0.5rem; color: {logic.activeType === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'}">
+                    {logic.activeType} TRADING MODE
                 </div>
             </div>
             <div style="text-align: right;">

@@ -6,6 +6,11 @@
     onMount(() => {
         accounts.init();
     });
+
+    // Helper to determine if an account is the SINGLE active trading account
+    function isTradingAccount(account: any, type: string) {
+        return account.preferred && accounts.tradingMode === type;
+    }
 </script>
 
 <div style="padding: 1rem; max-width: 800px; margin: 0 auto;">
@@ -35,9 +40,10 @@
                 {:else}
                     <div style="display: grid; gap: 1rem;">
                         {#each accounts.realAccounts as account}
+                            {@const isActive = isTradingAccount(account, AUTH.REAL_TYPE)}
                             <svelte:element
-                                    this={account.preferred ? 'a' : 'div'}
-                                    href={account.preferred ? `/preferences?type=${AUTH.REAL_TYPE}` : undefined}
+                                    this={isActive ? 'a' : 'div'}
+                                    href={isActive ? `/preferences?type=${AUTH.REAL_TYPE}` : undefined}
                                     style="
                                     display: block;
                                     text-decoration: none;
@@ -48,26 +54,26 @@
                                     border: 1px solid #333;
                                     text-align: left;
                                     width: 100%;
-                                    cursor: {account.preferred ? 'pointer' : 'default'};
-                                    {account.preferred ? 'border-color: #26a69a;' : ''}
+                                    cursor: {isActive ? 'pointer' : 'default'};
+                                    {isActive ? 'border-color: #26a69a;' : ''}
                                 "
                             >
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
                                     <span style="font-weight: bold; color: white; font-size: 1rem;">{account.accountName} ({account.currency})</span>
                                     <div style="display: flex; gap: 1rem; align-items: center;">
                                         <span style="font-size: 0.8em; color: #888;">{account.status}</span>
-                                        {#if !account.preferred}
+                                        {#if !isActive}
                                             <button
                                                     onclick={(e) => {
                                                     e.stopPropagation();
                                                     accounts.switchTo(account, AUTH.REAL_TYPE);
                                                 }}
-                                                style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
+                                                    style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
                                             >
                                                 Switch
                                             </button>
                                         {:else}
-                                            <span style="font-size: 0.8rem; color: #26a69a;">Active</span>
+                                            <span style="font-size: 0.8rem; color: #26a69a;">Trading</span>
                                         {/if}
                                     </div>
                                 </div>
@@ -106,10 +112,11 @@
                 {:else}
                     <div style="display: grid; gap: 1rem;">
                         {#each accounts.demoAccounts as account}
+                            {@const isActive = isTradingAccount(account, AUTH.DEMO_TYPE)}
                             <svelte:element
-                                this={account.preferred ? 'a' : 'div'}
-                                href={account.preferred ? `/preferences?type=${AUTH.DEMO_TYPE}` : undefined}
-                                style="
+                                    this={isActive ? 'a' : 'div'}
+                                    href={isActive ? `/preferences?type=${AUTH.DEMO_TYPE}` : undefined}
+                                    style="
                                     display: block;
                                     text-decoration: none;
                                     color: inherit;
@@ -119,26 +126,26 @@
                                     border: 1px solid #333;
                                     text-align: left;
                                     width: 100%;
-                                    cursor: {account.preferred ? 'pointer' : 'default'};
-                                    {account.preferred ? 'border-color: #ef5350;' : ''}
+                                    cursor: {isActive ? 'pointer' : 'default'};
+                                    {isActive ? 'border-color: #ef5350;' : ''}
                                 "
                             >
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
                                     <span style="font-weight: bold; color: white; font-size: 1rem;">{account.accountName} ({account.currency})</span>
                                     <div style="display: flex; gap: 1rem; align-items: center;">
                                         <span style="font-size: 0.8em; color: #888;">{account.status}</span>
-                                        {#if !account.preferred}
+                                        {#if !isActive}
                                             <button
-                                                onclick={(e) => {
+                                                    onclick={(e) => {
                                                     e.stopPropagation();
                                                     accounts.switchTo(account, AUTH.DEMO_TYPE);
                                                 }}
-                                                style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
+                                                    style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
                                             >
                                                 Switch
                                             </button>
                                         {:else}
-                                            <span style="font-size: 0.8rem; color: #ef5350;">Active</span>
+                                            <span style="font-size: 0.8rem; color: #ef5350;">Trading</span>
                                         {/if}
                                     </div>
                                 </div>
