@@ -28,11 +28,6 @@ export class PreferencesLogic {
         await this.load(this.activeType);
     }
 
-    async switchType(type: URL_TYPE) {
-        this.activeType = type;
-        await this.load(type);
-    }
-
     async load(type: URL_TYPE) {
         this.isLoading = true;
         this.error = '';
