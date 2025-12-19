@@ -86,7 +86,7 @@
         top: 1%;
         z-index: 50;
         display: flex;
-        align-items: center;
+        align-items: stretch;
     ">
         <!-- The Data Card (Navigates to accounts) -->
         {#if overlay.isOpen}
@@ -94,8 +94,16 @@
             <div
                     role="button"
                     tabindex="0"
-                    onclick={() => goto('/accounts')}
-                    onkeydown={(e) => e.key === 'Enter' && goto('/accounts')}
+                    onclick={(e) => {
+                    e.stopPropagation();
+                    goto('/accounts');
+                }}
+                    onkeydown={(e) => {
+                    if (e.key === 'Enter') {
+                        e.stopPropagation();
+                        goto('/accounts');
+                    }
+                }}
                     style="
                     background: rgba(20, 20, 20, 0.9);
                     backdrop-filter: blur(4px);
@@ -103,22 +111,31 @@
                     border-left: none;
                     border-top-right-radius: 8px;
                     border-bottom-right-radius: 8px;
-                    padding: 1rem;
+                    padding: 0.75rem 1rem;
                     color: white;
                     text-align: left;
                     cursor: pointer;
-                    min-width: 180px;
                     box-shadow: 4px 0 10px rgba(0,0,0,0.5);
                     border-left: 4px solid {overlay.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
                 "
             >
-                <div style="font-size: 1.1rem; font-weight: bold; margin-bottom: 0.5rem; color: #fff;">
+                <!-- Market Name -->
+                <div style="font-size: 1rem; font-weight: bold; white-space: nowrap;">
                     {overlay.marketName}
                 </div>
-                <div style="border-top: 1px solid #444; padding-top: 0.5rem;">
-                    <div style="font-size: 0.7rem; color: #aaa; margin-bottom: 0.25rem;">ACTIVE {overlay.mode}</div>
-                    <div style="font-weight: bold; margin-bottom: 0.25rem;">{overlay.account.accountName}</div>
-                    <div style="font-size: 0.9rem;">
+
+                <!-- Vertical Separator -->
+                <div style="width: 1px; height: 24px; background: #444;"></div>
+
+                <!-- Account Info -->
+                <div style="display: flex; flex-direction: column; justify-content: center; line-height: 1.2;">
+                    <div style="font-size: 0.75rem; color: #ddd;">
+                        {overlay.account.accountName} <span style="font-size: 0.65rem; color: #aaa;">({overlay.mode})</span>
+                    </div>
+                    <div style="font-size: 0.9rem; font-weight: bold;">
                         {overlay.account.symbol}{overlay.account.balance.balance.toFixed(2)}
                     </div>
                 </div>
@@ -127,26 +144,30 @@
 
         <!-- The Toggle Arrow -->
         <button
-                onclick={() => overlay.toggle()}
+                onclick={(e) => {
+                e.stopPropagation();
+                overlay.toggle();
+            }}
                 style="
                 background: rgba(40, 40, 40, 0.9);
                 border: 1px solid #333;
                 border-left: none;
                 border-top-right-radius: 8px;
                 border-bottom-right-radius: 8px;
-                padding: 1rem 0.5rem;
+                padding: 0 0.5rem;
                 color: #d1d4dc;
                 cursor: pointer;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 margin-left: -1px; /* Overlap border */
+                min-height: 40px; /* Ensure touch target size */
             "
         >
             {#if overlay.isOpen}
-                <span>◀</span>
+                <span style="font-size: 0.8rem;">◀</span>
             {:else}
-                <span>▶</span>
+                <span style="font-size: 0.8rem;">▶</span>
             {/if}
         </button>
     </div>
