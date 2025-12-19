@@ -83,8 +83,7 @@
     <div style="
         position: fixed;
         left: 0;
-        top: 50%;
-        transform: translateY(-50%);
+        top: 1%;
         z-index: 50;
         display: flex;
         align-items: center;
@@ -117,13 +116,6 @@
                 <div style="font-weight: bold; margin-bottom: 0.25rem;">{overlay.account.accountName}</div>
                 <div style="font-size: 0.9rem;">
                     {overlay.account.symbol}{overlay.account.balance.balance.toFixed(2)}
-                </div>
-                <div style="
-                    font-size: 0.8rem;
-                    margin-top: 0.25rem;
-                    color: {overlay.account.balance.profitLoss >= 0 ? '#26a69a' : '#ef5350'};
-                ">
-                    P&L: {overlay.account.balance.profitLoss.toFixed(2)}
                 </div>
             </div>
         {/if}
