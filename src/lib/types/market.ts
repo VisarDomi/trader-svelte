@@ -48,6 +48,43 @@ export interface QuoteMessage {
     }
 }
 
+// --- New Detailed Market Types ---
+
+export interface MarketInstrument {
+    epic: string;
+    symbol: string;
+    name: string;
+    type: string;
+    currency: string;
+    marginFactor: number;
+    marginFactorUnit: string; // e.g., "PERCENTAGE"
+    lotSize: number;
+}
+
+export interface MarketDealingRules {
+    minDealSize: { unit: string; value: number };
+    maxDealSize: { unit: string; value: number };
+    minSizeIncrement: { unit: string; value: number };
+    minStopOrProfitDistance?: { unit: string; value: number };
+}
+
+export interface MarketSnapshot {
+    marketStatus: string;
+    bid: number;
+    offer: number;
+    high: number;
+    low: number;
+    decimalPlacesFactor: number; // e.g. 2, 3
+    scalingFactor: number;
+}
+
+export interface MarketDetailsResponse {
+    instrument: MarketInstrument;
+    dealingRules: MarketDealingRules;
+    snapshot: MarketSnapshot;
+}
+
+// Legacy simple response used by overlay (can remain or be refactored later)
 export interface SingleMarketResponse {
     instrument: {
         epic: string;
