@@ -7,6 +7,7 @@
     import { ChartUI } from './ui.svelte.js';
     import { ChartFeed } from './feed.svelte.js';
     import { ChartOverlay } from './overlay.svelte.js';
+    import { ChartLines } from './lines.svelte.js'; // Import new Lines logic
 
     import TopBar from './TopBar.svelte';
     import Overlay from './Overlay.svelte';
@@ -30,19 +31,18 @@
     const layout = new ChartUI();
     const feed = new ChartFeed();
     const overlay = new ChartOverlay();
+    const lines = new ChartLines(); // Initialize Lines
 
     let currentEpic = TRADING.NDX_EPIC;
     let decimalPlaces = 2;
     let activePosition: PositionResponse | null = null;
 
     function handleChartClick(param: MouseEventParams) {
-        // 1. Check active position first
         if (activePosition) {
             goto('/position');
             return;
         }
 
-        // 2. Normal Trade Flow
         if (!param.point || !series || !feed.currentBid || !feed.currentOfr) return;
 
         const clickPrice = series.coordinateToPrice(param.point.y);
@@ -105,8 +105,6 @@
             const foundPos = positionsResp.positions.find(p => p.market.epic === currentEpic);
             if (foundPos) {
                 activePosition = foundPos;
-                // Determine Chart Source based on exit price
-                // Sell Position -> Exit at Ask (Offer)
                 if (activePosition.position.direction === TRADING.SELL_DIRECTION) {
                     chartDataSource = TRADING.CHART_DATA_SOURCE_OFR;
                 }
@@ -130,6 +128,12 @@
         series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(pricePrecision));
 
         layout.init(chart, chartContainer);
+
+        // Initialize lines logic
+        lines.init(series);
+        // Draw the lines if position exists
+        lines.update(activePosition);
+
         await feed.init(tokens, currentEpic, series, chartDataSource);
         layout.setDataLoaded(true);
     });
@@ -137,6 +141,7 @@
     onDestroy(() => {
         layout.destroy();
         feed.destroy();
+        // lines.clear(); // Technically chart.remove() cleans up, but good practice if logic gets complex
         if (chart) {
             chart.unsubscribeClick(handleChartClick);
             chart.remove();
