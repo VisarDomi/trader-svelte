@@ -62,11 +62,81 @@
     {/if}
 
     {#if logic.isLoading}
-        <p>Loading trading data...</p>
+        <p>Calculating trade parameters...</p>
     {:else}
         <div style="background: #1a1a1a; padding: 2rem; border-radius: 8px; border: 1px solid #333; text-align: center;">
 
-            {#if logic.currentPosition}
+            {#if logic.plannedTrade}
+                <!-- CONFIRM FLOW -->
+                <div style="margin-bottom: 2rem; text-align: left;">
+                    <h2 style="margin-bottom: 1.5rem; color: #d1d4dc; text-align: center;">Confirm Full Port Trade</h2>
+
+                    <div style="
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 1rem;
+                        background: #222;
+                        padding: 1rem;
+                        border-radius: 4px;
+                        margin-bottom: 2rem;
+                    ">
+                        <div style="color: #888;">Direction</div>
+                        <div style="font-weight: bold; color: {logic.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
+                            {logic.plannedTrade.direction}
+                        </div>
+
+                        <div style="color: #888;">Size</div>
+                        <div style="font-weight: bold; font-size: 1.2rem;">{logic.plannedTrade.size}</div>
+
+                        <div style="color: #888;">Entry (Approx)</div>
+                        <div>{logic.plannedTrade.entryPrice}</div>
+
+                        <div style="color: #888;">Take Profit</div>
+                        <div style="color: #26a69a; font-weight: bold;">{logic.plannedTrade.profitLevel}</div>
+
+                        <div style="color: #888;">Stop Loss</div>
+                        <div style="color: #ef5350; font-weight: bold;">{logic.plannedTrade.stopLevel}</div>
+
+                        <div style="color: #888;">Margin Req</div>
+                        <div>{logic.plannedTrade.marginRequired.toFixed(2)}</div>
+                    </div>
+
+                    <button
+                            onclick={() => logic.confirmTrade()}
+                            disabled={logic.isTrading}
+                            style="
+                        width: 100%;
+                        padding: 1.5rem;
+                        font-size: 1.5rem;
+                        font-weight: bold;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        color: white;
+                        background-color: {logic.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'};
+                        opacity: {logic.isTrading ? 0.5 : 1};
+                    ">
+                        {logic.isTrading ? 'EXECUTING...' : `CONFIRM ${logic.plannedTrade.direction}`}
+                    </button>
+
+                    <button
+                            onclick={() => window.history.back()}
+                            style="
+                            width: 100%;
+                            margin-top: 1rem;
+                            padding: 1rem;
+                            background: transparent;
+                            border: 1px solid #444;
+                            color: #888;
+                            border-radius: 8px;
+                            cursor: pointer;
+                        "
+                    >
+                        Cancel
+                    </button>
+                </div>
+
+            {:else if logic.currentPosition}
                 <!-- CLOSE FLOW -->
                 <div style="margin-bottom: 2rem;">
                     <h2 style="margin-bottom: 1rem; color: #d1d4dc;">Open Position</h2>
@@ -103,7 +173,7 @@
                 </button>
 
             {:else}
-                <!-- OPEN FLOW -->
+                <!-- MANUAL OPEN FLOW -->
                 <h2 style="margin-bottom: 2rem; color: #d1d4dc;">Open New Position</h2>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">

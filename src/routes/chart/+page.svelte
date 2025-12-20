@@ -31,6 +31,7 @@
     const overlay = new ChartOverlay();
 
     let currentEpic = TRADING.NDX_EPIC;
+    let decimalPlaces = 2; // Default safe value
 
     function handleChartClick(param: MouseEventParams) {
         // Need live quotes to decide direction
@@ -42,7 +43,6 @@
         let direction: string | null = null;
 
         // Momentum logic: Click above Offer = BUY, Click below Bid = SELL
-        // If inside spread, ignore.
         if (clickPrice > feed.currentOfr) {
             direction = TRADING.BUY_DIRECTION;
         } else if (clickPrice < feed.currentBid) {
@@ -53,9 +53,9 @@
             const params = new URLSearchParams({
                 epic: currentEpic,
                 direction: direction,
-                price: clickPrice.toString(),
-                bid: feed.currentBid.toString(),
-                ofr: feed.currentOfr.toString()
+                price: clickPrice.toFixed(decimalPlaces),
+                bid: feed.currentBid.toFixed(decimalPlaces),
+                ofr: feed.currentOfr.toFixed(decimalPlaces)
             });
             goto(`/position?${params.toString()}`);
         }
@@ -84,7 +84,6 @@
         const tokens: SessionTokens = JSON.parse(tokensData);
 
         // Fetch Market Info & Positions Parallelly
-        // Positions are needed to determine if we show Bid or Offer chart
         let pricePrecision = 100;
         let chartDataSource = TRADING.CHART_DATA_SOURCE_BID;
 
@@ -95,12 +94,11 @@
             ]);
 
             // 1. Set Precision
-            const factor = marketDetails.snapshot.decimalPlacesFactor;
-            pricePrecision = Math.pow(10, factor);
+            decimalPlaces = marketDetails.snapshot.decimalPlacesFactor;
+            pricePrecision = Math.pow(10, decimalPlaces);
 
             // 2. Determine Chart Source (Bid vs Offer)
-            // If we have a SELL position, we exit by Buying at Offer. Show Offer chart to track SL/TP accurately.
-            // If we have a BUY position, we exit by Selling at Bid. Show Bid chart.
+            // If SELL position -> Exit is Buy at Offer -> Show Offer chart
             const activePos = positionsResp.positions.find(p => p.market.epic === currentEpic);
             if (activePos && activePos.position.direction === TRADING.SELL_DIRECTION) {
                 chartDataSource = TRADING.CHART_DATA_SOURCE_OFR;
