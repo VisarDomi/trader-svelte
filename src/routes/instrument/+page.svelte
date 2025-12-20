@@ -8,85 +8,160 @@
     });
 </script>
 
-<div style="padding: 1rem; max-width: 800px; margin: 0 auto;">
+<div style="padding: 1rem; max-width: 900px; margin: 0 auto;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h1>Select Instrument</h1>
         <a href="/chart" style="color: #d1d4dc;">← Back</a>
     </div>
 
     {#if logic.isLoading}
-        <p>Fetching market details...</p>
+        <p>Fetching detailed market data...</p>
     {:else if logic.error}
         <div style="color: #ef5350; border: 1px solid #ef5350; padding: 1rem; border-radius: 4px;">
             {logic.error}
         </div>
     {:else}
-        <div style="display: grid; gap: 1rem;">
-            {#each logic.instruments as market}
+        <div style="display: grid; gap: 2rem;">
+            {#each logic.instruments as m}
                 <button
-                        onclick={() => logic.select(market.instrument.epic)}
+                        onclick={() => logic.select(m.instrument.epic)}
                         style="
                         display: block;
                         width: 100%;
-                        text-decoration: none;
-                        color: inherit;
-                        background: #1a1a1a;
-                        padding: 1.5rem;
-                        border-radius: 8px;
-                        border: 1px solid #333;
                         text-align: left;
+                        background: #1a1a1a;
+                        border: 1px solid #333;
+                        border-radius: 8px;
+                        overflow: hidden;
+                        color: inherit;
                         cursor: pointer;
-                        transition: background 0.2s;
+                        padding: 0;
                     "
-                        onmouseover={(e) => e.currentTarget.style.background = '#262626'}
-                        onmouseout={(e) => e.currentTarget.style.background = '#1a1a1a'}
-                        onfocus={(e) => e.currentTarget.style.background = '#262626'}
-                        onblur={(e) => e.currentTarget.style.background = '#1a1a1a'}
                 >
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                    <!-- Header -->
+                    <div style="
+                        padding: 1.5rem;
+                        background: #222;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        border-bottom: 1px solid #333;
+                    ">
                         <div>
-                            <div style="font-size: 1.3rem; font-weight: bold; color: white;">
-                                {market.instrument.name}
+                            <div style="font-size: 1.5rem; font-weight: bold; color: white;">
+                                {m.instrument.name}
                             </div>
-                            <div style="font-size: 0.8rem; color: #888; margin-top: 0.25rem;">
-                                {market.instrument.epic} | {market.instrument.type}
+                            <div style="color: #888; margin-top: 0.25rem; font-family: monospace;">
+                                {m.instrument.epic} • {m.instrument.type} • {m.instrument.currency}
                             </div>
                         </div>
                         <div style="text-align: right;">
-                            <div style="font-size: 1.1rem; font-weight: bold; color: {market.snapshot.marketStatus === 'TRADEABLE' ? '#26a69a' : '#ef5350'}">
-                                {market.snapshot.marketStatus}
+                            <div style="
+                                font-size: 1.2rem;
+                                font-weight: bold;
+                                color: {m.snapshot.marketStatus === 'TRADEABLE' ? '#26a69a' : '#ef5350'};
+                             ">
+                                {m.snapshot.marketStatus}
                             </div>
-                            <div style="font-size: 0.8rem; color: #888;">
-                                Lev: {logic.getLeverage(market)}
+                            <div style="color: #aaa; font-size: 0.9rem; margin-top: 0.25rem;">
+                                Lev: <span style="color: white; font-weight: bold;">{logic.getUserLeverage(m)}</span>
                             </div>
                         </div>
                     </div>
 
-                    <div style="
-                        display: grid;
-                        grid-template-columns: repeat(4, 1fr);
-                        gap: 1rem;
-                        font-size: 0.85rem;
-                        background: #222;
-                        padding: 1rem;
-                        border-radius: 4px;
-                    ">
-                        <div>
-                            <div style="color: #888; margin-bottom: 0.25rem;">Bid</div>
-                            <div style="font-weight: bold;">{market.snapshot.bid.toFixed(market.snapshot.decimalPlacesFactor)}</div>
+                    <div style="padding: 1.5rem; display: grid; gap: 1.5rem;">
+
+                        <!-- Prices Section -->
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 1rem;">
+                            <div>
+                                <div style="color: #888; font-size: 0.8rem;">BID</div>
+                                <div style="font-size: 1.2rem; font-weight: bold; color: #ef5350;">
+                                    {m.snapshot.bid.toFixed(m.snapshot.decimalPlacesFactor)}
+                                </div>
+                            </div>
+                            <div>
+                                <div style="color: #888; font-size: 0.8rem;">OFFER</div>
+                                <div style="font-size: 1.2rem; font-weight: bold; color: #26a69a;">
+                                    {m.snapshot.offer.toFixed(m.snapshot.decimalPlacesFactor)}
+                                </div>
+                            </div>
+                            <div>
+                                <div style="color: #888; font-size: 0.8rem;">NET CHANGE</div>
+                                <div style="color: {m.snapshot.netChange >= 0 ? '#26a69a' : '#ef5350'}">
+                                    {m.snapshot.netChange} ({m.snapshot.percentageChange}%)
+                                </div>
+                            </div>
+                            <div>
+                                <div style="color: #888; font-size: 0.8rem;">RANGE (H/L)</div>
+                                <div>{m.snapshot.high} / {m.snapshot.low}</div>
+                            </div>
                         </div>
-                        <div>
-                            <div style="color: #888; margin-bottom: 0.25rem;">Offer</div>
-                            <div style="font-weight: bold;">{market.snapshot.offer.toFixed(market.snapshot.decimalPlacesFactor)}</div>
+
+                        <!-- Dealing Rules -->
+                        <div style="border-top: 1px solid #333; padding-top: 1rem;">
+                            <h4 style="color: #666; margin-bottom: 0.75rem; font-size: 0.8rem; text-transform: uppercase;">Dealing Rules</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; font-size: 0.9rem;">
+                                <div>
+                                    <span style="color: #aaa;">Min Deal:</span>
+                                    {m.dealingRules.minDealSize.value} {m.dealingRules.minDealSize.unit}
+                                </div>
+                                <div>
+                                    <span style="color: #aaa;">Max Deal:</span>
+                                    {m.dealingRules.maxDealSize.value}
+                                </div>
+                                <div>
+                                    <span style="color: #aaa;">Step:</span>
+                                    {m.dealingRules.minSizeIncrement.value}
+                                </div>
+                                <div>
+                                    <span style="color: #aaa;">Min Stop Dist:</span>
+                                    {m.dealingRules.minStopOrProfitDistance?.value ?? '-'}%
+                                </div>
+                                <div>
+                                    <span style="color: #aaa;">Lot Size:</span>
+                                    {m.instrument.lotSize}
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <div style="color: #888; margin-bottom: 0.25rem;">Min Size</div>
-                            <div style="font-weight: bold;">{market.dealingRules.minDealSize.value}</div>
+
+                        <!-- Fees & Hours -->
+                        <div style="border-top: 1px solid #333; padding-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+
+                            <!-- Overnight Fees -->
+                            <div>
+                                <h4 style="color: #666; margin-bottom: 0.5rem; font-size: 0.8rem; text-transform: uppercase;">Overnight Fees</h4>
+                                {#if m.instrument.overnightFee}
+                                    <div style="font-size: 0.9rem;">
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <span style="color: #aaa;">Long Rate:</span>
+                                            <span>{m.instrument.overnightFee.longRate}</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <span style="color: #aaa;">Short Rate:</span>
+                                            <span>{m.instrument.overnightFee.shortRate}</span>
+                                        </div>
+                                    </div>
+                                {:else}
+                                    <span style="color: #555; font-size: 0.9rem;">None</span>
+                                {/if}
+                            </div>
+
+                            <!-- Schedule -->
+                            <div>
+                                <h4 style="color: #666; margin-bottom: 0.5rem; font-size: 0.8rem; text-transform: uppercase;">Schedule</h4>
+                                <div style="font-size: 0.9rem;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">Zone:</span>
+                                        <span>{m.instrument.openingHours.zone}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">Update:</span>
+                                        <span>{new Date(m.snapshot.updateTime).toLocaleTimeString()}</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <div style="color: #888; margin-bottom: 0.25rem;">Precision</div>
-                            <div style="font-weight: bold;">{market.snapshot.decimalPlacesFactor}</div>
-                        </div>
+
                     </div>
                 </button>
             {/each}

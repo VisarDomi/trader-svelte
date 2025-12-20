@@ -5,7 +5,7 @@ import * as TIME from '$lib/constants/time.js';
 import { getBaseUrl } from "$lib/utils/helpers.js";
 import { REAL_TYPE } from "$lib/constants/auth.js";
 import type { SessionTokens } from "$lib/types/auth.js";
-import type { MarketPriceResponse, ChartCandle, SingleMarketResponse, MarketDetailsResponse } from "$lib/types/market.js";
+import type { MarketPriceResponse, ChartCandle, MarketDetailsResponse } from "$lib/types/market.js";
 import { DEFAULT_ERROR } from "$lib/constants/error.js";
 import type { URL_TYPE } from "$lib/types/url.js";
 
@@ -45,12 +45,14 @@ export async function getHistoricalPrices(
     })).sort((a, b) => (a.time as number) - (b.time as number));
 }
 
+// Used for quick name lookups
 export async function getMarketInfo(
+    type: URL_TYPE,
     tokens: SessionTokens,
     epic: string
 ): Promise<string> {
     try {
-        const details = await getMarketDetails(tokens, epic);
+        const details = await getMarketDetails(type, tokens, epic);
         return details.instrument.name;
     } catch {
         return epic;
@@ -59,10 +61,11 @@ export async function getMarketInfo(
 
 // Full API details
 export async function getMarketDetails(
+    type: URL_TYPE,
     tokens: SessionTokens,
     epic: string
 ): Promise<MarketDetailsResponse> {
-    const baseUrl = getBaseUrl(REAL_TYPE);
+    const baseUrl = getBaseUrl(type);
     const url = `${baseUrl}${API.MARKETS_ENDPOINT}/${epic}`;
 
     const response = await fetch(url, {

@@ -48,34 +48,71 @@ export interface QuoteMessage {
     }
 }
 
-// --- New Detailed Market Types ---
+// --- Detailed Market Types ---
+
+export interface MarketOpeningHours {
+    zone: string;
+    mon?: string[];
+    tue?: string[];
+    wed?: string[];
+    thu?: string[];
+    fri?: string[];
+    sat?: string[];
+    sun?: string[];
+}
+
+export interface MarketOvernightFee {
+    longRate: number;
+    shortRate: number;
+    swapChargeTimestamp?: number;
+    swapChargeInterval?: number;
+}
 
 export interface MarketInstrument {
     epic: string;
     symbol: string;
     name: string;
-    type: string;
+    lotSize: number;
+    type: string; // e.g., "COMMODITIES", "INDICES"
+    guaranteedStopAllowed: boolean;
+    streamingPricesAvailable: boolean;
     currency: string;
     marginFactor: number;
-    marginFactorUnit: string; // e.g., "PERCENTAGE"
-    lotSize: number;
+    marginFactorUnit: string; // "PERCENTAGE"
+    openingHours: MarketOpeningHours;
+    overnightFee?: MarketOvernightFee;
+}
+
+export interface DealingRuleValue {
+    unit: string; // "POINTS", "PERCENTAGE"
+    value: number;
 }
 
 export interface MarketDealingRules {
-    minDealSize: { unit: string; value: number };
-    maxDealSize: { unit: string; value: number };
-    minSizeIncrement: { unit: string; value: number };
-    minStopOrProfitDistance?: { unit: string; value: number };
+    minStepDistance: DealingRuleValue;
+    minDealSize: DealingRuleValue;
+    maxDealSize: DealingRuleValue;
+    minSizeIncrement: DealingRuleValue;
+    minGuaranteedStopDistance?: DealingRuleValue;
+    minStopOrProfitDistance?: DealingRuleValue;
+    maxStopOrProfitDistance?: DealingRuleValue;
+    marketOrderPreference: string;
+    trailingStopsPreference: string;
 }
 
 export interface MarketSnapshot {
-    marketStatus: string;
+    marketStatus: string; // "TRADEABLE", "CLOSED"
+    netChange: number;
+    percentageChange: number;
+    updateTime: string;
+    delayTime: number;
     bid: number;
     offer: number;
     high: number;
     low: number;
-    decimalPlacesFactor: number; // e.g. 2, 3
+    decimalPlacesFactor: number;
     scalingFactor: number;
+    marketModes: string[];
 }
 
 export interface MarketDetailsResponse {
@@ -84,7 +121,7 @@ export interface MarketDetailsResponse {
     snapshot: MarketSnapshot;
 }
 
-// Legacy simple response used by overlay (can remain or be refactored later)
+// Legacy simple response (kept for compatibility if needed)
 export interface SingleMarketResponse {
     instrument: {
         epic: string;
