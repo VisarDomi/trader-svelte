@@ -20,6 +20,7 @@ export interface PositionBody {
     profitLevel?: number;
     stopDistance?: number;
     profitDistance?: number;
+    initialBalance?: number;
 }
 
 export interface PositionMarket {

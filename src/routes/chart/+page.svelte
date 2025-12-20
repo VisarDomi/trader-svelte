@@ -7,7 +7,7 @@
     import { ChartUI } from './ui.svelte.js';
     import { ChartFeed } from './feed.svelte.js';
     import { ChartOverlay } from './overlay.svelte.js';
-    import { ChartLines } from './lines.svelte.js'; // Import new Lines logic
+    import { ChartLines } from './lines.svelte.js';
 
     import TopBar from './TopBar.svelte';
     import Overlay from './Overlay.svelte';
@@ -19,6 +19,7 @@
     import { authenticateAndStoreSession } from "$lib/services/auth.js";
     import { getMarketDetails } from "$lib/services/market.js";
     import { getPositions } from "$lib/services/trading.js";
+    import { getSyncedAccounts } from "$lib/services/account.js";
     import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
     import type { SessionTokens } from "$lib/types/auth.js";
     import type { URL_TYPE } from '$lib/types/url.js';
@@ -31,7 +32,7 @@
     const layout = new ChartUI();
     const feed = new ChartFeed();
     const overlay = new ChartOverlay();
-    const lines = new ChartLines(); // Initialize Lines
+    const lines = new ChartLines();
 
     let currentEpic = TRADING.NDX_EPIC;
     let decimalPlaces = 2;
@@ -94,16 +95,21 @@
         let chartDataSource = TRADING.CHART_DATA_SOURCE_BID;
 
         try {
-            const [marketDetails, positionsResp] = await Promise.all([
+            const [marketDetails, positionsResp, accounts] = await Promise.all([
                 getMarketDetails(feedMode, tokens, currentEpic),
-                getPositions(feedMode, tokens)
+                getPositions(feedMode, tokens),
+                getSyncedAccounts(feedMode, tokens)
             ]);
 
             decimalPlaces = marketDetails.snapshot.decimalPlacesFactor;
             pricePrecision = Math.pow(10, decimalPlaces);
 
+            const activeAccount = accounts.find(a => a.preferred) || accounts[0];
+            const currentEquity = activeAccount?.balance.available || 0;
+
             const foundPos = positionsResp.positions.find(p => p.market.epic === currentEpic);
             if (foundPos) {
+                foundPos.position.initialBalance = currentEquity;
                 activePosition = foundPos;
                 if (activePosition.position.direction === TRADING.SELL_DIRECTION) {
                     chartDataSource = TRADING.CHART_DATA_SOURCE_OFR;
@@ -129,19 +135,16 @@
 
         layout.init(chart, chartContainer);
 
-        // Initialize lines logic
         lines.init(series);
-        // Draw the lines if position exists
         lines.update(activePosition);
 
-        await feed.init(tokens, currentEpic, series, chartDataSource);
+        await feed.init(tokens, currentEpic, series, chartDataSource, decimalPlaces, activePosition);
         layout.setDataLoaded(true);
     });
 
     onDestroy(() => {
         layout.destroy();
         feed.destroy();
-        // lines.clear(); // Technically chart.remove() cleans up, but good practice if logic gets complex
         if (chart) {
             chart.unsubscribeClick(handleChartClick);
             chart.remove();

@@ -1,6 +1,8 @@
-import type { ISeriesApi, IPriceLine } from "lightweight-charts";
+import { type ISeriesApi, type IPriceLine, LineStyle } from "lightweight-charts";
 import type { PositionResponse } from "$lib/types/trading.js";
-import * as TRADING from "$lib/constants/trading.js";
+import * as CHART from "$lib/constants/chart.js";
+import { formatTimestampToLocalTime } from "$lib/utils/time.js";
+import { DateTime } from "luxon";
 
 export class ChartLines {
     private series: ISeriesApi<"Candlestick"> | null = null;
@@ -15,44 +17,75 @@ export class ChartLines {
     update(position: PositionResponse | null) {
         if (!this.series) return;
 
-        // Always clear existing lines first
         this.clear();
 
         if (!position) return;
 
         const p = position.position;
+        const initialBalance = p.initialBalance || 0;
+        const hasValidInitialBalance = initialBalance !== 0;
 
-        // 1. Entry Line
+        const directionText = p.direction === "BUY" ? "You bought" : "You sold";
+        let startingTitle = `${directionText} ${p.size} ${position.market.epic}`;
+
+        if (p.createdDateUTC) {
+            const dateSeconds = DateTime.fromISO(p.createdDateUTC, { zone: "utc" }).toSeconds();
+            const tradeTime = formatTimestampToLocalTime(dateSeconds as any);
+            startingTitle += ` at ${tradeTime}`;
+        }
+
         this.entryLine = this.series.createPriceLine({
             price: p.level,
-            color: '#d1d4dc', // White/Gray
-            lineWidth: 1,
-            lineStyle: 2, // Dashed
+            color: CHART.STARTING_LINE_COLOR || "#FFDD00",
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
-            title: `${p.direction} @ ${p.level}`,
+            title: startingTitle,
         });
 
-        // 2. Take Profit
         if (p.profitLevel) {
+            const potentialProfit = Math.abs(p.level - p.profitLevel) * p.size;
+            let lamboTitle = `Potential Profit +${potentialProfit.toFixed(2)}`;
+
+            if (hasValidInitialBalance) {
+                const optimisticBalance = initialBalance + potentialProfit;
+                const potentialProfitPercentage = (potentialProfit / initialBalance) * 100;
+                const offsetProfitPercentage = (potentialProfitPercentage / (100 + potentialProfitPercentage)) * 100;
+                lamboTitle = `Potential Profit +${potentialProfit.toFixed(2)} (${optimisticBalance.toFixed(2)}) (+${potentialProfitPercentage.toFixed(2)}%) (+-${offsetProfitPercentage.toFixed(2)}%)`;
+            }
+
             this.tpLine = this.series.createPriceLine({
                 price: p.profitLevel,
-                color: '#26a69a', // Green
-                lineWidth: 1,
-                lineStyle: 0, // Solid
+                color: CHART.UP_COLOR,
+                lineWidth: 2,
+                lineStyle: LineStyle.Solid,
                 axisLabelVisible: true,
-                title: 'TP',
+                title: lamboTitle,
             });
         }
 
-        // 3. Stop Loss
         if (p.stopLevel) {
+            const potentialLoss = Math.abs(p.level - p.stopLevel) * p.size;
+            let wendyTitle = `Potential Loss -${potentialLoss.toFixed(2)}`;
+
+            if (hasValidInitialBalance) {
+                const pessimisticBalance = initialBalance - potentialLoss;
+                const potentialLossPercentage = (potentialLoss / initialBalance) * 100;
+                let offsetPercentageText = "";
+                if (potentialLossPercentage < 100) {
+                    const offsetPercentage = (potentialLossPercentage / (100 - potentialLossPercentage)) * 100;
+                    offsetPercentageText = ` (-+${offsetPercentage.toFixed(2)}%)`;
+                }
+                wendyTitle = `Potential Loss -${potentialLoss.toFixed(2)} (${pessimisticBalance.toFixed(2)}) (-${potentialLossPercentage.toFixed(2)}%)${offsetPercentageText}`;
+            }
+
             this.slLine = this.series.createPriceLine({
                 price: p.stopLevel,
-                color: '#ef5350', // Red
-                lineWidth: 1,
-                lineStyle: 0, // Solid
+                color: CHART.DOWN_COLOR,
+                lineWidth: 2,
+                lineStyle: LineStyle.Solid,
                 axisLabelVisible: true,
-                title: 'SL',
+                title: wendyTitle,
             });
         }
     }

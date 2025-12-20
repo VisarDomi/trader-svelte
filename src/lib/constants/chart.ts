@@ -18,3 +18,9 @@ export const MOBILE_BAR_SPACING = 6;
 
 export const PRICE_FORMAT_TYPE = "price";
 export const BASE_SERIES_TITLE = "Current Price";
+
+export const CLICK_THRESHOLD = 20;
+
+export const WENDY_LINE_COLOR = "#FF3366";
+export const LAMBO_LINE_COLOR = "#00FF99";
+export const STARTING_LINE_COLOR = "#FFDD00";
