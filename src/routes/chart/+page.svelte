@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createChart, CandlestickSeries } from 'lightweight-charts';
-    import type { IChartApi } from 'lightweight-charts';
+    import type { IChartApi, ISeriesApi, MouseEventParams } from 'lightweight-charts';
     import { onMount, onDestroy } from 'svelte';
     import { goto } from '$app/navigation';
 
@@ -17,16 +17,49 @@
     import * as AUTH from '$lib/constants/auth.js';
     import { authenticateAndStoreSession } from "$lib/services/auth.js";
     import { getMarketDetails } from "$lib/services/market.js";
+    import { getPositions } from "$lib/services/trading.js";
     import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
     import type { SessionTokens } from "$lib/types/auth.js";
     import type { URL_TYPE } from '$lib/types/url.js';
 
     let chartContainer: HTMLDivElement;
     let chart: IChartApi;
+    let series: ISeriesApi<"Candlestick">;
 
     const layout = new ChartUI();
     const feed = new ChartFeed();
     const overlay = new ChartOverlay();
+
+    let currentEpic = TRADING.NDX_EPIC;
+
+    function handleChartClick(param: MouseEventParams) {
+        // Need live quotes to decide direction
+        if (!param.point || !series || !feed.currentBid || !feed.currentOfr) return;
+
+        const clickPrice = series.coordinateToPrice(param.point.y);
+        if (clickPrice === null) return;
+
+        let direction: string | null = null;
+
+        // Momentum logic: Click above Offer = BUY, Click below Bid = SELL
+        // If inside spread, ignore.
+        if (clickPrice > feed.currentOfr) {
+            direction = TRADING.BUY_DIRECTION;
+        } else if (clickPrice < feed.currentBid) {
+            direction = TRADING.SELL_DIRECTION;
+        }
+
+        if (direction) {
+            const params = new URLSearchParams({
+                epic: currentEpic,
+                direction: direction,
+                price: clickPrice.toString(),
+                bid: feed.currentBid.toString(),
+                ofr: feed.currentOfr.toString()
+            });
+            goto(`/position?${params.toString()}`);
+        }
+    }
 
     onMount(async () => {
         try {
@@ -36,54 +69,64 @@
             return;
         }
 
-        // 1. Determine Epic (Storage > Default)
         const storedEpic = localStorage.getItem(STORAGE.LAST_EPIC_KEY);
-        const epic = storedEpic || TRADING.NDX_EPIC;
+        currentEpic = storedEpic || TRADING.NDX_EPIC;
 
-        // 2. Determine Mode & Tokens
         const tradingMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE || AUTH.DEMO_TYPE;
-        // Chart feed uses opposite of trading mode if we wanted, or just REAL.
-        // For simplicity based on your previous logic:
-        // If trading REAL, use REAL feed. If trading DEMO, use DEMO feed (usually).
-        // However, your code had logic: "feedMode = tradingMode === REAL ? DEMO : REAL" which seemed odd.
-        // I will assume we want the feed matching the current mode, or Real if available for better data.
-        // Let's stick to: Use Real for charts if possible, unless in Demo mode and only have Demo tokens?
-        // Actually, to match Overlay logic:
-
-        const feedMode = tradingMode === AUTH.REAL_TYPE ? AUTH.REAL_TYPE : AUTH.DEMO_TYPE; // Simplified for now
+        const feedMode = tradingMode === AUTH.REAL_TYPE ? AUTH.REAL_TYPE : AUTH.DEMO_TYPE;
         const tokensKey = feedMode === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
         const tokensData = localStorage.getItem(tokensKey);
 
         if (!tokensData) {
-            // Fallback to opposite if primary missing? Or just fail.
             await goto('/login');
             return;
         }
         const tokens: SessionTokens = JSON.parse(tokensData);
 
-        // 3. Fetch Dynamic Instrument Data (Replacing constants)
-        // We need precision for the chart configuration
-        let pricePrecision = 100; // Safe default
+        // Fetch Market Info & Positions Parallelly
+        // Positions are needed to determine if we show Bid or Offer chart
+        let pricePrecision = 100;
+        let chartDataSource = TRADING.CHART_DATA_SOURCE_BID;
+
         try {
-            const marketDetails = await getMarketDetails(feedMode, tokens, epic);
-            const factor = marketDetails.snapshot.decimalPlacesFactor; // e.g., 2
-            pricePrecision = Math.pow(10, factor); // 10^2 = 100
+            const [marketDetails, positionsResp] = await Promise.all([
+                getMarketDetails(feedMode, tokens, currentEpic),
+                getPositions(feedMode, tokens)
+            ]);
+
+            // 1. Set Precision
+            const factor = marketDetails.snapshot.decimalPlacesFactor;
+            pricePrecision = Math.pow(10, factor);
+
+            // 2. Determine Chart Source (Bid vs Offer)
+            // If we have a SELL position, we exit by Buying at Offer. Show Offer chart to track SL/TP accurately.
+            // If we have a BUY position, we exit by Selling at Bid. Show Bid chart.
+            const activePos = positionsResp.positions.find(p => p.market.epic === currentEpic);
+            if (activePos && activePos.position.direction === TRADING.SELL_DIRECTION) {
+                chartDataSource = TRADING.CHART_DATA_SOURCE_OFR;
+            } else {
+                chartDataSource = TRADING.CHART_DATA_SOURCE_BID;
+            }
+
         } catch (e) {
-            console.error("Failed to fetch market details for chart config", e);
+            console.error("Failed to fetch initial data", e);
         }
 
-        await overlay.init(epic);
+        await overlay.init(currentEpic);
 
         const w = window.innerWidth;
         const h = window.innerHeight;
         chart = createChart(chartContainer, getChartOptions(w, h));
 
-        // 4. Configure Series with dynamic precision
-        const series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(pricePrecision));
+        chart.subscribeClick(handleChartClick);
+
+        series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(pricePrecision));
 
         layout.init(chart, chartContainer);
 
-        await feed.init(tokens, epic, series);
+        // Pass the determined source to the feed
+        await feed.init(tokens, currentEpic, series, chartDataSource);
+
         layout.setDataLoaded(true);
     });
 
@@ -91,6 +134,7 @@
         layout.destroy();
         feed.destroy();
         if (chart) {
+            chart.unsubscribeClick(handleChartClick);
             chart.remove();
         }
     });

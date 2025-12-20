@@ -8,12 +8,14 @@ import type { SessionTokens } from "$lib/types/auth.js";
 import type { MarketPriceResponse, ChartCandle, MarketDetailsResponse } from "$lib/types/market.js";
 import { DEFAULT_ERROR } from "$lib/constants/error.js";
 import type { URL_TYPE } from "$lib/types/url.js";
+import * as TRADING from "$lib/constants/trading.js";
 
 export async function getHistoricalPrices(
     tokens: SessionTokens,
-    epic: string
+    epic: string,
+    type: typeof TRADING.CHART_DATA_SOURCE_BID | typeof TRADING.CHART_DATA_SOURCE_OFR = TRADING.CHART_DATA_SOURCE_BID
 ): Promise<ChartCandle[]> {
-    const baseUrl = getBaseUrl(REAL_TYPE);
+    const baseUrl = getBaseUrl(REAL_TYPE); // Always fetch history from REAL for better data quality? Or match context. User code used REAL_TYPE previously.
     const endDateTime = DateTime.utc();
     const fromUTCDateTime = endDateTime.minus({minutes: TIME.TOTAL_MINUTES_IN_THE_PAST});
     const fromUTC = fromUTCDateTime.startOf(TIME.SECOND_KEY).toISO({suppressMilliseconds: true}).slice(0, -1);
@@ -36,16 +38,31 @@ export async function getHistoricalPrices(
         throw new Error(DEFAULT_ERROR);
     }
     const data: MarketPriceResponse = await response.json();
-    return data.prices.map(p => ({
-        time: DateTime.fromISO(p.snapshotTimeUTC, { zone: TIME.UTC_ZONE }).toSeconds() as UTCTimestamp,
-        open: p.openPrice.bid,
-        high: p.highPrice.bid,
-        low: p.lowPrice.bid,
-        close: p.closePrice.bid
-    })).sort((a, b) => (a.time as number) - (b.time as number));
+
+    // Map based on requested type (Bid or Ask)
+    return data.prices.map(p => {
+        const priceSet = type === TRADING.CHART_DATA_SOURCE_OFR ? {
+            open: p.openPrice.ask,
+            high: p.highPrice.ask,
+            low: p.lowPrice.ask,
+            close: p.closePrice.ask
+        } : {
+            open: p.openPrice.bid,
+            high: p.highPrice.bid,
+            low: p.lowPrice.bid,
+            close: p.closePrice.bid
+        };
+
+        return {
+            time: DateTime.fromISO(p.snapshotTimeUTC, { zone: TIME.UTC_ZONE }).toSeconds() as UTCTimestamp,
+            open: priceSet.open,
+            high: priceSet.high,
+            low: priceSet.low,
+            close: priceSet.close
+        };
+    }).sort((a, b) => (a.time as number) - (b.time as number));
 }
 
-// Used for quick name lookups
 export async function getMarketInfo(
     type: URL_TYPE,
     tokens: SessionTokens,
@@ -59,7 +76,6 @@ export async function getMarketInfo(
     }
 }
 
-// Full API details
 export async function getMarketDetails(
     type: URL_TYPE,
     tokens: SessionTokens,
