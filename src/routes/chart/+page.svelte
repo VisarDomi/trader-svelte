@@ -3,7 +3,6 @@
     import type { IChartApi } from 'lightweight-charts';
     import { onMount, onDestroy } from 'svelte';
     import { goto } from '$app/navigation';
-    import { page } from '$app/state';
 
     import { ChartUI } from './ui.svelte.js';
     import { ChartFeed } from './feed.svelte.js';
@@ -13,7 +12,6 @@
     import Overlay from './Overlay.svelte';
 
     import * as STORAGE from '$lib/constants/storage.js';
-    import * as API from '$lib/constants/api.js';
     import * as TRADING from '$lib/constants/trading.js';
     import * as CHART_CONST from '$lib/constants/chart.js';
     import * as AUTH from '$lib/constants/auth.js';
@@ -30,15 +28,16 @@
     const feed = new ChartFeed();
     const overlay = new ChartOverlay();
 
-    const paramEpic = page.url.searchParams.get(API.EPIC_KEY);
-    const epic = paramEpic || TRADING.NDX_EPIC;
-
     onMount(async () => {
-        if (!paramEpic) {
-            const newUrl = new URL(page.url);
-            newUrl.searchParams.set(API.EPIC_KEY, epic);
-            void goto(newUrl, { replaceState: true });
+        // 1. Determine Epic (Storage > Default) - No URL logic
+        const storedEpic = localStorage.getItem(STORAGE.LAST_EPIC_KEY);
+        let epic = storedEpic || TRADING.NDX_EPIC;
+
+        // 2. Validate Epic
+        if (!TRADING.INSTRUMENT_DETAILS[epic]) {
+            epic = TRADING.NDX_EPIC;
         }
+
         try {
             await authenticateAndStoreSession();
         } catch (ignore) {
@@ -60,8 +59,7 @@
         const h = window.innerHeight;
         chart = createChart(chartContainer, getChartOptions(w, h));
 
-        // Refactored: Lookup precision from config
-        const instrumentConfig = TRADING.INSTRUMENT_DETAILS[epic] || TRADING.INSTRUMENT_DETAILS[TRADING.NDX_EPIC];
+        const instrumentConfig = TRADING.INSTRUMENT_DETAILS[epic];
         const series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(instrumentConfig.pricePrecision));
 
         layout.init(chart, chartContainer);
