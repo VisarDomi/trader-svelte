@@ -1,10 +1,10 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { PositionLogic } from './logic.svelte.js';
-    import * as AUTH from '$lib/constants/auth.js';
+    import { PositionViewerLogic } from './logic.svelte.js';
     import * as TRADING from '$lib/constants/trading.js';
+    import * as AUTH from '$lib/constants/auth.js';
 
-    const logic = new PositionLogic();
+    const logic = new PositionViewerLogic();
 
     onMount(() => {
         logic.init();
@@ -13,11 +13,10 @@
 
 <div style="padding: 1rem; max-width: 800px; margin: 0 auto;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-        <h1>Trade {logic.targetEpic}</h1>
-        <a href="/" style="color: #d1d4dc;">← Back</a>
+        <h1>Current Position</h1>
+        <a href="/chart" style="color: #d1d4dc;">← Chart</a>
     </div>
 
-    <!-- Active Account Banner -->
     {#if logic.currentAccount}
         <div style="
             margin-bottom: 2rem;
@@ -27,24 +26,13 @@
             border-left: 4px solid {logic.activeType === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
             display: flex;
             justify-content: space-between;
-            align-items: center;
         ">
             <div>
-                <div style="font-weight: bold; font-size: 1.1rem; color: #fff;">
-                    {logic.currentAccount.accountName} ({logic.currentAccount.currency})
-                </div>
-                <div style="font-size: 0.85rem; color: #aaa; margin-top: 0.25rem;">
-                    ID: {logic.currentAccount.accountId}
-                </div>
-                <div style="font-size: 0.8rem; margin-top: 0.5rem; color: {logic.activeType === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'}">
-                    {logic.activeType} TRADING MODE
-                </div>
+                <span style="font-weight: bold;">{logic.currentAccount.accountName}</span>
+                <span style="font-size: 0.8rem; color: #aaa; margin-left: 0.5rem;">{logic.targetEpic}</span>
             </div>
-            <div style="text-align: right;">
-                <div style="font-size: 0.85rem; color: #aaa;">Balance</div>
-                <div style="font-weight: bold; font-size: 1.1rem;">
-                    {logic.currentAccount.symbol}{logic.currentAccount.balance.balance.toFixed(2)}
-                </div>
+            <div style="font-weight: bold;">
+                {logic.currentAccount.symbol}{logic.currentAccount.balance.balance.toFixed(2)}
             </div>
         </div>
     {/if}
@@ -55,167 +43,129 @@
         </div>
     {/if}
 
-    {#if logic.message}
-        <div style="color: #26a69a; border: 1px solid #26a69a; padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem;">
-            {logic.message}
-        </div>
-    {/if}
-
     {#if logic.isLoading}
-        <p>Calculating trade parameters...</p>
-    {:else}
-        <div style="background: #1a1a1a; padding: 2rem; border-radius: 8px; border: 1px solid #333; text-align: center;">
+        <p>Loading position details...</p>
+    {:else if logic.currentPosition}
+        <!-- Position Dashboard -->
+        <div style="background: #1a1a1a; padding: 1.5rem; border-radius: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 2rem;">
 
-            {#if logic.plannedTrade}
-                <!-- CONFIRM FLOW -->
-                <div style="margin-bottom: 2rem; text-align: left;">
-                    <h2 style="margin-bottom: 1.5rem; color: #d1d4dc; text-align: center;">Confirm Full Port Trade</h2>
-
-                    <div style="
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 1rem;
-                        background: #222;
-                        padding: 1rem;
-                        border-radius: 4px;
-                        margin-bottom: 2rem;
-                    ">
-                        <div style="color: #888;">Direction</div>
-                        <div style="font-weight: bold; color: {logic.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
-                            {logic.plannedTrade.direction}
-                        </div>
-
-                        <div style="color: #888;">Size</div>
-                        <div style="font-weight: bold; font-size: 1.2rem;">{logic.plannedTrade.size}</div>
-
-                        <div style="color: #888;">Entry (Approx)</div>
-                        <div>{logic.plannedTrade.entryPrice}</div>
-
-                        <div style="color: #888;">Take Profit</div>
-                        <div style="color: #26a69a; font-weight: bold;">{logic.plannedTrade.profitLevel}</div>
-
-                        <div style="color: #888;">Stop Loss</div>
-                        <div style="color: #ef5350; font-weight: bold;">{logic.plannedTrade.stopLevel}</div>
-
-                        <div style="color: #888;">Margin Req</div>
-                        <div>{logic.plannedTrade.marginRequired.toFixed(2)}</div>
+            <!-- 1. Headline (Dir, Size, P&L) -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 1.5rem; border-bottom: 1px solid #333;">
+                <div>
+                    <div style="font-size: 2.5rem; font-weight: bold; color: {logic.currentPosition.position.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}; line-height: 1;">
+                        {logic.currentPosition.position.direction}
                     </div>
-
-                    <button
-                            onclick={() => logic.confirmTrade()}
-                            disabled={logic.isTrading}
-                            style="
-                        width: 100%;
-                        padding: 1.5rem;
-                        font-size: 1.5rem;
-                        font-weight: bold;
-                        border: none;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        color: white;
-                        background-color: {logic.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'};
-                        opacity: {logic.isTrading ? 0.5 : 1};
-                    ">
-                        {logic.isTrading ? 'EXECUTING...' : `CONFIRM ${logic.plannedTrade.direction}`}
-                    </button>
-
-                    <button
-                            onclick={() => window.history.back()}
-                            style="
-                            width: 100%;
-                            margin-top: 1rem;
-                            padding: 1rem;
-                            background: transparent;
-                            border: 1px solid #444;
-                            color: #888;
-                            border-radius: 8px;
-                            cursor: pointer;
-                        "
-                    >
-                        Cancel
-                    </button>
-                </div>
-
-            {:else if logic.currentPosition}
-                <!-- CLOSE FLOW -->
-                <div style="margin-bottom: 2rem;">
-                    <h2 style="margin-bottom: 1rem; color: #d1d4dc;">Open Position</h2>
-                    <div style="font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5rem;">
-                        <span style="color: {logic.currentPosition.position.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
-                            {logic.currentPosition.position.direction}
-                        </span>
-                        <span>{logic.currentPosition.position.size}</span>
-                    </div>
-                    <div style="color: #888; margin-bottom: 0.5rem;">
-                        Entry: {logic.currentPosition.position.level}
-                    </div>
-                    <div style="font-size: 1.2rem; color: {logic.currentPosition.position.upl >= 0 ? '#26a69a' : '#ef5350'}">
-                        P&L: {logic.currentPosition.position.upl.toFixed(2)}
+                    <div style="font-size: 1.2rem; font-weight: bold; margin-top: 0.5rem; color: #ccc;">
+                        Size: {logic.currentPosition.position.size}
                     </div>
                 </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 0.9rem; color: #888;">UNREALIZED P&L</div>
+                    <div style="font-size: 2.5rem; font-weight: bold; color: {logic.currentPosition.position.upl >= 0 ? '#26a69a' : '#ef5350'}; line-height: 1;">
+                        {logic.currentPosition.position.upl.toFixed(2)}
+                    </div>
+                </div>
+            </div>
 
-                <button
-                        onclick={() => logic.closePosition()}
-                        disabled={logic.isTrading}
-                        style="
-                        width: 100%;
-                        padding: 1.5rem;
-                        font-size: 1.2rem;
-                        font-weight: bold;
-                        border: none;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        background-color: #555;
-                        color: white;
-                        opacity: {logic.isTrading ? 0.5 : 1};
-                    ">
-                    {logic.isTrading ? 'CLOSING...' : 'CLOSE POSITION'}
-                </button>
-
-            {:else}
-                <!-- MANUAL OPEN FLOW -->
-                <h2 style="margin-bottom: 2rem; color: #d1d4dc;">Open New Position</h2>
-
+            <!-- 2. Price Data -->
+            <div>
+                <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Price Information</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <button
-                            onclick={() => logic.openPosition(TRADING.BUY_DIRECTION)}
-                            disabled={logic.isTrading}
-                            style="
-                            padding: 2rem;
-                            font-size: 1.5rem;
-                            font-weight: bold;
-                            border: none;
-                            border-radius: 8px;
-                            cursor: pointer;
-                            background-color: #26a69a;
-                            color: white;
-                            opacity: {logic.isTrading ? 0.5 : 1};
-                        ">
-                        BUY
-                    </button>
-
-                    <button
-                            onclick={() => logic.openPosition(TRADING.SELL_DIRECTION)}
-                            disabled={logic.isTrading}
-                            style="
-                            padding: 2rem;
-                            font-size: 1.5rem;
-                            font-weight: bold;
-                            border: none;
-                            border-radius: 8px;
-                            cursor: pointer;
-                            background-color: #ef5350;
-                            color: white;
-                            opacity: {logic.isTrading ? 0.5 : 1};
-                        ">
-                        SELL
-                    </button>
+                    <div style="background: #222; padding: 1rem; border-radius: 4px;">
+                        <span style="color: #888; font-size: 0.85rem;">Entry Level</span>
+                        <div style="font-weight: bold; font-size: 1.2rem;">{logic.currentPosition.position.level}</div>
+                    </div>
+                    <div style="background: #222; padding: 1rem; border-radius: 4px;">
+                        <span style="color: #888; font-size: 0.85rem;">Current Market (Bid/Ask)</span>
+                        <div style="font-weight: bold; font-size: 1.2rem;">
+                            {logic.currentPosition.market.bid} / {logic.currentPosition.market.offer}
+                        </div>
+                    </div>
                 </div>
-                <p style="margin-top: 1rem; color: #666; font-size: 0.8rem;">
-                    Default Size: {logic.defaultSize}
-                </p>
-            {/if}
+            </div>
 
+            <!-- 3. Stops & Limits -->
+            <div>
+                <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Protection</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                    <div style="background: #222; padding: 1rem; border-radius: 4px;">
+                        <span style="color: #888; font-size: 0.85rem;">Stop Loss</span>
+                        <div style="font-weight: bold; color: #ef5350;">
+                            {logic.currentPosition.position.stopLevel ?? 'None'}
+                        </div>
+                    </div>
+                    <div style="background: #222; padding: 1rem; border-radius: 4px;">
+                        <span style="color: #888; font-size: 0.85rem;">Take Profit</span>
+                        <div style="font-weight: bold; color: #26a69a;">
+                            {logic.currentPosition.position.profitLevel ?? 'None'}
+                        </div>
+                    </div>
+                    <div style="background: #222; padding: 1rem; border-radius: 4px;">
+                        <span style="color: #888; font-size: 0.85rem;">Guaranteed</span>
+                        <div style="font-weight: bold; color: #ddd;">
+                            {logic.currentPosition.position.guaranteedStop ? 'YES' : 'NO'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Market Meta -->
+            <div>
+                <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Market Details</h4>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; font-size: 0.9rem;">
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
+                        <span style="color: #888;">Net Change</span>
+                        <span style="color: {logic.currentPosition.market.netChange >= 0 ? '#26a69a' : '#ef5350'}">
+                            {logic.currentPosition.market.netChange} ({logic.currentPosition.market.percentageChange}%)
+                        </span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
+                        <span style="color: #888;">Daily Range</span>
+                        <span>{logic.currentPosition.market.high} - {logic.currentPosition.market.low}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
+                        <span style="color: #888;">Status</span>
+                        <span>{logic.currentPosition.market.marketStatus}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
+                        <span style="color: #888;">Leverage Used</span>
+                        <span>1:{logic.currentPosition.position.leverage}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. Trade Metadata -->
+            <div style="font-size: 0.8rem; color: #666; display: flex; flex-direction: column; gap: 0.25rem;">
+                <div>Deal ID: {logic.currentPosition.position.dealId}</div>
+                <div>Deal Ref: {logic.currentPosition.position.dealReference}</div>
+                <div>Opened: {new Date(logic.currentPosition.position.createdDate).toLocaleString()}</div>
+                <div>Contract Size: {logic.currentPosition.position.contractSize}</div>
+            </div>
+
+            <button
+                    onclick={() => logic.closePosition()}
+                    disabled={logic.isClosing}
+                    style="
+                width: 100%;
+                padding: 1.5rem;
+                font-size: 1.2rem;
+                font-weight: bold;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                background-color: #444;
+                color: white;
+                opacity: {logic.isClosing ? 0.5 : 1};
+                margin-top: 1rem;
+            ">
+                {logic.isClosing ? 'CLOSING...' : 'CLOSE POSITION'}
+            </button>
+        </div>
+
+    {:else}
+        <div style="text-align: center; padding: 3rem; background: #1a1a1a; border-radius: 8px;">
+            <p style="color: #888;">No active position found for {logic.targetEpic}.</p>
+            <a href="/chart" style="display: block; margin-top: 1rem; color: #26a69a; text-decoration: none;">Open Chart</a>
         </div>
     {/if}
 </div>

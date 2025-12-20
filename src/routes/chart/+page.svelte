@@ -21,6 +21,7 @@
     import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
     import type { SessionTokens } from "$lib/types/auth.js";
     import type { URL_TYPE } from '$lib/types/url.js';
+    import type { PositionResponse } from '$lib/types/trading.js';
 
     let chartContainer: HTMLDivElement;
     let chart: IChartApi;
@@ -31,10 +32,17 @@
     const overlay = new ChartOverlay();
 
     let currentEpic = TRADING.NDX_EPIC;
-    let decimalPlaces = 2; // Default safe value
+    let decimalPlaces = 2;
+    let activePosition: PositionResponse | null = null;
 
     function handleChartClick(param: MouseEventParams) {
-        // Need live quotes to decide direction
+        // 1. Check active position first
+        if (activePosition) {
+            goto('/position');
+            return;
+        }
+
+        // 2. Normal Trade Flow
         if (!param.point || !series || !feed.currentBid || !feed.currentOfr) return;
 
         const clickPrice = series.coordinateToPrice(param.point.y);
@@ -42,7 +50,6 @@
 
         let direction: string | null = null;
 
-        // Momentum logic: Click above Offer = BUY, Click below Bid = SELL
         if (clickPrice > feed.currentOfr) {
             direction = TRADING.BUY_DIRECTION;
         } else if (clickPrice < feed.currentBid) {
@@ -57,7 +64,7 @@
                 bid: feed.currentBid.toFixed(decimalPlaces),
                 ofr: feed.currentOfr.toFixed(decimalPlaces)
             });
-            goto(`/position?${params.toString()}`);
+            goto(`/trade?${params.toString()}`);
         }
     }
 
@@ -83,7 +90,6 @@
         }
         const tokens: SessionTokens = JSON.parse(tokensData);
 
-        // Fetch Market Info & Positions Parallelly
         let pricePrecision = 100;
         let chartDataSource = TRADING.CHART_DATA_SOURCE_BID;
 
@@ -93,16 +99,19 @@
                 getPositions(feedMode, tokens)
             ]);
 
-            // 1. Set Precision
             decimalPlaces = marketDetails.snapshot.decimalPlacesFactor;
             pricePrecision = Math.pow(10, decimalPlaces);
 
-            // 2. Determine Chart Source (Bid vs Offer)
-            // If SELL position -> Exit is Buy at Offer -> Show Offer chart
-            const activePos = positionsResp.positions.find(p => p.market.epic === currentEpic);
-            if (activePos && activePos.position.direction === TRADING.SELL_DIRECTION) {
-                chartDataSource = TRADING.CHART_DATA_SOURCE_OFR;
+            const foundPos = positionsResp.positions.find(p => p.market.epic === currentEpic);
+            if (foundPos) {
+                activePosition = foundPos;
+                // Determine Chart Source based on exit price
+                // Sell Position -> Exit at Ask (Offer)
+                if (activePosition.position.direction === TRADING.SELL_DIRECTION) {
+                    chartDataSource = TRADING.CHART_DATA_SOURCE_OFR;
+                }
             } else {
+                activePosition = null;
                 chartDataSource = TRADING.CHART_DATA_SOURCE_BID;
             }
 
@@ -121,10 +130,7 @@
         series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(pricePrecision));
 
         layout.init(chart, chartContainer);
-
-        // Pass the determined source to the feed
         await feed.init(tokens, currentEpic, series, chartDataSource);
-
         layout.setDataLoaded(true);
     });
 
