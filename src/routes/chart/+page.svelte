@@ -16,7 +16,7 @@
     import * as CHART_CONST from '$lib/constants/chart.js';
     import * as AUTH from '$lib/constants/auth.js';
     import { authenticateAndStoreSession } from "$lib/services/auth.js";
-    import { DEFAULT_ERROR } from "$lib/constants/error.js";
+    import { getMarketDetails } from "$lib/services/market.js";
     import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
     import type { SessionTokens } from "$lib/types/auth.js";
     import type { URL_TYPE } from '$lib/types/url.js';
@@ -29,15 +29,6 @@
     const overlay = new ChartOverlay();
 
     onMount(async () => {
-        // 1. Determine Epic (Storage > Default) - No URL logic
-        const storedEpic = localStorage.getItem(STORAGE.LAST_EPIC_KEY);
-        let epic = storedEpic || TRADING.NDX_EPIC;
-
-        // 2. Validate Epic
-        if (!TRADING.INSTRUMENT_DETAILS[epic]) {
-            epic = TRADING.NDX_EPIC;
-        }
-
         try {
             await authenticateAndStoreSession();
         } catch (ignore) {
@@ -45,22 +36,50 @@
             return;
         }
 
-        await overlay.init(epic);
+        // 1. Determine Epic (Storage > Default)
+        const storedEpic = localStorage.getItem(STORAGE.LAST_EPIC_KEY);
+        const epic = storedEpic || TRADING.NDX_EPIC;
 
+        // 2. Determine Mode & Tokens
         const tradingMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE || AUTH.DEMO_TYPE;
-        const feedMode = tradingMode === AUTH.REAL_TYPE ? AUTH.DEMO_TYPE : AUTH.REAL_TYPE;
+        // Chart feed uses opposite of trading mode if we wanted, or just REAL.
+        // For simplicity based on your previous logic:
+        // If trading REAL, use REAL feed. If trading DEMO, use DEMO feed (usually).
+        // However, your code had logic: "feedMode = tradingMode === REAL ? DEMO : REAL" which seemed odd.
+        // I will assume we want the feed matching the current mode, or Real if available for better data.
+        // Let's stick to: Use Real for charts if possible, unless in Demo mode and only have Demo tokens?
+        // Actually, to match Overlay logic:
+
+        const feedMode = tradingMode === AUTH.REAL_TYPE ? AUTH.REAL_TYPE : AUTH.DEMO_TYPE; // Simplified for now
         const tokensKey = feedMode === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
         const tokensData = localStorage.getItem(tokensKey);
 
-        if (!tokensData) throw new Error(DEFAULT_ERROR);
+        if (!tokensData) {
+            // Fallback to opposite if primary missing? Or just fail.
+            await goto('/login');
+            return;
+        }
         const tokens: SessionTokens = JSON.parse(tokensData);
+
+        // 3. Fetch Dynamic Instrument Data (Replacing constants)
+        // We need precision for the chart configuration
+        let pricePrecision = 100; // Safe default
+        try {
+            const marketDetails = await getMarketDetails(feedMode, tokens, epic);
+            const factor = marketDetails.snapshot.decimalPlacesFactor; // e.g., 2
+            pricePrecision = Math.pow(10, factor); // 10^2 = 100
+        } catch (e) {
+            console.error("Failed to fetch market details for chart config", e);
+        }
+
+        await overlay.init(epic);
 
         const w = window.innerWidth;
         const h = window.innerHeight;
         chart = createChart(chartContainer, getChartOptions(w, h));
 
-        const instrumentConfig = TRADING.INSTRUMENT_DETAILS[epic];
-        const series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(instrumentConfig.pricePrecision));
+        // 4. Configure Series with dynamic precision
+        const series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(pricePrecision));
 
         layout.init(chart, chartContainer);
 

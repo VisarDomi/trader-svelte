@@ -23,8 +23,11 @@
     {:else}
         <div style="display: grid; gap: 2rem;">
             {#each logic.instruments as m}
-                <button
+                <div
+                        role="button"
+                        tabindex="0"
                         onclick={() => logic.select(m.instrument.epic)}
+                        onkeydown={(e) => e.key === 'Enter' && logic.select(m.instrument.epic)}
                         style="
                         display: block;
                         width: 100%;
@@ -35,8 +38,12 @@
                         overflow: hidden;
                         color: inherit;
                         cursor: pointer;
-                        padding: 0;
+                        outline: none;
                     "
+                        onmouseover={(e) => e.currentTarget.style.borderColor = '#666'}
+                        onmouseout={(e) => e.currentTarget.style.borderColor = '#333'}
+                        onfocus={(e) => e.currentTarget.style.borderColor = '#666'}
+                        onblur={(e) => e.currentTarget.style.borderColor = '#333'}
                 >
                     <!-- Header -->
                     <div style="
@@ -163,7 +170,7 @@
                         </div>
 
                     </div>
-                </button>
+                </div>
             {/each}
         </div>
     {/if}
