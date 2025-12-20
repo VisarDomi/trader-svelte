@@ -42,17 +42,9 @@
             {/if}
         </button>
 
-        <!-- The Data Card (Navigates to accounts) -->
+        <!-- The Data Card (Split Navigation) -->
         {#if overlay.isOpen}
             <div
-                    role="button"
-                    tabindex="0"
-                    onclick={() => goto('/accounts')}
-                    onkeydown={(e) => {
-                    if (e.key === 'Enter') {
-                        goto('/accounts');
-                    }
-                }}
                     style="
                     background: rgba(20, 20, 20, 0.9);
                     backdrop-filter: blur(4px);
@@ -60,27 +52,52 @@
                     border-left: none;
                     border-top-right-radius: 8px;
                     border-bottom-right-radius: 8px;
-                    padding: 0.75rem 1rem;
                     color: white;
                     text-align: left;
-                    cursor: pointer;
                     box-shadow: 4px 0 10px rgba(0,0,0,0.5);
                     display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                    min-height: 3.5rem; /* Match arrow height */
+                    align-items: stretch;
+                    min-height: 3.5rem;
                 "
             >
-                <!-- Market Name -->
-                <div style="font-size: 1rem; font-weight: bold; white-space: nowrap;">
-                    {overlay.marketName}
+                <!-- Market Name -> /instrument -->
+                <div
+                        role="button"
+                        tabindex="0"
+                        onclick={() => goto('/instrument')}
+                        onkeydown={(e) => e.key === 'Enter' && goto('/instrument')}
+                        style="
+                        padding: 0.75rem 1rem;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        outline: none;
+                    "
+                >
+                    <div style="font-size: 1rem; font-weight: bold; white-space: nowrap;">
+                        {overlay.marketName}
+                    </div>
                 </div>
 
                 <!-- Vertical Separator -->
-                <div style="width: 1px; height: 24px; background: #444;"></div>
+                <div style="width: 1px; background: #444; margin: 0.5rem 0;"></div>
 
-                <!-- Account Info -->
-                <div style="display: flex; flex-direction: column; justify-content: center; line-height: 1.2;">
+                <!-- Account Info -> /accounts -->
+                <div
+                        role="button"
+                        tabindex="0"
+                        onclick={() => goto('/accounts')}
+                        onkeydown={(e) => e.key === 'Enter' && goto('/accounts')}
+                        style="
+                        padding: 0.75rem 1rem;
+                        cursor: pointer;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        line-height: 1.2;
+                        outline: none;
+                    "
+                >
                     <div style="font-size: 0.75rem; color: #ddd;">
                         {overlay.account.accountName} <span style="font-size: 0.65rem; color: #aaa;">({overlay.mode})</span>
                     </div>

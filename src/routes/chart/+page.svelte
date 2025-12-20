@@ -5,16 +5,13 @@
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
 
-    // Logic
     import { ChartUI } from './ui.svelte.js';
     import { ChartFeed } from './feed.svelte.js';
     import { ChartOverlay } from './overlay.svelte.js';
 
-    // Components
     import TopBar from './TopBar.svelte';
     import Overlay from './Overlay.svelte';
 
-    // Constants & Utils
     import * as STORAGE from '$lib/constants/storage.js';
     import * as API from '$lib/constants/api.js';
     import * as TRADING from '$lib/constants/trading.js';
@@ -51,7 +48,6 @@
 
         await overlay.init(epic);
 
-        // Determine Feed Source (Opposite of Trading Mode)
         const tradingMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE || AUTH.DEMO_TYPE;
         const feedMode = tradingMode === AUTH.REAL_TYPE ? AUTH.DEMO_TYPE : AUTH.REAL_TYPE;
         const tokensKey = feedMode === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
@@ -63,7 +59,12 @@
         const w = window.innerWidth;
         const h = window.innerHeight;
         chart = createChart(chartContainer, getChartOptions(w, h));
-        const series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(TRADING.NDX_PRICE_PRECISION));
+
+        const precision = epic === TRADING.BTCUSD_EPIC
+            ? TRADING.BTCUSD_PRICE_PRECISION
+            : TRADING.NDX_PRICE_PRECISION;
+
+        const series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(precision));
         layout.init(chart, chartContainer);
 
         await feed.init(tokens, epic, series);
