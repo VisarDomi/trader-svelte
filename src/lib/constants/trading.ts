@@ -21,3 +21,22 @@ export const SELL_DIRECTION = "SELL";
 
 export const CHART_DATA_SOURCE_OFR = "ofr";
 export const CHART_DATA_SOURCE_BID = "bid";
+
+export interface InstrumentDetail {
+    name: string;
+    pricePrecision: number;
+    sizePrecision: number;
+}
+
+export const INSTRUMENT_DETAILS: Record<string, InstrumentDetail> = {
+    [NDX_EPIC]: {
+        name: "US Tech 100",
+        pricePrecision: NDX_PRICE_PRECISION,
+        sizePrecision: NDX_SIZE_PRECISION
+    },
+    [BTCUSD_EPIC]: {
+        name: "Bitcoin / USD",
+        pricePrecision: BTCUSD_PRICE_PRECISION,
+        sizePrecision: BTCUSD_SIZE_PRECISION
+    }
+};

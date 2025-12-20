@@ -60,11 +60,10 @@
         const h = window.innerHeight;
         chart = createChart(chartContainer, getChartOptions(w, h));
 
-        const precision = epic === TRADING.BTCUSD_EPIC
-            ? TRADING.BTCUSD_PRICE_PRECISION
-            : TRADING.NDX_PRICE_PRECISION;
+        // Refactored: Lookup precision from config
+        const instrumentConfig = TRADING.INSTRUMENT_DETAILS[epic] || TRADING.INSTRUMENT_DETAILS[TRADING.NDX_EPIC];
+        const series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(instrumentConfig.pricePrecision));
 
-        const series = chart.addSeries(CandlestickSeries, getBaseSeriesOptions(precision));
         layout.init(chart, chartContainer);
 
         await feed.init(tokens, epic, series);
