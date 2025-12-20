@@ -1,4 +1,4 @@
-import { BUY_DIRECTION, SELL_DIRECTION } from "$lib/constants/trading.js";
+import { BUY_DIRECTION } from "$lib/constants/trading.js";
 import type { Direction } from "$lib/types/trading.js";
 
 /**

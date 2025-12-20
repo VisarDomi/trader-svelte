@@ -4,10 +4,12 @@ import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
 import { getSyncedAccounts } from '$lib/services/account.js';
 import { getPositions, createPosition } from '$lib/services/trading.js';
+import { getMarketDetails } from '$lib/services/market.js';
 import type { Account } from '$lib/types/account.js';
 import type { SessionTokens } from '$lib/types/auth.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 import type { PositionResponse } from '$lib/types/trading.js';
+import type { MarketDetailsResponse } from '$lib/types/market.js';
 
 export class PositionViewerLogic {
     activeType = $state<URL_TYPE>(AUTH.DEMO_TYPE);
@@ -18,7 +20,11 @@ export class PositionViewerLogic {
 
     currentAccount = $state<Account | null>(null);
     currentPosition = $state<PositionResponse | null>(null);
+    marketDetails = $state<MarketDetailsResponse | null>(null);
     targetEpic = $state('');
+
+    // Default precision if market details fail
+    precision = $state(2);
 
     async init() {
         if (typeof window === 'undefined') return;
@@ -46,6 +52,7 @@ export class PositionViewerLogic {
         this.error = '';
         this.currentAccount = null;
         this.currentPosition = null;
+        this.marketDetails = null;
 
         const tokens = this.getTokens(this.activeType);
         if (!tokens) {
@@ -54,12 +61,19 @@ export class PositionViewerLogic {
         }
 
         try {
-            const [accounts, positionsData] = await Promise.all([
+            // Fetch Accounts, All Positions, and Specific Market Details (for precision)
+            const [accounts, positionsData, marketData] = await Promise.all([
                 getSyncedAccounts(this.activeType, tokens),
-                getPositions(this.activeType, tokens)
+                getPositions(this.activeType, tokens),
+                getMarketDetails(this.activeType, tokens, this.targetEpic).catch(() => null)
             ]);
 
             this.currentAccount = accounts.find(a => a.preferred) || accounts[0] || null;
+            this.marketDetails = marketData;
+
+            if (this.marketDetails) {
+                this.precision = this.marketDetails.snapshot.decimalPlacesFactor;
+            }
 
             // Find position for current EPIC
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);

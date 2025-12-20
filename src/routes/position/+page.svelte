@@ -9,6 +9,12 @@
     onMount(() => {
         logic.init();
     });
+
+    // Helper to format prices safely
+    function fmt(price: number | undefined | null): string {
+        if (price === undefined || price === null) return '—';
+        return price.toFixed(logic.precision);
+    }
 </script>
 
 <div style="padding: 1rem; max-width: 800px; margin: 0 auto;">
@@ -73,12 +79,12 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div style="background: #222; padding: 1rem; border-radius: 4px;">
                         <span style="color: #888; font-size: 0.85rem;">Entry Level</span>
-                        <div style="font-weight: bold; font-size: 1.2rem;">{logic.currentPosition.position.level}</div>
+                        <div style="font-weight: bold; font-size: 1.2rem;">{fmt(logic.currentPosition.position.level)}</div>
                     </div>
                     <div style="background: #222; padding: 1rem; border-radius: 4px;">
                         <span style="color: #888; font-size: 0.85rem;">Current Market (Bid/Ask)</span>
                         <div style="font-weight: bold; font-size: 1.2rem;">
-                            {logic.currentPosition.market.bid} / {logic.currentPosition.market.offer}
+                            {fmt(logic.currentPosition.market.bid)} / {fmt(logic.currentPosition.market.offer)}
                         </div>
                     </div>
                 </div>
@@ -91,13 +97,13 @@
                     <div style="background: #222; padding: 1rem; border-radius: 4px;">
                         <span style="color: #888; font-size: 0.85rem;">Stop Loss</span>
                         <div style="font-weight: bold; color: #ef5350;">
-                            {logic.currentPosition.position.stopLevel ?? 'None'}
+                            {fmt(logic.currentPosition.position.stopLevel)}
                         </div>
                     </div>
                     <div style="background: #222; padding: 1rem; border-radius: 4px;">
                         <span style="color: #888; font-size: 0.85rem;">Take Profit</span>
                         <div style="font-weight: bold; color: #26a69a;">
-                            {logic.currentPosition.position.profitLevel ?? 'None'}
+                            {fmt(logic.currentPosition.position.profitLevel)}
                         </div>
                     </div>
                     <div style="background: #222; padding: 1rem; border-radius: 4px;">
@@ -121,7 +127,7 @@
                     </div>
                     <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
                         <span style="color: #888;">Daily Range</span>
-                        <span>{logic.currentPosition.market.high} - {logic.currentPosition.market.low}</span>
+                        <span>{fmt(logic.currentPosition.market.high)} - {fmt(logic.currentPosition.market.low)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
                         <span style="color: #888;">Status</span>
