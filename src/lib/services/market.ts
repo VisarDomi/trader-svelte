@@ -7,7 +7,6 @@ import { REAL_TYPE } from "$lib/constants/auth.js";
 import type { SessionTokens } from "$lib/types/auth.js";
 import type { MarketPriceResponse, ChartCandle, SingleMarketResponse } from "$lib/types/market.js";
 import { DEFAULT_ERROR } from "$lib/constants/error.js";
-import type { URL_TYPE } from "$lib/types/url.js";
 
 export async function getHistoricalPrices(
     tokens: SessionTokens,
@@ -46,12 +45,10 @@ export async function getHistoricalPrices(
 }
 
 export async function getMarketInfo(
-    type: URL_TYPE,
     tokens: SessionTokens,
     epic: string
 ): Promise<string> {
-    const baseUrl = getBaseUrl(type);
-    // Correct Endpoint: /api/v1/markets/{epic}
+    const baseUrl = getBaseUrl(REAL_TYPE);
     const url = `${baseUrl}${API.MARKETS_ENDPOINT}/${epic}`;
 
     const response = await fetch(url, {

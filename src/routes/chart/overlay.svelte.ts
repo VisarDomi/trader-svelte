@@ -31,7 +31,7 @@ export class ChartOverlay {
 
                 const [accounts, name] = await Promise.all([
                     getSyncedAccounts(this.mode, tokens),
-                    getMarketInfo(this.mode, tokens, epic)
+                    getMarketInfo(tokens, epic)
                 ]);
 
                 this.account = accounts.find(a => a.preferred) || accounts[0] || null;
