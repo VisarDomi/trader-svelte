@@ -6,6 +6,7 @@ import type { QuoteMessage, ChartCandle } from "$lib/types/market.js";
 import * as TRADING from "$lib/constants/trading.js";
 import type { PositionResponse } from "$lib/types/trading.js";
 import { getBaseSeriesOptions } from "$lib/utils/chart.js";
+import { roundDownToFactor } from "$lib/utils/trading.js";
 
 export class ChartFeed {
     private series: ISeriesApi<"Candlestick"> | null = null;
@@ -70,7 +71,6 @@ export class ChartFeed {
         for (const msg of this.liveBuffer) {
             this.currentBid = msg.payload.bid;
             this.currentOfr = msg.payload.ofr;
-
             const price = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? msg.payload.ofr : msg.payload.bid;
             this.processTick(price, msg.payload.timestamp);
         }
@@ -83,18 +83,20 @@ export class ChartFeed {
 
         if (position) {
             const p = position.position;
-            const currentPrice = p.direction === TRADING.BUY_DIRECTION ? this.currentBid : this.currentOfr;
-
             let profitOrLoss: number;
+
             if (p.direction === TRADING.BUY_DIRECTION) {
-                profitOrLoss = (currentPrice - p.level) * p.size;
+                profitOrLoss = (this.currentBid - p.level) * p.size;
             } else {
-                profitOrLoss = (p.level - currentPrice) * p.size;
+                profitOrLoss = (p.level - this.currentOfr) * p.size;
             }
 
-            const profitOrLossSign = profitOrLoss >= 0 ? "+" : "-";
+            const PLUS = "+";
+            const MINUS = "-";
+            const profitOrLossSign = profitOrLoss >= 0 ? PLUS : MINUS;
             const priceLineColor = profitOrLoss >= 0 ? "#22958a" : "#bf4240";
-            const profitOrLossRounded = Math.abs(profitOrLoss).toFixed(2);
+
+            const profitOrLossRounded = roundDownToFactor(Math.abs(profitOrLoss), TRADING.ACCOUNT_USD_PRICE_PRECISION).toFixed(2);
 
             let title = `${profitOrLossSign}${profitOrLossRounded}`;
 

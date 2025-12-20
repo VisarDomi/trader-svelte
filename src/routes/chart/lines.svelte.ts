@@ -1,7 +1,9 @@
 import { type ISeriesApi, type IPriceLine, LineStyle } from "lightweight-charts";
 import type { PositionResponse } from "$lib/types/trading.js";
 import * as CHART from "$lib/constants/chart.js";
+import * as TRADING from "$lib/constants/trading.js";
 import { formatTimestampToLocalTime } from "$lib/utils/time.js";
+import { roundDownToFactor } from "$lib/utils/trading.js";
 import { DateTime } from "luxon";
 
 export class ChartLines {
@@ -36,7 +38,7 @@ export class ChartLines {
 
         this.entryLine = this.series.createPriceLine({
             price: p.level,
-            color: CHART.STARTING_LINE_COLOR || "#FFDD00",
+            color: "#FFDD00",
             lineWidth: 2,
             lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
@@ -45,13 +47,14 @@ export class ChartLines {
 
         if (p.profitLevel) {
             const potentialProfit = Math.abs(p.level - p.profitLevel) * p.size;
-            let lamboTitle = `Potential Profit +${potentialProfit.toFixed(2)}`;
+            const roundedPotentialProfit = roundDownToFactor(potentialProfit, TRADING.ACCOUNT_USD_PRICE_PRECISION).toFixed(2);
+            let lamboTitle = `Potential Profit +${roundedPotentialProfit}`;
 
             if (hasValidInitialBalance) {
                 const optimisticBalance = initialBalance + potentialProfit;
                 const potentialProfitPercentage = (potentialProfit / initialBalance) * 100;
                 const offsetProfitPercentage = (potentialProfitPercentage / (100 + potentialProfitPercentage)) * 100;
-                lamboTitle = `Potential Profit +${potentialProfit.toFixed(2)} (${optimisticBalance.toFixed(2)}) (+${potentialProfitPercentage.toFixed(2)}%) (+-${offsetProfitPercentage.toFixed(2)}%)`;
+                lamboTitle = `Potential Profit +${roundedPotentialProfit} (${optimisticBalance.toFixed(2)}) (+${potentialProfitPercentage.toFixed(2)}%) (+-${offsetProfitPercentage.toFixed(2)}%)`;
             }
 
             this.tpLine = this.series.createPriceLine({
@@ -66,7 +69,8 @@ export class ChartLines {
 
         if (p.stopLevel) {
             const potentialLoss = Math.abs(p.level - p.stopLevel) * p.size;
-            let wendyTitle = `Potential Loss -${potentialLoss.toFixed(2)}`;
+            const roundedPotentialLoss = roundDownToFactor(potentialLoss, TRADING.ACCOUNT_USD_PRICE_PRECISION).toFixed(2);
+            let wendyTitle = `Potential Loss -${roundedPotentialLoss}`;
 
             if (hasValidInitialBalance) {
                 const pessimisticBalance = initialBalance - potentialLoss;
@@ -76,7 +80,7 @@ export class ChartLines {
                     const offsetPercentage = (potentialLossPercentage / (100 - potentialLossPercentage)) * 100;
                     offsetPercentageText = ` (-+${offsetPercentage.toFixed(2)}%)`;
                 }
-                wendyTitle = `Potential Loss -${potentialLoss.toFixed(2)} (${pessimisticBalance.toFixed(2)}) (-${potentialLossPercentage.toFixed(2)}%)${offsetPercentageText}`;
+                wendyTitle = `Potential Loss -${roundedPotentialLoss} (${pessimisticBalance.toFixed(2)}) (-${potentialLossPercentage.toFixed(2)}%)${offsetPercentageText}`;
             }
 
             this.slLine = this.series.createPriceLine({

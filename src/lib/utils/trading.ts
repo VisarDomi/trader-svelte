@@ -1,35 +1,32 @@
 import { BUY_DIRECTION } from "$lib/constants/trading.js";
 import type { Direction } from "$lib/types/trading.js";
 
-/**
- * Rounds a number down to a specific step/precision.
- * Example: 0.1234, step 0.1 -> 0.1
- */
+export function roundDownToFactor(value: number, factor: number): number {
+    return Math.floor(value * factor) / factor;
+}
+
 export function roundDownToStep(value: number, step: number): number {
     if (step === 0) return value;
     const inv = 1.0 / step;
     return Math.floor(value * inv) / inv;
 }
 
-/**
- * Rounds a price to the market's decimal precision.
- */
 export function roundPrice(value: number, decimalPlaces: number): number {
     const factor = Math.pow(10, decimalPlaces);
     return Math.round(value * factor) / factor;
 }
 
 export interface TradeCalculationParams {
-    accountBalance: number; // Available Cash
-    leverage: number;       // e.g., 20
+    accountBalance: number;
+    leverage: number;
     entryPrice: number;
-    lotSize: number;        // e.g., 1
-    minSizeIncrement: number; // e.g., 0.1
-    minDealSize: number;      // e.g., 1
-    decimalPlaces: number;    // e.g., 2
+    lotSize: number;
+    minSizeIncrement: number;
+    minDealSize: number;
+    decimalPlaces: number;
     direction: Direction;
-    clickPrice: number;       // Target TP
-    stopLossRatio: number;    // e.g., 0.5 (50%)
+    clickPrice: number;
+    stopLossRatio: number;
 }
 
 export interface TradeCalculationResult {
@@ -56,24 +53,14 @@ export function calculatePositionParameters(params: TradeCalculationParams): Tra
 
     if (leverage < 1 || entryPrice <= 0) return null;
 
-    // 1. Calculate Max Size (Full Port)
-    // Formula: Margin = (Size * LotSize * Price) / Leverage
-    // Thus: Size = (Margin * Leverage) / (LotSize * Price)
     const rawSize = (accountBalance * leverage) / (lotSize * entryPrice);
-
-    // 2. Apply Constraints
     const size = roundDownToStep(rawSize, minSizeIncrement);
 
     if (size < minDealSize) {
-        return null; // Insufficient funds for minimum trade
+        return null;
     }
 
     const marginRequired = (size * lotSize * entryPrice) / leverage;
-
-    // 3. Calculate Stop Loss Price
-    // Loss = (Entry - Stop) * Size * LotSize (for BUY)
-    // LossAmount = AccountBalance * Ratio
-    // Diff = LossAmount / (Size * LotSize)
     const lossAmount = accountBalance * stopLossRatio;
     const priceDiff = lossAmount / (size * lotSize);
 
@@ -85,9 +72,6 @@ export function calculatePositionParameters(params: TradeCalculationParams): Tra
     }
 
     const stopLevel = roundPrice(unroundedStopPrice, decimalPlaces);
-
-    // 4. Take Profit (The Click Price)
-    // We strictly use the click price, assuming the user clicked "far enough"
     const profitLevel = roundPrice(clickPrice, decimalPlaces);
 
     return {

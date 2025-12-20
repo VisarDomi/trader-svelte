@@ -109,7 +109,7 @@
 
             const foundPos = positionsResp.positions.find(p => p.market.epic === currentEpic);
             if (foundPos) {
-                foundPos.position.initialBalance = currentEquity;
+                foundPos.position.initialBalance = currentEquity - foundPos.position.upl;
                 activePosition = foundPos;
                 if (activePosition.position.direction === TRADING.SELL_DIRECTION) {
                     chartDataSource = TRADING.CHART_DATA_SOURCE_OFR;
