@@ -2,7 +2,6 @@ import type { IChartApi } from "lightweight-charts";
 import { isIOS } from "$lib/utils/platform.js";
 import { viewport } from "$lib/services/viewport.svelte.js";
 import { getTimeScaleHeight } from "$lib/utils/chart.js";
-import * as EVENTS from '$lib/constants/events.js';
 import * as CHART_CONST from '$lib/constants/chart.js';
 
 export class ChartUI {
@@ -15,18 +14,31 @@ export class ChartUI {
         if (typeof window !== 'undefined') {
             this.isIosDevice = isIOS();
         }
+
+        // Centralized resize logic using Svelte 5 effects.
+        // This replaces manual window event listeners.
+        $effect(() => {
+            // Accessing viewport properties registers this effect as a dependency.
+            // When viewport changes, this runs automatically.
+            const width = viewport.width;
+            const height = viewport.height;
+            const maxW = viewport.maxWidth;
+            const maxH = viewport.maxHeight;
+
+            // Only update if we have the chart instance ready
+            if (this.container && this.chart) {
+                this.updateDimensions();
+            }
+        });
     }
 
     init(chart: IChartApi, container: HTMLDivElement) {
         this.chart = chart;
         this.container = container;
 
-        // Listeners for Resize are now handled centrally by ViewportService,
-        // but we need to react to its changes.
-        // However, standard "resize" events are still useful for triggering the chart update.
         if (typeof window !== 'undefined') {
-            window.addEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
-            window.addEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
+            // Scroll handling is specific to iOS PWA 'bounce' behavior,
+            // which ViewportService doesn't handle. Keeping this local.
             if (this.isIosDevice) {
                 window.addEventListener('scroll', this.handleScroll);
             }
@@ -38,6 +50,9 @@ export class ChartUI {
 
     setDataLoaded(loaded: boolean) {
         this.isDataLoaded = loaded;
+        // Effect will handle dimension updates, but we can trigger one now to be safe
+        // or rely on the reactive state if we made dimensions reactive.
+        // For now, imperative call ensures immediate update.
         if (loaded) {
             setTimeout(() => this.updateDimensions(), 0);
         }
@@ -45,18 +60,12 @@ export class ChartUI {
 
     destroy() {
         if (typeof window === 'undefined') return;
-        window.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
-        window.removeEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
         window.removeEventListener('scroll', this.handleScroll);
     }
 
     private getScrollTarget(chartH: number, winH: number): number {
         return CHART_CONST.TOPBAR_HEIGHT + (chartH - winH);
     }
-
-    private handleResize = () => {
-        this.updateDimensions();
-    };
 
     private handleScroll = () => {
         if (!this.isIosDevice || !this.isDataLoaded || !this.container) return;
@@ -85,7 +94,7 @@ export class ChartUI {
             height = dims.height;
         } else {
             // Standard behavior for Desktop / Android
-            width = viewport.width; // Reactive from service
+            width = viewport.width;
             height = viewport.height;
         }
 

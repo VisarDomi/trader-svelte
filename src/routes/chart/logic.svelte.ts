@@ -1,6 +1,7 @@
 import { createChart, CandlestickSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, MouseEventParams } from 'lightweight-charts';
 import { goto } from '$app/navigation';
+import { viewport } from '$lib/services/viewport.svelte.js';
 
 // Sub-systems
 import { ChartUI } from './ui.svelte.js';
@@ -44,15 +45,27 @@ export class ChartLogic {
     private userLeverage = 1;
 
     constructor() {
+        // This effect ensures lines and feed are updated when:
+        // 1. Account changes
+        // 2. Planning state changes
+        // 3. Viewport (rotation) changes - implicit dependency via viewport.width/height access
         $effect(() => {
+            // Explicitly read viewport dimensions to guarantee reactivity on rotation
+            const _w = viewport.width;
+            const _h = viewport.height;
+
             if (this.activeAccount?.symbol) {
                 let posToUpdate = this.activePosition;
                 if (this.isPlanning && this.plannedTrade && this.marketDetails) {
                     posToUpdate = this.getMockPlanningPosition();
                 }
 
+                // Update static lines (Start, TP, SL)
                 this.lines.update(posToUpdate, this.activeAccount.symbol);
+
+                // Update dynamic line (Current PnL)
                 this.feed.accountSymbol = this.activeAccount.symbol;
+                this.feed.updateLayout();
             }
         });
     }
@@ -198,8 +211,6 @@ export class ChartLogic {
         const clickPrice = this.series.coordinateToPrice(param.point.y);
         if (clickPrice === null) return;
 
-        // Capture snapshot of prices BEFORE we switch the data source
-        // This ensures we plan based on the spread that existed when the user clicked
         const snapshotBid = this.feed.currentBid;
         const snapshotOfr = this.feed.currentOfr;
 
@@ -208,21 +219,17 @@ export class ChartLogic {
         let executionPrice: number;
 
         if (clickPrice > snapshotOfr) {
-            // User clicked ABOVE Offer -> BUY Intent
             direction = TRADING.BUY_DIRECTION;
-            targetSource = TRADING.CHART_DATA_SOURCE_BID; // View Bid chart to see exit price
-            executionPrice = snapshotOfr; // You BUY at the OFFER
+            targetSource = TRADING.CHART_DATA_SOURCE_BID;
+            executionPrice = snapshotOfr;
         } else if (clickPrice < snapshotBid) {
-            // User clicked BELOW Bid -> SELL Intent
             direction = TRADING.SELL_DIRECTION;
-            targetSource = TRADING.CHART_DATA_SOURCE_OFR; // View Offer chart to see exit price
-            executionPrice = snapshotBid; // You SELL at the BID
+            targetSource = TRADING.CHART_DATA_SOURCE_OFR;
+            executionPrice = snapshotBid;
         } else {
-            // Clicked inside spread
             return;
         }
 
-        // Switch the chart view
         await this.feed.setDataSource(targetSource);
 
         const basisBalance = this.activeAccount.balance.deposit;
@@ -230,7 +237,7 @@ export class ChartLogic {
         const result = calculatePositionParameters({
             accountBalance: basisBalance,
             leverage: this.userLeverage,
-            entryPrice: executionPrice, // CRITICAL FIX: Use the actual execution price (Offer for Buy, Bid for Sell)
+            entryPrice: executionPrice,
             lotSize: this.marketDetails.instrument.lotSize || 1,
             minSizeIncrement: this.marketDetails.dealingRules.minSizeIncrement.value,
             minDealSize: this.marketDetails.dealingRules.minDealSize.value,
@@ -302,10 +309,6 @@ export class ChartLogic {
         this.isPlanning = false;
         this.plannedTrade = null;
         this.lines.clear();
-
-        // Reset chart source back to Bid if we cancel (standard view)
-        // Unless we want to stay on the chart of the intended direction?
-        // Let's reset to BID for consistency with "No Position" state
         this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
     }
 

@@ -42,6 +42,11 @@ export class ChartFeed {
         this.drawPnL(this._currentPosition);
     }
 
+    // New method to force a redraw when layout/viewport changes
+    updateLayout() {
+        this.drawPnL(this._currentPosition);
+    }
+
     async initDynamic(
         tokens: SessionTokens,
         epic: string,
