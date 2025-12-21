@@ -1,6 +1,5 @@
 import { goto } from '$app/navigation';
 import * as AUTH from '$lib/constants/auth.js';
-import * as STORAGE from '$lib/constants/storage.js';
 import { session } from '$lib/services/session.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
 import { getPreferences, updatePreferences, getAccounts } from '$lib/services/account.js';
@@ -47,7 +46,9 @@ export class PreferencesLogic {
                 getAccounts(client)
             ]);
             this.data = prefs;
-            this.hedging = prefs.hedgingMode;
+
+            // Force local hedging state to false regardless of API response
+            this.hedging = false;
 
             // Resolve which account was last used for this environment
             const storedId = session.getLastAccountId(type);
@@ -79,7 +80,9 @@ export class PreferencesLogic {
 
         try {
             const leverageUpdate = { ...this.leverages } as LeverageUpdate;
-            const response = await updatePreferences(this.activeType, tokens, leverageUpdate, this.hedging);
+
+            // Force hedgingMode to false
+            const response = await updatePreferences(this.activeType, tokens, leverageUpdate, false);
 
             if (response.status === 'SUCCESS') {
                 notifications.success("Preferences updated successfully");

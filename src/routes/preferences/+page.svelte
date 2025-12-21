@@ -33,13 +33,13 @@
     {:else if logic.data}
         <div style="background: #1a1a1a; padding: 1.5rem; border-radius: 8px; border: 1px solid #333;">
 
-            <div style="margin-bottom: 2rem;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" bind:checked={logic.hedging} />
-                    <span style="font-weight: bold;">Hedging Mode</span>
+            <div style="margin-bottom: 2rem; opacity: 0.5;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: not-allowed;">
+                    <input type="checkbox" checked={false} disabled />
+                    <span style="font-weight: bold; color: #888;">Hedging Mode (Disabled)</span>
                 </label>
-                <p style="font-size: 0.8rem; color: #888; margin-top: 0.25rem;">
-                    If enabled, allows opening opposite positions for the same instrument.
+                <p style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">
+                    Hedging is strictly disabled to ensure single-position flow.
                 </p>
             </div>
 

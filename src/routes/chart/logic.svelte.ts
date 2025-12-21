@@ -70,7 +70,6 @@ export class ChartLogic {
             this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
 
             client = session.getClient(mode)!;
-            tokens = session.getTokens(mode)!;
 
             const [md, positionsResp, prefs] = await Promise.all([
                 getMarketDetails(client, this.currentEpic),
