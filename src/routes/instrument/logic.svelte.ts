@@ -2,6 +2,7 @@ import { goto } from '$app/navigation';
 import * as TRADING from '$lib/constants/trading.js';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
+import { ApiClient } from '$lib/api/client.js';
 import { getMarketDetails } from '$lib/services/market.js';
 import { getPreferences } from '$lib/services/account.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
@@ -27,7 +28,6 @@ export class InstrumentLogic {
         this.isLoading = true;
         this.error = '';
 
-        // Use Real tokens preferably, else Demo
         const realTokens = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
         const demoTokens = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
 
@@ -46,11 +46,11 @@ export class InstrumentLogic {
 
         try {
             const tokens: SessionTokens = JSON.parse(tokensStr);
+            const client = new ApiClient(type, tokens);
 
-            // Parallel Fetch: Markets + User Preferences (for leverage)
             const [prefs, ...marketResults] = await Promise.all([
-                getPreferences(type, tokens),
-                ...this.targetEpics.map(epic => getMarketDetails(type, tokens, epic))
+                getPreferences(client),
+                ...this.targetEpics.map(epic => getMarketDetails(client, epic))
             ]);
 
             this.userPreferences = prefs;
@@ -70,19 +70,13 @@ export class InstrumentLogic {
         goto('/chart');
     }
 
-    /**
-     * Looks up the user's effective leverage for this instrument category.
-     * Fallback to the instrument's default marginFactor if preference not found.
-     */
     getUserLeverage(market: MarketDetailsResponse): string {
         const category = market.instrument.type as LeverageCategory;
 
-        // Try getting from User Preferences first
         if (this.userPreferences && this.userPreferences.leverages[category]) {
             return `1:${this.userPreferences.leverages[category].current}`;
         }
 
-        // Fallback to Market Data
         if (market.instrument.marginFactorUnit === 'PERCENTAGE' && market.instrument.marginFactor > 0) {
             const lev = Math.round(100 / market.instrument.marginFactor);
             return `1:${lev} (Default)`;

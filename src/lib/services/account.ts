@@ -2,29 +2,20 @@ import * as API from '$lib/constants/api.js';
 import * as BACKEND from '$lib/constants/backend.js';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
-import {getBaseUrl} from "$lib/utils/helpers.js";
-import type {URL_TYPE} from "$lib/types/url.js";
-import type {Account, AccountPreferences, LeverageUpdate, PreferencesUpdateResponse} from "$lib/types/account.js";
-import {DEFAULT_ERROR} from "$lib/constants/error.js";
-import type {SessionTokens} from "$lib/types/auth.js";
+import { getBaseUrl } from "$lib/utils/helpers.js";
+import type { URL_TYPE } from "$lib/types/url.js";
+import type { Account, AccountPreferences, LeverageUpdate, PreferencesUpdateResponse } from "$lib/types/account.js";
+import { DEFAULT_ERROR } from "$lib/constants/error.js";
+import type { SessionTokens } from "$lib/types/auth.js";
+import type { ApiClient } from '$lib/api/client.js';
 
-export async function getAccounts(type: URL_TYPE, tokens: SessionTokens): Promise<Account[]> {
-    const baseUrl = getBaseUrl(type);
-    const url = `${baseUrl}${API.ACCOUNTS_ENDPOINT}`;
-    const response = await fetch(url, {
-        method: API.GET_METHOD,
-        headers: {
-            [API.CST_KEY]: tokens[API.CST_KEY],
-            [API.X_SECURITY_TOKEN_KEY]: tokens[API.X_SECURITY_TOKEN_KEY]
-        }
-    });
-    if (!response.ok) {
-        throw new Error(DEFAULT_ERROR);
-    }
-    const data  = await response.json();
-    return data.accounts as Account[];
+// Refactored to use ApiClient
+export async function getAccounts(client: ApiClient): Promise<Account[]> {
+    const data = await client.get<{ accounts: Account[] }>(API.ACCOUNTS_ENDPOINT);
+    return data.accounts;
 }
 
+// Kept as raw fetch because it hits the Node Proxy (Backend), not Capital directly
 export async function switchAccount(type: URL_TYPE, tokens: SessionTokens, accountId: string): Promise<SessionTokens> {
     const brokerUrl = `${getBaseUrl(type)}${API.SESSION_ENDPOINT}`;
     const payload = {
@@ -46,8 +37,8 @@ export async function switchAccount(type: URL_TYPE, tokens: SessionTokens, accou
     return await response.json() as SessionTokens;
 }
 
-export async function getSyncedAccounts(type: URL_TYPE, tokens: SessionTokens): Promise<Account[]> {
-    const accounts = await getAccounts(type, tokens);
+export async function getSyncedAccounts(type: URL_TYPE, tokens: SessionTokens, client: ApiClient): Promise<Account[]> {
+    const accounts = await getAccounts(client);
 
     if (typeof window === 'undefined') return accounts;
 
@@ -78,22 +69,11 @@ export async function getSyncedAccounts(type: URL_TYPE, tokens: SessionTokens): 
     return accounts;
 }
 
-export async function getPreferences(type: URL_TYPE, tokens: SessionTokens): Promise<AccountPreferences> {
-    const baseUrl = getBaseUrl(type);
-    const url = `${baseUrl}${API.PREFERENCES_ENDPOINT}`;
-    const response = await fetch(url, {
-        method: API.GET_METHOD,
-        headers: {
-            [API.CST_KEY]: tokens[API.CST_KEY],
-            [API.X_SECURITY_TOKEN_KEY]: tokens[API.X_SECURITY_TOKEN_KEY]
-        }
-    });
-    if (!response.ok) {
-        throw new Error(DEFAULT_ERROR);
-    }
-    return await response.json() as AccountPreferences;
+export function getPreferences(client: ApiClient): Promise<AccountPreferences> {
+    return client.get<AccountPreferences>(API.PREFERENCES_ENDPOINT);
 }
 
+// Kept as raw fetch because it hits the Node Proxy (Backend)
 export async function updatePreferences(
     type: URL_TYPE,
     tokens: SessionTokens,

@@ -1,6 +1,7 @@
 import { goto } from '$app/navigation';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
+import { ApiClient } from '$lib/api/client.js';
 import { getPreferences, updatePreferences, getAccounts } from '$lib/services/account.js';
 import type { AccountPreferences, LeverageUpdate, LeverageCategory, Account } from '$lib/types/account.js';
 import type { SessionTokens } from '$lib/types/auth.js';
@@ -41,9 +42,11 @@ export class PreferencesLogic {
         }
         try {
             const tokens: SessionTokens = JSON.parse(tokensStr);
+            const client = new ApiClient(type, tokens);
+
             const [prefs, accounts] = await Promise.all([
-                getPreferences(type, tokens),
-                getAccounts(type, tokens)
+                getPreferences(client),
+                getAccounts(client)
             ]);
             this.data = prefs;
             this.hedging = prefs.hedgingMode;

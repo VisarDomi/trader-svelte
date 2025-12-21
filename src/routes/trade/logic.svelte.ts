@@ -2,6 +2,7 @@ import { goto } from '$app/navigation';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
+import { ApiClient } from '$lib/api/client.js';
 import { getSyncedAccounts, getPreferences } from '$lib/services/account.js';
 import { createPosition, getConfirmation } from '$lib/services/trading.js';
 import { getMarketDetails } from '$lib/services/market.js';
@@ -63,11 +64,13 @@ export class TradeLogic {
             return;
         }
 
+        const client = new ApiClient(this.activeType, tokens);
+
         try {
             const [accounts, prefs, market] = await Promise.all([
-                getSyncedAccounts(this.activeType, tokens),
-                getPreferences(this.activeType, tokens),
-                getMarketDetails(this.activeType, tokens, this.targetEpic)
+                getSyncedAccounts(this.activeType, tokens, client),
+                getPreferences(client),
+                getMarketDetails(client, this.targetEpic)
             ]);
 
             this.currentAccount = accounts.find(a => a.preferred) || accounts[0] || null;
@@ -125,10 +128,10 @@ export class TradeLogic {
             this.isTrading = false;
             return;
         }
+        const client = new ApiClient(this.activeType, tokens);
 
         try {
             // 1. CAPTURE SNAPSHOT
-            // Strictly using 'deposit' as requested
             const initialBalanceSnapshot = this.currentAccount.balance.deposit;
 
             // 2. CREATE POSITION
@@ -140,10 +143,10 @@ export class TradeLogic {
                 profitLevel: this.plannedTrade.profitLevel
             };
 
-            const response = await createPosition(this.activeType, tokens, body);
+            const response = await createPosition(client, body);
 
             // 3. GET CONFIRMATION
-            const confirmation = await getConfirmation(this.activeType, tokens, response.dealReference);
+            const confirmation = await getConfirmation(client, response.dealReference);
 
             // 4. SAVE INITIAL BALANCE KEYED BY DEAL ID
             const storageKey = `IB_${confirmation.dealId}`;

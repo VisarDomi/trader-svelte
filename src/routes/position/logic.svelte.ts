@@ -2,6 +2,7 @@ import { goto } from '$app/navigation';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
+import { ApiClient } from '$lib/api/client.js';
 import { getSyncedAccounts } from '$lib/services/account.js';
 import { getPositions, createPosition } from '$lib/services/trading.js';
 import { getMarketDetails } from '$lib/services/market.js';
@@ -77,11 +78,13 @@ export class PositionViewerLogic {
             return;
         }
 
+        const client = new ApiClient(this.activeType, tokens);
+
         try {
             const [accounts, positionsData, marketData] = await Promise.all([
-                getSyncedAccounts(this.activeType, tokens),
-                getPositions(this.activeType, tokens),
-                getMarketDetails(this.activeType, tokens, this.targetEpic).catch(() => null)
+                getSyncedAccounts(this.activeType, tokens, client),
+                getPositions(client),
+                getMarketDetails(client, this.targetEpic).catch(() => null)
             ]);
 
             this.currentAccount = accounts.find(a => a.preferred) || accounts[0] || null;
@@ -94,7 +97,6 @@ export class PositionViewerLogic {
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);
 
             if (found && this.currentAccount) {
-                // Use Shared Utility
                 found.position.initialBalance = resolveInitialBalance(found.position, this.currentAccount);
             }
 
@@ -124,14 +126,15 @@ export class PositionViewerLogic {
             return;
         }
 
+        const client = new ApiClient(this.activeType, tokens);
+
         try {
-            await createPosition(this.activeType, tokens, {
+            await createPosition(client, {
                 epic: this.targetEpic,
                 direction: oppositeDir,
                 size
             });
 
-            // Cleanup IB on close
             localStorage.removeItem(`IB_${dealId}`);
 
             this.message = "Position closed successfully";

@@ -16,6 +16,7 @@
     import * as TRADING from '$lib/constants/trading.js';
     import * as CHART_CONST from '$lib/constants/chart.js';
     import * as AUTH from '$lib/constants/auth.js';
+    import { ApiClient } from '$lib/api/client.js';
     import { authenticateAndStoreSession } from "$lib/services/auth.js";
     import { getMarketDetails } from "$lib/services/market.js";
     import { getPositions } from "$lib/services/trading.js";
@@ -24,7 +25,7 @@
     import { resolveInitialBalance } from "$lib/utils/position.js";
     import type { SessionTokens } from "$lib/types/auth.js";
     import type { URL_TYPE } from '$lib/types/url.js';
-    import type {ChartData, PositionResponse} from '$lib/types/trading.js';
+    import type { ChartData, PositionResponse } from '$lib/types/trading.js';
 
     let chartContainer: HTMLDivElement;
     let chart: IChartApi;
@@ -91,15 +92,16 @@
             return;
         }
         const tokens: SessionTokens = JSON.parse(tokensData);
+        const client = new ApiClient(feedMode, tokens);
 
         let pricePrecision = 100;
         let chartDataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
 
         try {
             const [marketDetails, positionsResp, accounts] = await Promise.all([
-                getMarketDetails(feedMode, tokens, currentEpic),
-                getPositions(feedMode, tokens),
-                getSyncedAccounts(feedMode, tokens)
+                getMarketDetails(client, currentEpic),
+                getPositions(client),
+                getSyncedAccounts(feedMode, tokens, client)
             ]);
 
             decimalPlaces = marketDetails.snapshot.decimalPlacesFactor;
@@ -109,7 +111,6 @@
             const foundPos = positionsResp.positions.find(p => p.market.epic === currentEpic);
 
             if (foundPos && activeAccount) {
-                // Apply Initial Balance Logic Shared with /position
                 foundPos.position.initialBalance = resolveInitialBalance(foundPos.position, activeAccount);
                 activePosition = foundPos;
                 if (activePosition.position.direction === TRADING.SELL_DIRECTION) {
@@ -137,7 +138,6 @@
         layout.init(chart, chartContainer);
 
         lines.init(series);
-        // lines.update will now use the enriched activePosition with initialBalance
         lines.update(activePosition);
 
         await feed.init(tokens, currentEpic, series, chartDataSource, decimalPlaces, activePosition);
