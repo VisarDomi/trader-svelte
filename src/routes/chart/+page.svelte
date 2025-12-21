@@ -23,7 +23,7 @@
     import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
     import type { SessionTokens } from "$lib/types/auth.js";
     import type { URL_TYPE } from '$lib/types/url.js';
-    import type { PositionResponse } from '$lib/types/trading.js';
+    import type {ChartData, PositionResponse} from '$lib/types/trading.js';
 
     let chartContainer: HTMLDivElement;
     let chart: IChartApi;
@@ -92,7 +92,7 @@
         const tokens: SessionTokens = JSON.parse(tokensData);
 
         let pricePrecision = 100;
-        let chartDataSource = TRADING.CHART_DATA_SOURCE_BID;
+        let chartDataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
 
         try {
             const [marketDetails, positionsResp, accounts] = await Promise.all([

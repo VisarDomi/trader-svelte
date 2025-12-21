@@ -4,7 +4,7 @@ import { getHistoricalPrices } from "$lib/services/market.js";
 import type { SessionTokens } from "$lib/types/auth.js";
 import type { QuoteMessage, ChartCandle } from "$lib/types/market.js";
 import * as TRADING from "$lib/constants/trading.js";
-import type { PositionResponse } from "$lib/types/trading.js";
+import type {ChartData, PositionResponse} from "$lib/types/trading.js";
 import { getBaseSeriesOptions } from "$lib/utils/chart.js";
 import { roundDownToFactor } from "$lib/utils/trading.js";
 
@@ -24,7 +24,7 @@ export class ChartFeed {
         tokens: SessionTokens,
         epic: string,
         series: ISeriesApi<"Candlestick">,
-        dataSource: typeof TRADING.CHART_DATA_SOURCE_BID | typeof TRADING.CHART_DATA_SOURCE_OFR,
+        dataSource: ChartData,
         decimalPlaces: number,
         activePosition: PositionResponse | null
     ) {

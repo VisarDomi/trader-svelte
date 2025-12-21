@@ -1,6 +1,8 @@
 import {BUY_DIRECTION, SELL_DIRECTION} from "$lib/constants/trading.js";
+import * as TRADING from "$lib/constants/trading";
 
 export type Direction = typeof BUY_DIRECTION | typeof SELL_DIRECTION;
+export type ChartData = typeof TRADING.CHART_DATA_SOURCE_BID | typeof TRADING.CHART_DATA_SOURCE_OFR
 
 export interface PositionBody {
     contractSize: number;
