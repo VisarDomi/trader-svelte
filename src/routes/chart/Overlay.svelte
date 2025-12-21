@@ -1,9 +1,15 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
+    import { onDestroy } from 'svelte';
     import { ChartOverlay } from './overlay.svelte.js';
     import * as AUTH from '$lib/constants/auth.js';
+    import * as TRADING from '$lib/constants/trading.js';
 
     let { overlay }: { overlay: ChartOverlay } = $props();
+
+    onDestroy(() => {
+        overlay.destroy();
+    });
 </script>
 
 {#if overlay.account}
@@ -14,14 +20,15 @@
         z-index: 50;
         display: flex;
         align-items: stretch;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     ">
-        <!-- The Toggle Arrow (Always Fixed at Left) -->
+        <!-- Toggle Arrow -->
         <button
                 onclick={() => overlay.toggle()}
                 style="
-                background: rgba(40, 40, 40, 0.9);
-                border: 1px solid #333;
-                border-left: none; /* flush with screen edge */
+                background: rgba(30, 30, 30, 0.95);
+                border: 1px solid #444;
+                border-left: none;
                 border-top-right-radius: {overlay.isOpen ? '0' : '8px'};
                 border-bottom-right-radius: {overlay.isOpen ? '0' : '8px'};
                 padding: 0 0.5rem;
@@ -30,8 +37,6 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 3.5rem; /* Enforce consistent height matching the content */
-                /* Add the color indicator here so user knows context even when collapsed */
                 border-left: 4px solid {overlay.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
             "
         >
@@ -42,13 +47,13 @@
             {/if}
         </button>
 
-        <!-- The Data Card (Split Navigation) -->
+        <!-- Expanded Content -->
         {#if overlay.isOpen}
             <div
                     style="
-                    background: rgba(20, 20, 20, 0.9);
+                    background: rgba(20, 20, 20, 0.95);
                     backdrop-filter: blur(4px);
-                    border: 1px solid #333;
+                    border: 1px solid #444;
                     border-left: none;
                     border-top-right-radius: 8px;
                     border-bottom-right-radius: 8px;
@@ -56,33 +61,31 @@
                     text-align: left;
                     box-shadow: 4px 0 10px rgba(0,0,0,0.5);
                     display: flex;
-                    align-items: stretch;
-                    min-height: 3.5rem;
+                    flex-direction: column;
+                    min-width: 200px;
                 "
             >
-                <!-- Market Name -> /instrument -->
+                <!-- Top Header: Market Name -->
                 <div
                         role="button"
                         tabindex="0"
                         onclick={() => goto('/instrument')}
                         onkeydown={(e) => e.key === 'Enter' && goto('/instrument')}
                         style="
-                        padding: 0.75rem 1rem;
+                        padding: 0.5rem 1rem;
+                        border-bottom: 1px solid #444;
+                        font-weight: bold;
                         cursor: pointer;
                         display: flex;
+                        justify-content: space-between;
                         align-items: center;
-                        outline: none;
                     "
                 >
-                    <div style="font-size: 1rem; font-weight: bold; white-space: nowrap;">
-                        {overlay.marketName}
-                    </div>
+                    <span>{overlay.marketName}</span>
+                    <span style="font-size: 0.7rem; color: #888;">Change</span>
                 </div>
 
-                <!-- Vertical Separator -->
-                <div style="width: 1px; background: #444; margin: 0.5rem 0;"></div>
-
-                <!-- Account Info -> /accounts -->
+                <!-- Account Balances Grid -->
                 <div
                         role="button"
                         tabindex="0"
@@ -90,21 +93,61 @@
                         onkeydown={(e) => e.key === 'Enter' && goto('/accounts')}
                         style="
                         padding: 0.75rem 1rem;
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 0.75rem;
                         cursor: pointer;
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                        line-height: 1.2;
-                        outline: none;
+                        font-size: 0.8rem;
+                        border-bottom: 1px solid #444;
                     "
                 >
-                    <div style="font-size: 0.75rem; color: #ddd;">
-                        {overlay.account.accountName} <span style="font-size: 0.65rem; color: #aaa;">({overlay.mode})</span>
+                    <div>
+                        <div style="color: #888;">Balance</div>
+                        <div>{overlay.account.balance.balance.toFixed(2)}</div>
                     </div>
-                    <div style="font-size: 0.9rem; font-weight: bold;">
-                        {overlay.account.symbol}{overlay.account.balance.balance.toFixed(2)}
+                    <div>
+                        <div style="color: #888;">Deposit</div>
+                        <div>{overlay.account.balance.deposit.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style="color: #888;">P&L</div>
+                        <div style="color: {overlay.account.balance.profitLoss >= 0 ? '#26a69a' : '#ef5350'}; font-weight: bold;">
+                            {overlay.account.balance.profitLoss.toFixed(2)}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="color: #888;">Available</div>
+                        <div style="color: white;">{overlay.account.balance.available.toFixed(2)}</div>
                     </div>
                 </div>
+
+                <!-- Active Position Details (If Exists) -->
+                {#if overlay.position}
+                    <div
+                            role="button"
+                            tabindex="0"
+                            onclick={() => goto('/position')}
+                            onkeydown={(e) => e.key === 'Enter' && goto('/position')}
+                            style="
+                            padding: 0.75rem 1rem;
+                            background: rgba(255, 255, 255, 0.05);
+                            cursor: pointer;
+                        "
+                    >
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                            <div style="font-weight: bold; color: {overlay.position.position.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
+                                {overlay.position.position.direction} {overlay.position.position.size}
+                            </div>
+                            <div style="font-weight: bold; color: {overlay.position.position.upl >= 0 ? '#26a69a' : '#ef5350'}">
+                                {overlay.position.position.upl.toFixed(2)}
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #aaa;">
+                            <span>Entry: {overlay.position.position.level}</span>
+                            <span>Lev: 1:{overlay.position.position.leverage}</span>
+                        </div>
+                    </div>
+                {/if}
             </div>
         {/if}
     </div>

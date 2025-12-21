@@ -24,21 +24,39 @@ export class PositionViewerLogic {
     marketDetails = $state<MarketDetailsResponse | null>(null);
     targetEpic = $state('');
 
-    // Default precision if market details fail
     precision = $state(2);
+    private pollInterval: ReturnType<typeof setInterval> | null = null;
 
     async init() {
         if (typeof window === 'undefined') return;
 
-        // 1. Determine Mode
+        // 1. Determine Mode & Epic
         const storedMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE;
         this.activeType = storedMode || AUTH.DEMO_TYPE;
 
-        // 2. Determine Epic (Default to last used)
         const storedEpic = localStorage.getItem(STORAGE.LAST_EPIC_KEY);
         this.targetEpic = storedEpic || TRADING.NDX_EPIC;
 
+        // 2. Initial Load
         await this.load();
+
+        // 3. Start Polling for Real-Time Debugging
+        this.startPolling();
+    }
+
+    destroy() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+    }
+
+    private startPolling() {
+        if (this.pollInterval) clearInterval(this.pollInterval);
+        this.pollInterval = setInterval(async () => {
+            // Quiet load (don't set isLoading)
+            await this.load(true);
+        }, 1000);
     }
 
     private getTokens(type: URL_TYPE): SessionTokens | null {
@@ -48,21 +66,17 @@ export class PositionViewerLogic {
         return JSON.parse(tokensStr);
     }
 
-    async load() {
-        this.isLoading = true;
+    async load(isPolling = false) {
+        if (!isPolling) this.isLoading = true;
         this.error = '';
-        this.currentAccount = null;
-        this.currentPosition = null;
-        this.marketDetails = null;
 
         const tokens = this.getTokens(this.activeType);
         if (!tokens) {
-            await goto('/login');
+            if (!isPolling) await goto('/login');
             return;
         }
 
         try {
-            // Fetch Accounts, All Positions, and Specific Market Details (for precision)
             const [accounts, positionsData, marketData] = await Promise.all([
                 getSyncedAccounts(this.activeType, tokens),
                 getPositions(this.activeType, tokens),
@@ -76,35 +90,34 @@ export class PositionViewerLogic {
                 this.precision = this.marketDetails.snapshot.decimalPlacesFactor;
             }
 
-            // Find position for current EPIC
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);
 
-            // SIMULATE GRAPH LOGIC: Back-calculate initial balance
             if (found && this.currentAccount) {
-                // NOTE: This logic mirrors src/routes/chart/+page.svelte
-                // We use 'available' (Margin Available) - UPL to approximate starting state.
-                const currentEquity = this.currentAccount.balance.available;
-                found.position.initialBalance = currentEquity - found.position.upl;
+                // BUG FIX:
+                // Previous incorrect logic: currentEquity (Free Margin) - upl = Negative result
+                // Correct logic: initialBalance = account.balance.balance (Cash Balance)
+                // This represents the funds available before this trade's P&L is applied.
+                found.position.initialBalance = this.currentAccount.balance.balance;
             }
 
             this.currentPosition = found || null;
 
         } catch (e) {
-            this.error = e instanceof Error ? e.message : String(e);
+            // Only show error if not polling to avoid flickering UI on transient net errors
+            if (!isPolling) this.error = e instanceof Error ? e.message : String(e);
         } finally {
-            this.isLoading = false;
+            if (!isPolling) this.isLoading = false;
         }
     }
 
     async closePosition() {
         if (!this.currentPosition) return;
-
         this.isClosing = true;
         this.error = '';
 
+        const size = this.currentPosition.position.size;
         const currentDir = this.currentPosition.position.direction;
         const oppositeDir = currentDir === TRADING.BUY_DIRECTION ? TRADING.SELL_DIRECTION : TRADING.BUY_DIRECTION;
-        const size = this.currentPosition.position.size;
 
         const tokens = this.getTokens(this.activeType);
         if (!tokens) {
@@ -129,8 +142,7 @@ export class PositionViewerLogic {
         }
     }
 
-    // DEBUG: Replicates the line calculation logic from src/routes/chart/lines.svelte.ts
-    // to visualize what the chart sees.
+    // DEBUG: Visualization Logic for Chart Lines
     get debugInfo() {
         if (!this.currentPosition) return null;
 
@@ -144,7 +156,6 @@ export class PositionViewerLogic {
         // WENDY (Stop Loss) Logic
         if (p.stopLevel) {
             const potentialLoss = Math.abs(p.level - p.stopLevel) * p.size;
-            // Rounding logic from lines.svelte.ts
             const roundedPotentialLoss = roundDownToFactor(potentialLoss, TRADING.ACCOUNT_USD_PRICE_PRECISION);
             const pessimisticBalance = initialBalance - potentialLoss;
             const potentialLossPercentage = hasValidInitialBalance ? (potentialLoss / initialBalance) * 100 : 0;

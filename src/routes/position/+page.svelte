@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { PositionViewerLogic } from './logic.svelte.js';
     import * as TRADING from '$lib/constants/trading.js';
     import * as AUTH from '$lib/constants/auth.js';
@@ -8,6 +8,10 @@
 
     onMount(() => {
         logic.init();
+    });
+
+    onDestroy(() => {
+        logic.destroy();
     });
 
     // Helper to format prices safely
@@ -49,7 +53,7 @@
         </div>
     {/if}
 
-    {#if logic.isLoading}
+    {#if logic.isLoading && !logic.currentPosition}
         <p>Loading position details...</p>
     {:else if logic.currentPosition}
         <!-- Position Dashboard -->
