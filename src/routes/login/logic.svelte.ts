@@ -2,6 +2,7 @@ import * as STORAGE from '$lib/constants/storage.js';
 import * as ENV from '$lib/env.js';
 import * as AUTH_CONST from '$lib/constants/auth.js';
 import { login } from "$lib/services/auth.js";
+import { session } from "$lib/services/session.js";
 import type { SessionTokens, UserCredentials } from "$lib/types/auth.js";
 import type { URL_TYPE } from "$lib/types/url.js";
 
@@ -28,10 +29,9 @@ export class Login {
             this.password = c.password;
             this.apiKey = c.apiKey;
         }
-        const demoTokensData = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
-        if (demoTokensData) this.demoTokens = JSON.parse(demoTokensData);
-        const realTokensData = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
-        if (realTokensData) this.realTokens = JSON.parse(realTokensData);
+
+        this.demoTokens = session.getTokens(AUTH_CONST.DEMO_TYPE);
+        this.realTokens = session.getTokens(AUTH_CONST.REAL_TYPE);
     }
 
     async loginBoth() {
@@ -69,12 +69,14 @@ export class Login {
             if (isReal) this.realTokens = t;
             else this.demoTokens = t;
         };
-        const storageKey = isReal ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
+
         try {
             setStatus("Logging in...");
             const sessionTokens = await login(type);
-            localStorage.setItem(storageKey, JSON.stringify(sessionTokens));
-            localStorage.setItem(STORAGE.LOGIN_TIMESTAMP_KEY, Date.now().toString());
+
+            session.saveTokens(type, sessionTokens);
+            session.saveLoginTimestamp();
+
             setTokens(sessionTokens);
             setStatus("Connected");
         } catch (e) {

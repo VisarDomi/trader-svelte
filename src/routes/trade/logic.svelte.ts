@@ -1,14 +1,12 @@
 import { goto } from '$app/navigation';
-import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
-import { ApiClient } from '$lib/api/client.js';
+import { session } from '$lib/services/session.js';
 import { getSyncedAccounts, getPreferences } from '$lib/services/account.js';
 import { createPosition, getConfirmation } from '$lib/services/trading.js';
 import { getMarketDetails } from '$lib/services/market.js';
 import { calculatePositionParameters, type TradeCalculationResult } from '$lib/utils/trading.js';
 import type { Account, LeverageCategory } from '$lib/types/account.js';
-import type { SessionTokens } from '$lib/types/auth.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 import type { Direction, TradeRequest } from '$lib/types/trading.js';
 
@@ -27,8 +25,7 @@ export class TradeLogic {
     async init() {
         if (typeof window === 'undefined') return;
 
-        const storedMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE;
-        this.activeType = storedMode || AUTH.DEMO_TYPE;
+        this.activeType = session.mode;
 
         const params = new URLSearchParams(window.location.search);
         const epicParam = params.get('epic');
@@ -46,29 +43,20 @@ export class TradeLogic {
         }
     }
 
-    private getTokens(type: URL_TYPE): SessionTokens | null {
-        const storageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
-        const tokensStr = localStorage.getItem(storageKey);
-        if (!tokensStr) return null;
-        return JSON.parse(tokensStr);
-    }
-
     async calculateSetup(direction: Direction, clickPrice: number, bid: number, ofr: number) {
         this.isLoading = true;
         this.plannedTrade = null;
         this.error = '';
 
-        const tokens = this.getTokens(this.activeType);
-        if (!tokens) {
+        const client = session.getClient(this.activeType);
+        if (!client) {
             await goto('/login');
             return;
         }
 
-        const client = new ApiClient(this.activeType, tokens);
-
         try {
             const [accounts, prefs, market] = await Promise.all([
-                getSyncedAccounts(this.activeType, tokens, client),
+                getSyncedAccounts(this.activeType, session.getTokens(this.activeType)!, client),
                 getPreferences(client),
                 getMarketDetails(client, this.targetEpic)
             ]);
@@ -122,13 +110,12 @@ export class TradeLogic {
         this.isTrading = true;
         this.error = '';
 
-        const tokens = this.getTokens(this.activeType);
-        if (!tokens) {
+        const client = session.getClient(this.activeType);
+        if (!client) {
             this.error = "Session expired";
             this.isTrading = false;
             return;
         }
-        const client = new ApiClient(this.activeType, tokens);
 
         try {
             // 1. CAPTURE SNAPSHOT
@@ -149,8 +136,7 @@ export class TradeLogic {
             const confirmation = await getConfirmation(client, response.dealReference);
 
             // 4. SAVE INITIAL BALANCE KEYED BY DEAL ID
-            const storageKey = `IB_${confirmation.dealId}`;
-            localStorage.setItem(storageKey, initialBalanceSnapshot.toString());
+            session.setInitialBalance(confirmation.dealId, initialBalanceSnapshot);
 
             // 5. REDIRECT
             await goto('/position');

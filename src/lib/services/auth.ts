@@ -6,6 +6,7 @@ import type { URL_TYPE } from "$lib/types/url.js";
 import type { SessionTokens, UserCredentials } from "$lib/types/auth.js";
 import { DEFAULT_ERROR } from "$lib/constants/error.js";
 import { getCredentials } from "$lib/services/credentials.js";
+import { session } from "$lib/services/session.js";
 
 export async function login(type: URL_TYPE): Promise<SessionTokens> {
     const credentials: UserCredentials = getCredentials();
@@ -37,24 +38,29 @@ export async function login(type: URL_TYPE): Promise<SessionTokens> {
 }
 
 export async function authenticateAndStoreSession(): Promise<void> {
-    getCredentials();
-    const timestampStr = localStorage.getItem(STORAGE.LOGIN_TIMESTAMP_KEY);
-    const realTokensStr = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
-    const demoTokensStr = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
-    if (timestampStr && realTokensStr && demoTokensStr) {
+    getCredentials(); // Will throw if no creds
+
+    // Check throttling
+    const timestampStr = localStorage.getItem(STORAGE.LOGIN_TIMESTAMP_KEY); // Keep direct access here or move to session? Moved to session below.
+    const hasReal = session.isAuthenticated(AUTH.REAL_TYPE);
+    const hasDemo = session.isAuthenticated(AUTH.DEMO_TYPE);
+
+    if (timestampStr && hasReal && hasDemo) {
         const timestamp = parseInt(timestampStr, 10);
         const now = Date.now();
         if (now - timestamp < AUTH.REST_PING_INTERVAL) {
             return;
         }
     }
+
     const [realTokens, demoTokens] = await Promise.all([
         login(AUTH.REAL_TYPE),
         login(AUTH.DEMO_TYPE)
     ]);
-    localStorage.setItem(STORAGE.TOKENS_REAL_KEY, JSON.stringify(realTokens));
-    localStorage.setItem(STORAGE.TOKENS_DEMO_KEY, JSON.stringify(demoTokens));
-    localStorage.setItem(STORAGE.LOGIN_TIMESTAMP_KEY, Date.now().toString());
+
+    session.saveTokens(AUTH.REAL_TYPE, realTokens);
+    session.saveTokens(AUTH.DEMO_TYPE, demoTokens);
+    session.saveLoginTimestamp();
 }
 
 async function ping(type: URL_TYPE, tokens: SessionTokens): Promise<void> {
@@ -72,17 +78,18 @@ async function ping(type: URL_TYPE, tokens: SessionTokens): Promise<void> {
 export function startRestHeartbeat() {
     if (typeof window === 'undefined') return () => {};
     const intervalId = setInterval(async () => {
-        const realTokensStr = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
-        const demoTokensStr = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
         const promises = [];
-        if (realTokensStr) {
-            const tokens = JSON.parse(realTokensStr);
-            promises.push(ping(AUTH.REAL_TYPE, tokens).catch(console.error));
+
+        const realTokens = session.getTokens(AUTH.REAL_TYPE);
+        if (realTokens) {
+            promises.push(ping(AUTH.REAL_TYPE, realTokens).catch(console.error));
         }
-        if (demoTokensStr) {
-            const tokens = JSON.parse(demoTokensStr);
-            promises.push(ping(AUTH.DEMO_TYPE, tokens).catch(console.error));
+
+        const demoTokens = session.getTokens(AUTH.DEMO_TYPE);
+        if (demoTokens) {
+            promises.push(ping(AUTH.DEMO_TYPE, demoTokens).catch(console.error));
         }
+
         await Promise.all(promises);
     }, AUTH.REST_PING_INTERVAL);
     return () => clearInterval(intervalId);
