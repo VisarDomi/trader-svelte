@@ -8,12 +8,13 @@ import { ChartUI } from './ui.svelte.js';
 import { ChartFeed } from './feed.svelte.js';
 import { ChartOverlay } from './overlay.svelte.js';
 import { ChartLines } from './lines.svelte.js';
+import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
 // Services & Utils
 import * as TRADING from '$lib/constants/trading.js';
 import { session } from '$lib/services/session.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
-import { authenticateAndStoreSession } from "$lib/services/auth.js";
+import { authenticateAndStoreSession, startRestHeartbeat } from "$lib/services/auth.js";
 import { getMarketDetails } from "$lib/services/market.js";
 import { getPositions, createPosition, getConfirmation } from "$lib/services/trading.js";
 import { getSyncedAccounts, getPreferences } from "$lib/services/account.js";
@@ -34,6 +35,7 @@ export class ChartLogic {
 
     private feed = new ChartFeed();
     private lines = new ChartLines();
+    private watchdog: Watchdog;
     private chart: IChartApi | null = null;
     private series: ISeriesApi<"Candlestick"> | null = null;
 
@@ -43,14 +45,16 @@ export class ChartLogic {
     private marketDetails: MarketDetailsResponse | null = null;
     private activeAccount: Account | null = null;
     private userLeverage = 1;
+    private currentDataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
+
+    // Auth heartbeat cleanup function
+    private stopAuthHeartbeat: (() => void) | null = null;
 
     constructor() {
-        // This effect ensures lines and feed are updated when:
-        // 1. Account changes
-        // 2. Planning state changes
-        // 3. Viewport (rotation) changes - implicit dependency via viewport.width/height access
+        // Initialize Watchdog with the restart callback
+        this.watchdog = new Watchdog(() => this.restartEngine());
+
         $effect(() => {
-            // Explicitly read viewport dimensions to guarantee reactivity on rotation
             const _w = viewport.width;
             const _h = viewport.height;
 
@@ -60,10 +64,7 @@ export class ChartLogic {
                     posToUpdate = this.getMockPlanningPosition();
                 }
 
-                // Update static lines (Start, TP, SL)
                 this.lines.update(posToUpdate, this.activeAccount.symbol);
-
-                // Update dynamic line (Current PnL)
                 this.feed.accountSymbol = this.activeAccount.symbol;
                 this.feed.updateLayout();
             }
@@ -71,101 +72,46 @@ export class ChartLogic {
     }
 
     async init(container: HTMLDivElement) {
+        // 1. Initial Authentication
         try {
             await authenticateAndStoreSession();
+            // Start the auth heartbeat (pinging REST API)
+            this.stopAuthHeartbeat = startRestHeartbeat();
         } catch {
             await goto('/login');
             return;
         }
 
+        // 2. Start Watchdog & Visibility Listener
+        this.watchdog.start();
+        if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', this.handleVisibilityChange);
+        }
+
         this.currentEpic = session.lastEpic;
-        const mode = session.mode;
 
-        let tokens = session.getTokens(mode);
-        let client = session.getClient(mode);
-
-        if (!client || !tokens) {
-            await goto('/login');
-            return;
-        }
-
-        let pricePrecision = 100;
-        let chartDataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
-
-        try {
-            const accounts = await getSyncedAccounts(mode, tokens, client);
-            this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
-
-            client = session.getClient(mode)!;
-
-            const [md, positionsResp, prefs] = await Promise.all([
-                getMarketDetails(client, this.currentEpic),
-                getPositions(client),
-                getPreferences(client)
-            ]);
-
-            this.marketDetails = md;
-            this.decimalPlaces = md.snapshot.decimalPlacesFactor;
-            pricePrecision = Math.pow(10, this.decimalPlaces);
-
-            const category = md.instrument.type as LeverageCategory;
-            if (prefs.leverages[category]) {
-                this.userLeverage = prefs.leverages[category].current;
-            } else if (md.instrument.marginFactorUnit === 'PERCENTAGE' && md.instrument.marginFactor > 0) {
-                this.userLeverage = 100 / md.instrument.marginFactor;
-            }
-
-            const foundPos = positionsResp.positions.find(p => p.market.epic === this.currentEpic);
-
-            if (foundPos && this.activeAccount) {
-                foundPos.position.initialBalance = resolveInitialBalance(foundPos.position, this.activeAccount);
-                this.activePosition = foundPos;
-
-                if (this.activePosition.position.direction === TRADING.SELL_DIRECTION) {
-                    chartDataSource = TRADING.CHART_DATA_SOURCE_OFR;
-                }
-            } else {
-                this.activePosition = null;
-                chartDataSource = TRADING.CHART_DATA_SOURCE_BID;
-            }
-
-        } catch (e) {
-            console.error("Chart Logic Init Failed", e);
-        }
-
-        await this.overlay.init(this.currentEpic, (acc) => this.handlePositionClosed(acc));
-
+        // 3. UI Setup
         const w = window.innerWidth;
         const h = window.innerHeight;
         this.chart = createChart(container, getChartOptions(w, h));
         this.chart.subscribeClick(this.handleChartClick);
-
-        this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(pricePrecision));
-
         this.layout.init(this.chart, container);
-        this.lines.init(this.series);
 
-        if (this.activeAccount) {
-            this.lines.update(this.activePosition, this.activeAccount.symbol);
-            this.feed.accountSymbol = this.activeAccount.symbol;
-        } else {
-            this.lines.update(this.activePosition, "");
-        }
-
-        const finalTokens = session.getTokens(mode)!;
-        await this.feed.initDynamic(
-            finalTokens,
-            this.currentEpic,
-            this.series,
-            chartDataSource,
-            this.decimalPlaces,
-            this.activePosition
-        );
-
+        // 4. Load Data
+        await this.loadDataAndFeed(true);
         this.layout.setDataLoaded(true);
     }
 
     destroy() {
+        this.watchdog.stop();
+        if (typeof document !== 'undefined') {
+            document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+        }
+        if (this.stopAuthHeartbeat) {
+            this.stopAuthHeartbeat();
+            this.stopAuthHeartbeat = null;
+        }
+
         this.layout.destroy();
         this.feed.destroy();
         this.overlay.destroy();
@@ -176,10 +122,139 @@ export class ChartLogic {
         }
     }
 
+    private handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            // Force an immediate check to catch the gap instantly
+            this.watchdog.checkNow();
+        }
+    };
+
+    /**
+     * TEARDOWN & RESTART
+     * Called when Watchdog detects a significant time gap.
+     */
+    private async restartEngine() {
+        console.log('[Engine] Freeze detected. Restarting...');
+
+        // 1. Teardown
+        // Kill the feed (WebSocket) immediately to prevent zombie behavior
+        this.feed.destroy();
+
+        // Stop the auth heartbeat to prevent stacked intervals
+        if (this.stopAuthHeartbeat) {
+            this.stopAuthHeartbeat();
+            this.stopAuthHeartbeat = null;
+        }
+
+        // 2. Re-Auth (Refresh tokens if expired)
+        try {
+            await authenticateAndStoreSession();
+            // Restart auth heartbeat
+            this.stopAuthHeartbeat = startRestHeartbeat();
+        } catch (e) {
+            console.error("[Engine] Session invalid on resume", e);
+            // If we can't auth, we must go to login
+            await goto('/login');
+            return;
+        }
+
+        // 3. Hydration (Data + WS)
+        // Pass false to reuse existing chart series
+        await this.loadDataAndFeed(false);
+
+        console.log('[Engine] Restart complete.');
+    }
+
+    private async loadDataAndFeed(createSeries: boolean) {
+        const mode = session.mode;
+        let tokens = session.getTokens(mode);
+        let client = session.getClient(mode);
+
+        if (!client || !tokens) {
+            await goto('/login');
+            return;
+        }
+
+        try {
+            const accounts = await getSyncedAccounts(mode, tokens, client);
+            this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
+
+            // Refresh client with potentially new tokens
+            client = session.getClient(mode)!;
+            tokens = session.getTokens(mode)!;
+
+            const [md, positionsResp, prefs] = await Promise.all([
+                getMarketDetails(client, this.currentEpic),
+                getPositions(client),
+                getPreferences(client)
+            ]);
+
+            this.marketDetails = md;
+            this.decimalPlaces = md.snapshot.decimalPlacesFactor;
+
+            const category = md.instrument.type as LeverageCategory;
+            if (prefs.leverages[category]) {
+                this.userLeverage = prefs.leverages[category].current;
+            } else if (md.instrument.marginFactorUnit === 'PERCENTAGE' && md.instrument.marginFactor > 0) {
+                this.userLeverage = 100 / md.instrument.marginFactor;
+            }
+
+            const foundPos = positionsResp.positions.find(p => p.market.epic === this.currentEpic);
+            if (foundPos && this.activeAccount) {
+                foundPos.position.initialBalance = resolveInitialBalance(foundPos.position, this.activeAccount);
+                this.activePosition = foundPos;
+
+                if (this.activePosition.position.direction === TRADING.SELL_DIRECTION) {
+                    this.currentDataSource = TRADING.CHART_DATA_SOURCE_OFR;
+                } else {
+                    this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
+                }
+            } else {
+                this.activePosition = null;
+                // Keep current data source on restart if no position, or reset to BID?
+                // Keeping it as is handles the case where user was viewing OFR manually.
+                // But generally safe to default to BID if no position.
+                // Let's stick to BID if no position to ensure clean state.
+                this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
+            }
+
+            if (createSeries && this.chart) {
+                const pricePrecision = Math.pow(10, this.decimalPlaces);
+                this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(pricePrecision));
+                this.lines.init(this.series);
+            }
+
+            await this.overlay.init(this.currentEpic, (acc) => this.handlePositionClosed(acc));
+
+            if (this.activeAccount) {
+                this.lines.update(this.activePosition, this.activeAccount.symbol);
+                this.feed.accountSymbol = this.activeAccount.symbol;
+            } else {
+                this.lines.update(this.activePosition, "");
+            }
+
+            if (this.series) {
+                await this.feed.initDynamic(
+                    tokens,
+                    this.currentEpic,
+                    this.series,
+                    this.currentDataSource,
+                    this.decimalPlaces,
+                    this.activePosition
+                );
+            }
+
+        } catch (e) {
+            console.error("Chart Logic Load Failed", e);
+            notifications.error("Connection failed. Retrying...");
+        }
+    }
+
     async handlePositionClosed(account: Account | null) {
         this.activePosition = null;
         this.feed.position = null;
         this.lines.update(null, account?.symbol || "");
+        this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
         await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
 
         if (account) {
@@ -230,6 +305,7 @@ export class ChartLogic {
             return;
         }
 
+        this.currentDataSource = targetSource;
         await this.feed.setDataSource(targetSource);
 
         const basisBalance = this.activeAccount.balance.deposit;
@@ -309,6 +385,7 @@ export class ChartLogic {
         this.isPlanning = false;
         this.plannedTrade = null;
         this.lines.clear();
+        this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
         this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
     }
 
@@ -352,6 +429,14 @@ export class ChartLogic {
                 this.feed.position = this.activePosition;
                 this.feed.accountSymbol = this.activeAccount.symbol;
                 this.overlay.position = this.activePosition;
+
+                if (foundPos.position.direction === TRADING.SELL_DIRECTION) {
+                    this.currentDataSource = TRADING.CHART_DATA_SOURCE_OFR;
+                    await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_OFR);
+                } else {
+                    this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
+                    await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
+                }
 
                 this.refreshAccountData();
             } else {

@@ -7,6 +7,7 @@ import { getSyncedAccounts } from '$lib/services/account.js';
 import { getPositions, createPosition } from '$lib/services/trading.js';
 import { getMarketDetails } from '$lib/services/market.js';
 import { resolveInitialBalance } from '$lib/utils/position.js';
+import { viewport } from '$lib/services/viewport.svelte.js';
 import {
     generateStartingLine,
     generateWendyLine,
@@ -36,13 +37,17 @@ export class PositionViewerLogic {
         if (typeof window === 'undefined') return;
 
         this.activeType = session.mode;
-        this.targetEpic = session.lastEpic; // Uses the getter, defaults to NDX
+        this.targetEpic = session.lastEpic;
 
         await this.load();
         this.startPolling();
     }
 
     destroy() {
+        this.stopPolling();
+    }
+
+    stopPolling() {
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
             this.pollInterval = null;
@@ -50,7 +55,7 @@ export class PositionViewerLogic {
     }
 
     private startPolling() {
-        if (this.pollInterval) clearInterval(this.pollInterval);
+        this.stopPolling();
         this.pollInterval = setInterval(async () => {
             await this.load(true);
         }, 1000);
@@ -83,7 +88,6 @@ export class PositionViewerLogic {
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);
 
             if (found && this.currentAccount) {
-                // Shared utility now uses SessionManager internally
                 found.position.initialBalance = resolveInitialBalance(found.position, this.currentAccount);
             }
 
@@ -141,16 +145,19 @@ export class PositionViewerLogic {
         const p = this.currentPosition.position;
         const initialBalance = p.initialBalance || 0;
 
-        const starting = generateStartingLine(p, this.currentPosition.market.epic);
-        const wendy = generateWendyLine(p, initialBalance);
-        const lambo = generateLamboLine(p, initialBalance);
+        // Use reactive viewport state to determine orientation
+        const isLandscape = viewport.width > viewport.height;
+
+        const starting = generateStartingLine(p, this.currentPosition.market.epic, isLandscape);
+        const wendy = generateWendyLine(p, initialBalance, this.currentAccount?.symbol || '', isLandscape);
+        const lambo = generateLamboLine(p, initialBalance, this.currentAccount?.symbol || '', isLandscape);
 
         let current = null;
         if (this.marketDetails) {
             const currentBid = this.marketDetails.snapshot.bid;
             const currentOfr = this.marketDetails.snapshot.offer;
             const currentPrice = p.direction === TRADING.BUY_DIRECTION ? currentBid : currentOfr;
-            current = generateCurrentLine(p, currentPrice, initialBalance);
+            current = generateCurrentLine(p, currentPrice, initialBalance, this.currentAccount?.symbol || '', isLandscape);
         }
 
         return {
