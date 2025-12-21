@@ -5,6 +5,7 @@ import * as TRADING from '$lib/constants/trading.js';
 import { getSyncedAccounts } from '$lib/services/account.js';
 import { getPositions, createPosition } from '$lib/services/trading.js';
 import { getMarketDetails } from '$lib/services/market.js';
+import { roundDownToFactor } from '$lib/utils/trading.js';
 import type { Account } from '$lib/types/account.js';
 import type { SessionTokens } from '$lib/types/auth.js';
 import type { URL_TYPE } from '$lib/types/url.js';
@@ -77,6 +78,15 @@ export class PositionViewerLogic {
 
             // Find position for current EPIC
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);
+
+            // SIMULATE GRAPH LOGIC: Back-calculate initial balance
+            if (found && this.currentAccount) {
+                // NOTE: This logic mirrors src/routes/chart/+page.svelte
+                // We use 'available' (Margin Available) - UPL to approximate starting state.
+                const currentEquity = this.currentAccount.balance.available;
+                found.position.initialBalance = currentEquity - found.position.upl;
+            }
+
             this.currentPosition = found || null;
 
         } catch (e) {
@@ -117,5 +127,67 @@ export class PositionViewerLogic {
             this.error = e instanceof Error ? e.message : String(e);
             this.isClosing = false;
         }
+    }
+
+    // DEBUG: Replicates the line calculation logic from src/routes/chart/lines.svelte.ts
+    // to visualize what the chart sees.
+    get debugInfo() {
+        if (!this.currentPosition) return null;
+
+        const p = this.currentPosition.position;
+        const initialBalance = p.initialBalance || 0;
+        const hasValidInitialBalance = initialBalance !== 0;
+
+        let wendy = null;
+        let lambo = null;
+
+        // WENDY (Stop Loss) Logic
+        if (p.stopLevel) {
+            const potentialLoss = Math.abs(p.level - p.stopLevel) * p.size;
+            // Rounding logic from lines.svelte.ts
+            const roundedPotentialLoss = roundDownToFactor(potentialLoss, TRADING.ACCOUNT_USD_PRICE_PRECISION);
+            const pessimisticBalance = initialBalance - potentialLoss;
+            const potentialLossPercentage = hasValidInitialBalance ? (potentialLoss / initialBalance) * 100 : 0;
+
+            let offsetPercentage = 0;
+            if (potentialLossPercentage < 100) {
+                offsetPercentage = (potentialLossPercentage / (100 - potentialLossPercentage)) * 100;
+            }
+
+            wendy = {
+                level: p.stopLevel,
+                lossVal: roundedPotentialLoss,
+                balance: pessimisticBalance,
+                pct: potentialLossPercentage,
+                offsetPct: offsetPercentage
+            };
+        }
+
+        // LAMBO (Take Profit) Logic
+        if (p.profitLevel) {
+            const potentialProfit = Math.abs(p.level - p.profitLevel) * p.size;
+            const roundedPotentialProfit = roundDownToFactor(potentialProfit, TRADING.ACCOUNT_USD_PRICE_PRECISION);
+            const optimisticBalance = initialBalance + potentialProfit;
+            const potentialProfitPercentage = hasValidInitialBalance ? (potentialProfit / initialBalance) * 100 : 0;
+
+            const offsetPercentage = (potentialProfitPercentage / (100 + potentialProfitPercentage)) * 100;
+
+            lambo = {
+                level: p.profitLevel,
+                profitVal: roundedPotentialProfit,
+                balance: optimisticBalance,
+                pct: potentialProfitPercentage,
+                offsetPct: offsetPercentage
+            };
+        }
+
+        return {
+            initialBalance,
+            entry: p.level,
+            size: p.size,
+            upl: p.upl,
+            wendy,
+            lambo
+        };
     }
 }

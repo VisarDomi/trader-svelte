@@ -73,6 +73,49 @@
                 </div>
             </div>
 
+            <!-- DEBUG CARD: The 4 Lines -->
+            {#if logic.debugInfo}
+                <div style="background: #220033; padding: 1rem; border: 1px dashed #ff00ff; border-radius: 4px; font-family: monospace; font-size: 0.85rem; color: #ffccff;">
+                    <h4 style="margin-bottom: 0.5rem; color: #ff00ff; font-weight: bold;">[DEBUG] CHART LINE CALCS</h4>
+
+                    <div style="margin-bottom: 0.5rem;">
+                        <div><span style="color:#aaa;">Initial Balance:</span> {logic.debugInfo.initialBalance.toFixed(2)}</div>
+                        <div><span style="color:#aaa;">Size:</span> {logic.debugInfo.size}</div>
+                        <div><span style="color:#aaa;">Entry:</span> {logic.debugInfo.entry}</div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <!-- LAMBO -->
+                        <div style="border: 1px solid #26a69a; padding: 0.5rem;">
+                            <strong style="color: #26a69a;">LAMBO (TP)</strong>
+                            {#if logic.debugInfo.lambo}
+                                <div>Level: {logic.debugInfo.lambo.level}</div>
+                                <div>Profit: +{logic.debugInfo.lambo.profitVal.toFixed(2)}</div>
+                                <div>Proj. Bal: {logic.debugInfo.lambo.balance.toFixed(2)}</div>
+                                <div>Direct %: {logic.debugInfo.lambo.pct.toFixed(2)}%</div>
+                                <div>Offset %: {logic.debugInfo.lambo.offsetPct.toFixed(2)}%</div>
+                            {:else}
+                                <div style="color: #666;">Not Set</div>
+                            {/if}
+                        </div>
+
+                        <!-- WENDY -->
+                        <div style="border: 1px solid #ef5350; padding: 0.5rem;">
+                            <strong style="color: #ef5350;">WENDY (SL)</strong>
+                            {#if logic.debugInfo.wendy}
+                                <div>Level: {logic.debugInfo.wendy.level}</div>
+                                <div>Loss: -{logic.debugInfo.wendy.lossVal.toFixed(2)}</div>
+                                <div>Proj. Bal: {logic.debugInfo.wendy.balance.toFixed(2)}</div>
+                                <div>Direct %: {logic.debugInfo.wendy.pct.toFixed(2)}%</div>
+                                <div>Offset %: {logic.debugInfo.wendy.offsetPct.toFixed(2)}%</div>
+                            {:else}
+                                <div style="color: #666;">Not Set</div>
+                            {/if}
+                        </div>
+                    </div>
+                </div>
+            {/if}
+
             <!-- 2. Price Data -->
             <div>
                 <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Price Information</h4>
