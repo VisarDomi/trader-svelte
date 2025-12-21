@@ -28,21 +28,43 @@
     </div>
 
     {#if logic.currentAccount}
+        <!-- Account Details Card (Updated to show 4 numbers) -->
         <div style="
             margin-bottom: 2rem;
-            padding: 1rem;
+            padding: 1.5rem;
             background: #262626;
             border-radius: 4px;
             border-left: 4px solid {logic.activeType === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
-            display: flex;
-            justify-content: space-between;
         ">
-            <div>
-                <span style="font-weight: bold;">{logic.currentAccount.accountName}</span>
-                <span style="font-size: 0.8rem; color: #aaa; margin-left: 0.5rem;">{logic.targetEpic}</span>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                <div>
+                    <span style="font-weight: bold; font-size: 1.1rem; color: #fff;">{logic.currentAccount.accountName}</span>
+                    <span style="font-size: 0.8rem; color: #aaa; margin-left: 0.5rem;">({logic.currentAccount.currency})</span>
+                </div>
+                <div style="font-size: 0.8rem; color: #aaa; background: #333; padding: 2px 6px; border-radius: 4px;">
+                    {logic.targetEpic}
+                </div>
             </div>
-            <div style="font-weight: bold;">
-                {logic.currentAccount.symbol}{logic.currentAccount.balance.balance.toFixed(2)}
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; font-size: 1rem;">
+                <div>
+                    <div style="font-size: 0.8rem; color: #aaa;">Balance</div>
+                    <div style="color: #fff; font-weight: bold;">{logic.currentAccount.balance.balance.toFixed(2)}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; color: #aaa;">Available</div>
+                    <div style="color: #fff; font-weight: bold;">{logic.currentAccount.balance.available.toFixed(2)}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; color: #aaa;">Deposit</div>
+                    <div style="color: #fff; font-weight: bold;">{logic.currentAccount.balance.deposit.toFixed(2)}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; color: #aaa;">P&L</div>
+                    <div style="font-weight: bold; color: {logic.currentAccount.balance.profitLoss >= 0 ? '#26a69a' : '#ef5350'}">
+                        {logic.currentAccount.balance.profitLoss.toFixed(2)}
+                    </div>
+                </div>
             </div>
         </div>
     {/if}

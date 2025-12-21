@@ -90,8 +90,21 @@ export class PositionViewerLogic {
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);
 
             if (found && this.currentAccount) {
-                // Correctly set initial balance based on cash balance (ignores floating P&L)
-                found.position.initialBalance = this.currentAccount.balance.balance;
+                // LOGIC FIX: Stable Initial Balance
+                // 1. Check if we have a saved IB for this Deal ID
+                const storageKey = `IB_${found.position.dealId}`;
+                const savedIB = localStorage.getItem(storageKey);
+
+                if (savedIB) {
+                    found.position.initialBalance = parseFloat(savedIB);
+                } else {
+                    // 2. If not, use current Balance (Realized funds) and save it
+                    // The old code used 'Equity', but assuming no other trades, Balance is the "Start" state relative to P&L.
+                    // If we used Equity, it would fluctuate with price. Balance is stable-ish.
+                    const initialBalance = this.currentAccount.balance.balance;
+                    found.position.initialBalance = initialBalance;
+                    localStorage.setItem(storageKey, initialBalance.toString());
+                }
             }
 
             this.currentPosition = found || null;
@@ -111,6 +124,7 @@ export class PositionViewerLogic {
         const size = this.currentPosition.position.size;
         const currentDir = this.currentPosition.position.direction;
         const oppositeDir = currentDir === TRADING.BUY_DIRECTION ? TRADING.SELL_DIRECTION : TRADING.BUY_DIRECTION;
+        const dealId = this.currentPosition.position.dealId;
 
         const tokens = this.getTokens(this.activeType);
         if (!tokens) {
@@ -126,6 +140,9 @@ export class PositionViewerLogic {
                 size
             });
 
+            // Cleanup the stored Initial Balance for this deal
+            localStorage.removeItem(`IB_${dealId}`);
+
             this.message = "Position closed successfully";
             await goto('/chart');
 
@@ -135,7 +152,7 @@ export class PositionViewerLogic {
         }
     }
 
-    // DEBUG: Visualization Logic for Chart Lines (Matches Old Repo ChartService.ts & lines.ts)
+    // DEBUG: Visualization Logic
     get debugInfo() {
         if (!this.currentPosition) return null;
 
@@ -143,7 +160,7 @@ export class PositionViewerLogic {
         const initialBalance = p.initialBalance || 0;
         const hasValidInitialBalance = initialBalance !== 0;
 
-        // --- 1. STARTING LINE LOGIC ---
+        // --- 1. STARTING LINE ---
         const directionText = p.direction === "BUY" ? "You bought" : "You sold";
         let startingTitle = `${directionText} ${p.size} ${this.currentPosition.market.epic}`;
         if (p.createdDateUTC) {
@@ -156,7 +173,7 @@ export class PositionViewerLogic {
             title: startingTitle
         };
 
-        // --- 2. WENDY (SL) LOGIC ---
+        // --- 2. WENDY (SL) ---
         let wendy = null;
         if (p.stopLevel) {
             const potentialLoss = Math.abs(p.level - p.stopLevel) * p.size;
@@ -184,7 +201,7 @@ export class PositionViewerLogic {
             };
         }
 
-        // --- 3. LAMBO (TP) LOGIC ---
+        // --- 3. LAMBO (TP) ---
         let lambo = null;
         if (p.profitLevel) {
             const potentialProfit = Math.abs(p.level - p.profitLevel) * p.size;
@@ -209,7 +226,7 @@ export class PositionViewerLogic {
             };
         }
 
-        // --- 4. CURRENT (DYNAMIC) LOGIC (From ChartService.ts) ---
+        // --- 4. CURRENT (DYNAMIC) ---
         let current = null;
         if (this.marketDetails) {
             const currentBid = this.marketDetails.snapshot.bid;
@@ -260,7 +277,7 @@ export class PositionViewerLogic {
             wendy,
             lambo,
             current,
-            initialBalance // Exposed for sanity check
+            initialBalance
         };
     }
 }
