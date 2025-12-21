@@ -3,7 +3,7 @@ import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
 import { getSyncedAccounts, getPreferences } from '$lib/services/account.js';
-import { createPosition } from '$lib/services/trading.js';
+import { createPosition, getConfirmation } from '$lib/services/trading.js';
 import { getMarketDetails } from '$lib/services/market.js';
 import { calculatePositionParameters, type TradeCalculationResult } from '$lib/utils/trading.js';
 import type { Account, LeverageCategory } from '$lib/types/account.js';
@@ -41,7 +41,6 @@ export class TradeLogic {
         if (dirParam && priceParam && bidParam && ofrParam) {
             await this.calculateSetup(dirParam, parseFloat(priceParam), parseFloat(bidParam), parseFloat(ofrParam));
         } else {
-            // No params? Go back to chart or view positions
             goto('/position');
         }
     }
@@ -116,7 +115,7 @@ export class TradeLogic {
     }
 
     async confirmTrade() {
-        if (!this.plannedTrade) return;
+        if (!this.plannedTrade || !this.currentAccount) return;
         this.isTrading = true;
         this.error = '';
 
@@ -128,6 +127,11 @@ export class TradeLogic {
         }
 
         try {
+            // 1. CAPTURE SNAPSHOT
+            // Strictly using 'deposit' as requested
+            const initialBalanceSnapshot = this.currentAccount.balance.deposit;
+
+            // 2. CREATE POSITION
             const body: TradeRequest = {
                 epic: this.targetEpic,
                 direction: this.plannedTrade.direction,
@@ -136,9 +140,16 @@ export class TradeLogic {
                 profitLevel: this.plannedTrade.profitLevel
             };
 
-            await createPosition(this.activeType, tokens, body);
+            const response = await createPosition(this.activeType, tokens, body);
 
-            // On success, redirect to the View Position page
+            // 3. GET CONFIRMATION
+            const confirmation = await getConfirmation(this.activeType, tokens, response.dealReference);
+
+            // 4. SAVE INITIAL BALANCE KEYED BY DEAL ID
+            const storageKey = `IB_${confirmation.dealId}`;
+            localStorage.setItem(storageKey, initialBalanceSnapshot.toString());
+
+            // 5. REDIRECT
             await goto('/position');
 
         } catch (e) {

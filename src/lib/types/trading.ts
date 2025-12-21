@@ -22,7 +22,7 @@ export interface PositionBody {
     profitLevel?: number;
     stopDistance?: number;
     profitDistance?: number;
-    initialBalance?: number;
+    initialBalance?: number; // Injected client-side
 }
 
 export interface PositionMarket {
@@ -58,6 +58,23 @@ export interface PositionListResponse {
 
 export interface CreatePositionResponse {
     dealReference: string;
+}
+
+// Matches Old Code's TradeDetails
+export interface TradeConfirmation {
+    date: string;
+    status: string;
+    dealStatus: string;
+    epic: string;
+    dealReference: string;
+    dealId: string;
+    level: number;
+    size: number;
+    direction: Direction;
+    guaranteedStop: boolean;
+    trailingStop: boolean;
+    profitLevel?: number;
+    stopLevel?: number;
 }
 
 export interface TradeRequest {

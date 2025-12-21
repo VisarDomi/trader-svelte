@@ -90,20 +90,22 @@ export class PositionViewerLogic {
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);
 
             if (found && this.currentAccount) {
-                // LOGIC FIX: Stable Initial Balance
-                // 1. Check if we have a saved IB for this Deal ID
-                const storageKey = `IB_${found.position.dealId}`;
+                const dealId = found.position.dealId;
+                const storageKey = `IB_${dealId}`;
                 const savedIB = localStorage.getItem(storageKey);
 
                 if (savedIB) {
+                    // Use saved snapshot
                     found.position.initialBalance = parseFloat(savedIB);
                 } else {
-                    // 2. If not, use current Balance (Realized funds) and save it
-                    // The old code used 'Equity', but assuming no other trades, Balance is the "Start" state relative to P&L.
-                    // If we used Equity, it would fluctuate with price. Balance is stable-ish.
-                    const initialBalance = this.currentAccount.balance.balance;
-                    found.position.initialBalance = initialBalance;
-                    localStorage.setItem(storageKey, initialBalance.toString());
+                    // Fallback: strictly use Deposit
+                    const currentDeposit = this.currentAccount.balance.deposit;
+                    found.position.initialBalance = currentDeposit;
+
+                    // Auto-heal: save this if missing to stop fluctuations?
+                    // User said: "initial balance in this case should be equal to deposit".
+                    // I'll save it to prevent weirdness if deposit changes mid-trade (rare but possible).
+                    localStorage.setItem(storageKey, currentDeposit.toString());
                 }
             }
 
@@ -140,7 +142,7 @@ export class PositionViewerLogic {
                 size
             });
 
-            // Cleanup the stored Initial Balance for this deal
+            // Cleanup IB on close
             localStorage.removeItem(`IB_${dealId}`);
 
             this.message = "Position closed successfully";
@@ -152,7 +154,6 @@ export class PositionViewerLogic {
         }
     }
 
-    // DEBUG: Visualization Logic
     get debugInfo() {
         if (!this.currentPosition) return null;
 
