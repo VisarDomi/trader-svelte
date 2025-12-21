@@ -25,9 +25,9 @@
 {#if logic.isPlanning && logic.plannedTrade}
     <div style="
         position: fixed;
-        top: 50%;
+        top: 8rem; /* Adjusted position */
         left: 50%;
-        transform: translate(-50%, -50%);
+        transform: translateX(-50%);
         background: rgba(20, 20, 20, 0.95);
         border: 1px solid #444;
         padding: 1.5rem;
@@ -36,7 +36,7 @@
         text-align: center;
         min-width: 250px;
         backdrop-filter: blur(4px);
-        box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     ">
         <h3 style="margin-bottom: 1rem; color: #d1d4dc;">Open Position?</h3>
 

@@ -19,10 +19,10 @@ function formatCurrency(val: number, symbol: string): string {
 }
 
 export function generateStartingLine(p: PositionBody, epic: string, isLandscape: boolean): LineInfo {
-    let title = "";
+    let title;
 
     // Time formatting
-    let tradeTime = "";
+    let tradeTime;
     if (p.createdDateUTC) {
         const dateSeconds = DateTime.fromISO(p.createdDateUTC, { zone: "utc" }).toSeconds();
         tradeTime = formatTimestampToLocalTime(dateSeconds as any);
@@ -46,7 +46,7 @@ export function generateWendyLine(p: PositionBody, initialBalance: number, accou
     const potentialLoss = Math.abs(p.level - p.stopLevel) * p.size;
     const roundedPotentialLoss = roundDownToFactor(potentialLoss, TRADING.ACCOUNT_USD_PRICE_PRECISION);
 
-    let title = "";
+    let title;
 
     if (initialBalance !== 0) {
         const pessimisticBalance = initialBalance - potentialLoss;
@@ -77,7 +77,7 @@ export function generateLamboLine(p: PositionBody, initialBalance: number, accou
     const potentialProfit = Math.abs(p.level - p.profitLevel) * p.size;
     const roundedPotentialProfit = roundDownToFactor(potentialProfit, TRADING.ACCOUNT_USD_PRICE_PRECISION);
 
-    let title = "";
+    let title;
 
     if (initialBalance !== 0) {
         const optimisticBalance = initialBalance + potentialProfit;
@@ -111,7 +111,7 @@ export function generateCurrentLine(p: PositionBody, currentPrice: number, initi
     const absVal = Math.abs(profitOrLoss);
     const profitOrLossRounded = roundDownToFactor(absVal, TRADING.ACCOUNT_USD_PRICE_PRECISION);
 
-    let title = "";
+    let title;
 
     if (initialBalance !== 0) {
         const currentBalance = initialBalance + profitOrLoss;

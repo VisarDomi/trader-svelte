@@ -11,7 +11,6 @@ import { ChartLines } from './lines.svelte.js';
 // Services & Utils
 import * as TRADING from '$lib/constants/trading.js';
 import { session } from '$lib/services/session.js';
-import { viewport } from "$lib/services/viewport.svelte.js";
 import { notifications } from '$lib/services/notifications.svelte.js';
 import { authenticateAndStoreSession } from "$lib/services/auth.js";
 import { getMarketDetails } from "$lib/services/market.js";
@@ -45,9 +44,7 @@ export class ChartLogic {
     private userLeverage = 1;
 
     constructor() {
-        // React to viewport changes to update line formatting
         $effect(() => {
-            const _ = viewport.width; // dependency
             if (this.activeAccount?.symbol) {
                 let posToUpdate = this.activePosition;
                 if (this.isPlanning && this.plannedTrade && this.marketDetails) {
@@ -87,7 +84,6 @@ export class ChartLogic {
             this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
 
             client = session.getClient(mode)!;
-            tokens = session.getTokens(mode)!;
 
             const [md, positionsResp, prefs] = await Promise.all([
                 getMarketDetails(client, this.currentEpic),
@@ -140,7 +136,6 @@ export class ChartLogic {
             this.lines.update(this.activePosition, this.activeAccount.symbol);
             this.feed.accountSymbol = this.activeAccount.symbol;
         } else {
-            // Safe fallback, though activeAccount should be present
             this.lines.update(this.activePosition, "");
         }
 
@@ -171,7 +166,6 @@ export class ChartLogic {
     async handlePositionClosed(account: Account | null) {
         this.activePosition = null;
         this.feed.position = null;
-        // Pass empty string if account is null, but Logic ensures account exists
         this.lines.update(null, account?.symbol || "");
         await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
 
@@ -204,28 +198,39 @@ export class ChartLogic {
         const clickPrice = this.series.coordinateToPrice(param.point.y);
         if (clickPrice === null) return;
 
+        // Capture snapshot of prices BEFORE we switch the data source
+        // This ensures we plan based on the spread that existed when the user clicked
+        const snapshotBid = this.feed.currentBid;
+        const snapshotOfr = this.feed.currentOfr;
+
         let direction: Direction;
         let targetSource: ChartData;
+        let executionPrice: number;
 
-        if (clickPrice > this.feed.currentOfr) {
+        if (clickPrice > snapshotOfr) {
+            // User clicked ABOVE Offer -> BUY Intent
             direction = TRADING.BUY_DIRECTION;
-            targetSource = TRADING.CHART_DATA_SOURCE_BID;
-        } else if (clickPrice < this.feed.currentBid) {
+            targetSource = TRADING.CHART_DATA_SOURCE_BID; // View Bid chart to see exit price
+            executionPrice = snapshotOfr; // You BUY at the OFFER
+        } else if (clickPrice < snapshotBid) {
+            // User clicked BELOW Bid -> SELL Intent
             direction = TRADING.SELL_DIRECTION;
-            targetSource = TRADING.CHART_DATA_SOURCE_OFR;
+            targetSource = TRADING.CHART_DATA_SOURCE_OFR; // View Offer chart to see exit price
+            executionPrice = snapshotBid; // You SELL at the BID
         } else {
+            // Clicked inside spread
             return;
         }
 
+        // Switch the chart view
         await this.feed.setDataSource(targetSource);
 
-        const visualEntry = this.feed.currentChartPrice;
         const basisBalance = this.activeAccount.balance.deposit;
 
         const result = calculatePositionParameters({
             accountBalance: basisBalance,
             leverage: this.userLeverage,
-            entryPrice: visualEntry,
+            entryPrice: executionPrice, // CRITICAL FIX: Use the actual execution price (Offer for Buy, Bid for Sell)
             lotSize: this.marketDetails.instrument.lotSize || 1,
             minSizeIncrement: this.marketDetails.dealingRules.minSizeIncrement.value,
             minDealSize: this.marketDetails.dealingRules.minDealSize.value,
@@ -240,11 +245,11 @@ export class ChartLogic {
             this.plannedTrade = {
                 ...result,
                 direction,
-                entryPrice: visualEntry
+                entryPrice: executionPrice
             };
             this.drawPlannedLines();
         } else {
-            const maxPosSize = (basisBalance * this.userLeverage) / (visualEntry * (this.marketDetails.instrument.lotSize || 1));
+            const maxPosSize = (basisBalance * this.userLeverage) / (executionPrice * (this.marketDetails.instrument.lotSize || 1));
             const minSize = this.marketDetails.dealingRules.minDealSize.value;
             notifications.error(`Plan Failed. Deposit: ${basisBalance.toFixed(2)}, MaxSize: ${maxPosSize.toFixed(2)}, MinReq: ${minSize}`);
         }
@@ -297,6 +302,11 @@ export class ChartLogic {
         this.isPlanning = false;
         this.plannedTrade = null;
         this.lines.clear();
+
+        // Reset chart source back to Bid if we cancel (standard view)
+        // Unless we want to stay on the chart of the intended direction?
+        // Let's reset to BID for consistency with "No Position" state
+        this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
     }
 
     async confirmTrade() {
