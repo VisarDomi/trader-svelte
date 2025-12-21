@@ -1,19 +1,18 @@
 import type { PositionBody } from "$lib/types/trading.js";
 import type { Account } from "$lib/types/account.js";
+import { session } from "$lib/services/session.js";
 
 export function resolveInitialBalance(position: PositionBody, account: Account): number {
-    if (typeof localStorage === 'undefined') return account.balance.deposit;
+    // 1. Try to get specific saved IB for this deal
+    const savedIB = session.getInitialBalance(position.dealId);
 
-    const storageKey = `IB_${position.dealId}`;
-    const savedIB = localStorage.getItem(storageKey);
-
-    if (savedIB) {
-        return parseFloat(savedIB);
+    if (savedIB !== null) {
+        return savedIB;
     }
 
-    // Fallback: strictly use Deposit as requested
+    // 2. Fallback: strictly use current Deposit as requested and save it for future consistency
     const currentDeposit = account.balance.deposit;
-    localStorage.setItem(storageKey, currentDeposit.toString());
+    session.setInitialBalance(position.dealId, currentDeposit);
 
     return currentDeposit;
 }
