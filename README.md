@@ -1,6 +1,6 @@
 # trader-svelte
 
-Click on the graph to open a position with all deposited cash.
+Click on the graph to open a position with all of your deposited cash. Stop loss at 50%.
 
 ## dev notes: pwa
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
