@@ -2,9 +2,6 @@
 
 Click on the graph to open a position with all deposited cash.
 
-## missing features
-* engine restart if the pwa gets paused by ios
-
 ## dev notes: pwa
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
