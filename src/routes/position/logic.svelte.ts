@@ -1,8 +1,8 @@
 import { goto } from '$app/navigation';
-import * as STORAGE from '$lib/constants/storage.js';
-import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
-import { ApiClient } from '$lib/api/client.js';
+import * as AUTH from '$lib/constants/auth.js';
+import { session } from '$lib/services/session.js';
+import { notifications } from '$lib/services/notifications.svelte.js';
 import { getSyncedAccounts } from '$lib/services/account.js';
 import { getPositions, createPosition } from '$lib/services/trading.js';
 import { getMarketDetails } from '$lib/services/market.js';
@@ -14,7 +14,6 @@ import {
     generateCurrentLine
 } from '$lib/utils/lines.js';
 import type { Account } from '$lib/types/account.js';
-import type { SessionTokens } from '$lib/types/auth.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 import type { PositionResponse } from '$lib/types/trading.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
@@ -24,7 +23,6 @@ export class PositionViewerLogic {
     isLoading = $state(true);
     isClosing = $state(false);
     error = $state('');
-    message = $state('');
 
     currentAccount = $state<Account | null>(null);
     currentPosition = $state<PositionResponse | null>(null);
@@ -37,11 +35,8 @@ export class PositionViewerLogic {
     async init() {
         if (typeof window === 'undefined') return;
 
-        const storedMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE;
-        this.activeType = storedMode || AUTH.DEMO_TYPE;
-
-        const storedEpic = localStorage.getItem(STORAGE.LAST_EPIC_KEY);
-        this.targetEpic = storedEpic || TRADING.NDX_EPIC;
+        this.activeType = session.mode;
+        this.targetEpic = session.lastEpic; // Uses the getter, defaults to NDX
 
         await this.load();
         this.startPolling();
@@ -61,28 +56,19 @@ export class PositionViewerLogic {
         }, 1000);
     }
 
-    private getTokens(type: URL_TYPE): SessionTokens | null {
-        const storageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
-        const tokensStr = localStorage.getItem(storageKey);
-        if (!tokensStr) return null;
-        return JSON.parse(tokensStr);
-    }
-
     async load(isPolling = false) {
         if (!isPolling) this.isLoading = true;
         this.error = '';
 
-        const tokens = this.getTokens(this.activeType);
-        if (!tokens) {
+        const client = session.getClient(this.activeType);
+        if (!client) {
             if (!isPolling) await goto('/login');
             return;
         }
 
-        const client = new ApiClient(this.activeType, tokens);
-
         try {
             const [accounts, positionsData, marketData] = await Promise.all([
-                getSyncedAccounts(this.activeType, tokens, client),
+                getSyncedAccounts(this.activeType, session.getTokens(this.activeType)!, client),
                 getPositions(client),
                 getMarketDetails(client, this.targetEpic).catch(() => null)
             ]);
@@ -97,13 +83,16 @@ export class PositionViewerLogic {
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);
 
             if (found && this.currentAccount) {
+                // Shared utility now uses SessionManager internally
                 found.position.initialBalance = resolveInitialBalance(found.position, this.currentAccount);
             }
 
             this.currentPosition = found || null;
 
         } catch (e) {
-            if (!isPolling) this.error = e instanceof Error ? e.message : String(e);
+            if (!isPolling) {
+                this.error = e instanceof Error ? e.message : String(e);
+            }
         } finally {
             if (!isPolling) this.isLoading = false;
         }
@@ -119,14 +108,12 @@ export class PositionViewerLogic {
         const oppositeDir = currentDir === TRADING.BUY_DIRECTION ? TRADING.SELL_DIRECTION : TRADING.BUY_DIRECTION;
         const dealId = this.currentPosition.position.dealId;
 
-        const tokens = this.getTokens(this.activeType);
-        if (!tokens) {
-            this.error = "Session expired";
+        const client = session.getClient(this.activeType);
+        if (!client) {
+            notifications.error("Session expired");
             this.isClosing = false;
             return;
         }
-
-        const client = new ApiClient(this.activeType, tokens);
 
         try {
             await createPosition(client, {
@@ -135,13 +122,15 @@ export class PositionViewerLogic {
                 size
             });
 
-            localStorage.removeItem(`IB_${dealId}`);
+            session.removeInitialBalance(dealId);
 
-            this.message = "Position closed successfully";
+            notifications.success("Position closed successfully");
             await goto('/chart');
 
         } catch (e) {
-            this.error = e instanceof Error ? e.message : String(e);
+            const msg = e instanceof Error ? e.message : String(e);
+            this.error = msg;
+            notifications.error(msg);
             this.isClosing = false;
         }
     }

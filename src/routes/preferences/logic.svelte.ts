@@ -1,10 +1,10 @@
 import { goto } from '$app/navigation';
-import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
-import { ApiClient } from '$lib/api/client.js';
+import * as STORAGE from '$lib/constants/storage.js';
+import { session } from '$lib/services/session.js';
+import { notifications } from '$lib/services/notifications.svelte.js';
 import { getPreferences, updatePreferences, getAccounts } from '$lib/services/account.js';
 import type { AccountPreferences, LeverageUpdate, LeverageCategory, Account } from '$lib/types/account.js';
-import type { SessionTokens } from '$lib/types/auth.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 
 export class PreferencesLogic {
@@ -12,7 +12,8 @@ export class PreferencesLogic {
     isLoading = $state(true);
     isSaving = $state(false);
     error = $state('');
-    message = $state('');
+
+    // UI Data
     data = $state<AccountPreferences | null>(null);
     currentAccount = $state<Account | null>(null);
     hedging = $state(false);
@@ -32,18 +33,15 @@ export class PreferencesLogic {
     async load(type: URL_TYPE) {
         this.isLoading = true;
         this.error = '';
-        this.message = '';
         this.currentAccount = null;
-        const storageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
-        const tokensStr = localStorage.getItem(storageKey);
-        if (!tokensStr) {
+
+        const client = session.getClient(type);
+        if (!client) {
             await goto('/login');
             return;
         }
-        try {
-            const tokens: SessionTokens = JSON.parse(tokensStr);
-            const client = new ApiClient(type, tokens);
 
+        try {
             const [prefs, accounts] = await Promise.all([
                 getPreferences(client),
                 getAccounts(client)
@@ -51,8 +49,8 @@ export class PreferencesLogic {
             this.data = prefs;
             this.hedging = prefs.hedgingMode;
 
-            const accountIdKey = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
-            const storedId = localStorage.getItem(accountIdKey);
+            // Resolve which account was last used for this environment
+            const storedId = session.getLastAccountId(type);
             const explicitAccount = accounts.find(a => a.accountId === storedId);
 
             this.currentAccount = explicitAccount || accounts.find(a => a.preferred) || accounts[0] || null;
@@ -71,26 +69,28 @@ export class PreferencesLogic {
     async save() {
         this.isSaving = true;
         this.error = '';
-        this.message = '';
-        const storageKey = this.activeType === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
-        const tokensStr = localStorage.getItem(storageKey);
-        if (!tokensStr) {
-            this.error = "Session expired";
+
+        const tokens = session.getTokens(this.activeType);
+        if (!tokens) {
+            notifications.error("Session expired");
             this.isSaving = false;
             return;
         }
+
         try {
-            const tokens: SessionTokens = JSON.parse(tokensStr);
             const leverageUpdate = { ...this.leverages } as LeverageUpdate;
             const response = await updatePreferences(this.activeType, tokens, leverageUpdate, this.hedging);
+
             if (response.status === 'SUCCESS') {
-                this.message = "Preferences updated successfully";
+                notifications.success("Preferences updated successfully");
                 await this.load(this.activeType);
             } else {
-                this.error = "Update failed: Unknown status";
+                throw new Error("Update failed: Unknown status");
             }
         } catch (e) {
-            this.error = e instanceof Error ? e.message : String(e);
+            const msg = e instanceof Error ? e.message : String(e);
+            this.error = msg;
+            notifications.error(msg);
         } finally {
             this.isSaving = false;
         }

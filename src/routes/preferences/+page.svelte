@@ -51,11 +51,7 @@
     {:else if logic.data}
         <div style="background: #1a1a1a; padding: 1.5rem; border-radius: 8px; border: 1px solid #333;">
 
-            {#if logic.message}
-                <div style="color: #26a69a; border: 1px solid #26a69a; padding: 0.5rem; border-radius: 4px; margin-bottom: 1.5rem;">
-                    {logic.message}
-                </div>
-            {/if}
+            <!-- NOTE: Success messages now handled by Global Toast -->
 
             <div style="margin-bottom: 2rem;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">

@@ -1,13 +1,12 @@
 import { goto } from '$app/navigation';
 import * as TRADING from '$lib/constants/trading.js';
-import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
-import { ApiClient } from '$lib/api/client.js';
+import { session } from '$lib/services/session.js';
+import { notifications } from '$lib/services/notifications.svelte.js';
 import { getMarketDetails } from '$lib/services/market.js';
 import { getPreferences } from '$lib/services/account.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
 import type { AccountPreferences, LeverageCategory } from '$lib/types/account.js';
-import type { SessionTokens } from '$lib/types/auth.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 
 export class InstrumentLogic {
@@ -28,26 +27,32 @@ export class InstrumentLogic {
         this.isLoading = true;
         this.error = '';
 
-        const realTokens = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
-        const demoTokens = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
+        // Try REAL tokens first, then DEMO. This page is just for information,
+        // but we need a valid session to fetch market data.
+        const realTokens = session.getTokens(AUTH.REAL_TYPE);
+        const demoTokens = session.getTokens(AUTH.DEMO_TYPE);
 
         let type: URL_TYPE = AUTH.REAL_TYPE;
-        let tokensStr = realTokens;
+        let validTokens = realTokens;
 
-        if (!tokensStr) {
+        if (!validTokens) {
             type = AUTH.DEMO_TYPE;
-            tokensStr = demoTokens;
+            validTokens = demoTokens;
         }
 
-        if (!tokensStr) {
+        if (!validTokens) {
+            await goto('/login');
+            return;
+        }
+
+        const client = session.getClient(type);
+        // Should not happen given validTokens check above, but for type safety:
+        if (!client) {
             await goto('/login');
             return;
         }
 
         try {
-            const tokens: SessionTokens = JSON.parse(tokensStr);
-            const client = new ApiClient(type, tokens);
-
             const [prefs, ...marketResults] = await Promise.all([
                 getPreferences(client),
                 ...this.targetEpics.map(epic => getMarketDetails(client, epic))
@@ -58,6 +63,7 @@ export class InstrumentLogic {
 
         } catch (e) {
             this.error = e instanceof Error ? e.message : String(e);
+            notifications.error("Failed to load instruments");
         } finally {
             this.isLoading = false;
         }
@@ -65,7 +71,7 @@ export class InstrumentLogic {
 
     select(epic: string) {
         if (typeof window !== 'undefined') {
-            localStorage.setItem(STORAGE.LAST_EPIC_KEY, epic);
+            session.lastEpic = epic;
         }
         goto('/chart');
     }
