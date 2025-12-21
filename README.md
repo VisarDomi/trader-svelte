@@ -16,3 +16,4 @@ manifest.json
 }
 * also some magic to get the correct dimensions for pwa and safari ios
 * no need for html for the icons
+
