@@ -11,15 +11,13 @@ export const CROSSHAIR_COLOR = '#808080';
 export const CROSSHAIR_LABEL_BG = '#696969';
 export const BORDER_COLOR = '#3e3e47';
 
-export const RIGHT_OFFSET = 5;
+export const RIGHT_OFFSET = 20;
 export const BAR_SPACING = 10;
 export const MIN_BAR_SPACING = 1;
 export const MOBILE_BAR_SPACING = 6;
 
 export const PRICE_FORMAT_TYPE = "price";
 export const BASE_SERIES_TITLE = "Current Price";
-
-export const CLICK_THRESHOLD = 20;
 
 export const WENDY_LINE_COLOR = "#FF3366";
 export const LAMBO_LINE_COLOR = "#00FF99";

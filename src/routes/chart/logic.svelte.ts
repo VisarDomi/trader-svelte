@@ -47,11 +47,10 @@ export class ChartLogic {
     private userLeverage = 1;
     private currentDataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
 
-    // Auth heartbeat cleanup function
     private stopAuthHeartbeat: (() => void) | null = null;
+    private isRestarting = false;
 
     constructor() {
-        // Initialize Watchdog with the restart callback
         this.watchdog = new Watchdog(() => this.restartEngine());
 
         $effect(() => {
@@ -72,17 +71,14 @@ export class ChartLogic {
     }
 
     async init(container: HTMLDivElement) {
-        // 1. Initial Authentication
         try {
             await authenticateAndStoreSession();
-            // Start the auth heartbeat (pinging REST API)
             this.stopAuthHeartbeat = startRestHeartbeat();
         } catch {
             await goto('/login');
             return;
         }
 
-        // 2. Start Watchdog & Visibility Listener
         this.watchdog.start();
         if (typeof document !== 'undefined') {
             document.addEventListener('visibilitychange', this.handleVisibilityChange);
@@ -90,14 +86,12 @@ export class ChartLogic {
 
         this.currentEpic = session.lastEpic;
 
-        // 3. UI Setup
         const w = window.innerWidth;
         const h = window.innerHeight;
         this.chart = createChart(container, getChartOptions(w, h));
         this.chart.subscribeClick(this.handleChartClick);
         this.layout.init(this.chart, container);
 
-        // 4. Load Data
         await this.loadDataAndFeed(true);
         this.layout.setDataLoaded(true);
     }
@@ -123,46 +117,43 @@ export class ChartLogic {
     }
 
     private handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-            // Force an immediate check to catch the gap instantly
+        if (document.visibilityState === 'visible' && !this.isRestarting) {
             this.watchdog.checkNow();
         }
     };
 
-    /**
-     * TEARDOWN & RESTART
-     * Called when Watchdog detects a significant time gap.
-     */
     private async restartEngine() {
+        if (this.isRestarting) return;
+        this.isRestarting = true;
         console.log('[Engine] Freeze detected. Restarting...');
 
         // 1. Teardown
-        // Kill the feed (WebSocket) immediately to prevent zombie behavior
+        // We destroy the feed (Network/WS) but NOT the visual series.
+        // The chart will appear "frozen" with old data during the re-auth/fetch phase.
         this.feed.destroy();
 
-        // Stop the auth heartbeat to prevent stacked intervals
         if (this.stopAuthHeartbeat) {
             this.stopAuthHeartbeat();
             this.stopAuthHeartbeat = null;
         }
 
-        // 2. Re-Auth (Refresh tokens if expired)
+        // 2. Re-Auth
         try {
             await authenticateAndStoreSession();
-            // Restart auth heartbeat
             this.stopAuthHeartbeat = startRestHeartbeat();
         } catch (e) {
             console.error("[Engine] Session invalid on resume", e);
-            // If we can't auth, we must go to login
             await goto('/login');
             return;
         }
 
-        // 3. Hydration (Data + WS)
-        // Pass false to reuse existing chart series
+        // 3. Hydration
+        // Pass false to reuse existing series.
+        // Old data remains on screen until 'loadHistory' inside this call finishes its fetch and swaps the data.
         await this.loadDataAndFeed(false);
 
         console.log('[Engine] Restart complete.');
+        this.isRestarting = false;
     }
 
     private async loadDataAndFeed(createSeries: boolean) {
@@ -176,10 +167,10 @@ export class ChartLogic {
         }
 
         try {
+            // These fetches happen BEFORE clearing any visual state
             const accounts = await getSyncedAccounts(mode, tokens, client);
             this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
 
-            // Refresh client with potentially new tokens
             client = session.getClient(mode)!;
             tokens = session.getTokens(mode)!;
 
@@ -211,19 +202,18 @@ export class ChartLogic {
                 }
             } else {
                 this.activePosition = null;
-                // Keep current data source on restart if no position, or reset to BID?
-                // Keeping it as is handles the case where user was viewing OFR manually.
-                // But generally safe to default to BID if no position.
-                // Let's stick to BID if no position to ensure clean state.
+                // Preserve current view if restarting without a position, or default to BID
                 this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
             }
 
+            // Only create series on first load. On restart, we keep the existing one.
             if (createSeries && this.chart) {
                 const pricePrecision = Math.pow(10, this.decimalPlaces);
                 this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(pricePrecision));
                 this.lines.init(this.series);
             }
 
+            // Update Overlay & Lines (Visual update happens here)
             await this.overlay.init(this.currentEpic, (acc) => this.handlePositionClosed(acc));
 
             if (this.activeAccount) {
@@ -233,6 +223,7 @@ export class ChartLogic {
                 this.lines.update(this.activePosition, "");
             }
 
+            // Start Feed: This will fetch history and THEN swap the chart data
             if (this.series) {
                 await this.feed.initDynamic(
                     tokens,
@@ -277,6 +268,8 @@ export class ChartLogic {
     }
 
     private handleChartClick = async (param: MouseEventParams) => {
+        // Prevent interaction during restart/sync
+        if (this.isRestarting) return;
         if (this.activePosition) return;
         if (this.isExecuting) return;
 
