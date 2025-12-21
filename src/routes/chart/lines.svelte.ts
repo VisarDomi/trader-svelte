@@ -1,5 +1,6 @@
 import { type ISeriesApi, type IPriceLine, LineStyle } from "lightweight-charts";
 import type { PositionResponse } from "$lib/types/trading.js";
+import { viewport } from "$lib/services/viewport.svelte.js";
 import * as CHART from "$lib/constants/chart.js";
 import {
     generateStartingLine,
@@ -17,7 +18,7 @@ export class ChartLines {
         this.series = series;
     }
 
-    update(position: PositionResponse | null) {
+    update(position: PositionResponse | null, accountSymbol: string) {
         if (!this.series) return;
 
         this.clear();
@@ -26,9 +27,11 @@ export class ChartLines {
 
         const p = position.position;
         const initialBalance = p.initialBalance || 0;
+        const isLandscape = viewport.width > viewport.height;
 
         // 1. STARTING LINE
-        const startInfo = generateStartingLine(p, position.market.epic);
+        // Now passing isLandscape
+        const startInfo = generateStartingLine(p, position.market.epic, isLandscape);
         this.entryLine = this.series.createPriceLine({
             price: startInfo.level,
             color: CHART.STARTING_LINE_COLOR,
@@ -39,7 +42,7 @@ export class ChartLines {
         });
 
         // 2. LAMBO (TP)
-        const lamboInfo = generateLamboLine(p, initialBalance);
+        const lamboInfo = generateLamboLine(p, initialBalance, accountSymbol, isLandscape);
         if (lamboInfo) {
             this.tpLine = this.series.createPriceLine({
                 price: lamboInfo.level,
@@ -52,7 +55,7 @@ export class ChartLines {
         }
 
         // 3. WENDY (SL)
-        const wendyInfo = generateWendyLine(p, initialBalance);
+        const wendyInfo = generateWendyLine(p, initialBalance, accountSymbol, isLandscape);
         if (wendyInfo) {
             this.slLine = this.series.createPriceLine({
                 price: wendyInfo.level,

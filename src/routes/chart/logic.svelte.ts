@@ -11,6 +11,7 @@ import { ChartLines } from './lines.svelte.js';
 // Services & Utils
 import * as TRADING from '$lib/constants/trading.js';
 import { session } from '$lib/services/session.js';
+import { viewport } from "$lib/services/viewport.svelte.js";
 import { notifications } from '$lib/services/notifications.svelte.js';
 import { authenticateAndStoreSession } from "$lib/services/auth.js";
 import { getMarketDetails } from "$lib/services/market.js";
@@ -43,6 +44,22 @@ export class ChartLogic {
     private activeAccount: Account | null = null;
     private userLeverage = 1;
 
+    constructor() {
+        // React to viewport changes to update line formatting
+        $effect(() => {
+            const _ = viewport.width; // dependency
+            if (this.activeAccount?.symbol) {
+                let posToUpdate = this.activePosition;
+                if (this.isPlanning && this.plannedTrade && this.marketDetails) {
+                    posToUpdate = this.getMockPlanningPosition();
+                }
+
+                this.lines.update(posToUpdate, this.activeAccount.symbol);
+                this.feed.accountSymbol = this.activeAccount.symbol;
+            }
+        });
+    }
+
     async init(container: HTMLDivElement) {
         try {
             await authenticateAndStoreSession();
@@ -70,6 +87,7 @@ export class ChartLogic {
             this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
 
             client = session.getClient(mode)!;
+            tokens = session.getTokens(mode)!;
 
             const [md, positionsResp, prefs] = await Promise.all([
                 getMarketDetails(client, this.currentEpic),
@@ -117,7 +135,14 @@ export class ChartLogic {
 
         this.layout.init(this.chart, container);
         this.lines.init(this.series);
-        this.lines.update(this.activePosition);
+
+        if (this.activeAccount) {
+            this.lines.update(this.activePosition, this.activeAccount.symbol);
+            this.feed.accountSymbol = this.activeAccount.symbol;
+        } else {
+            // Safe fallback, though activeAccount should be present
+            this.lines.update(this.activePosition, "");
+        }
 
         const finalTokens = session.getTokens(mode)!;
         await this.feed.initDynamic(
@@ -146,11 +171,13 @@ export class ChartLogic {
     async handlePositionClosed(account: Account | null) {
         this.activePosition = null;
         this.feed.position = null;
-        this.lines.update(null);
+        // Pass empty string if account is null, but Logic ensures account exists
+        this.lines.update(null, account?.symbol || "");
         await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
 
         if (account) {
             this.activeAccount = account;
+            this.feed.accountSymbol = account.symbol;
         } else {
             await this.refreshAccountData();
         }
@@ -161,6 +188,9 @@ export class ChartLogic {
         if (client) {
             const accounts = await getSyncedAccounts(session.mode, session.getTokens(session.mode)!, client);
             this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
+            if (this.activeAccount) {
+                this.feed.accountSymbol = this.activeAccount.symbol;
+            }
         }
     }
 
@@ -190,8 +220,6 @@ export class ChartLogic {
         await this.feed.setDataSource(targetSource);
 
         const visualEntry = this.feed.currentChartPrice;
-
-        // Use Deposit (Total Equity) for Full Port sizing, ignoring current margins
         const basisBalance = this.activeAccount.balance.deposit;
 
         const result = calculatePositionParameters({
@@ -222,8 +250,8 @@ export class ChartLogic {
         }
     };
 
-    private drawPlannedLines() {
-        if (!this.plannedTrade || !this.marketDetails || !this.activeAccount) return;
+    private getMockPlanningPosition(): PositionResponse | null {
+        if (!this.plannedTrade || !this.marketDetails || !this.activeAccount) return null;
 
         const mockBody: PositionBody = {
             contractSize: 0,
@@ -243,7 +271,7 @@ export class ChartLogic {
             initialBalance: this.activeAccount.balance.deposit
         };
 
-        const mockResponse: PositionResponse = {
+        return {
             market: {
                 ...this.marketDetails.snapshot,
                 epic: this.currentEpic,
@@ -256,8 +284,13 @@ export class ChartLogic {
             } as any,
             position: mockBody
         };
+    }
 
-        this.lines.update(mockResponse);
+    private drawPlannedLines() {
+        const mock = this.getMockPlanningPosition();
+        if (mock && this.activeAccount) {
+            this.lines.update(mock, this.activeAccount.symbol);
+        }
     }
 
     cancelPlanning() {
@@ -302,8 +335,9 @@ export class ChartLogic {
                 foundPos.position.initialBalance = this.activeAccount.balance.deposit;
                 this.activePosition = foundPos;
 
-                this.lines.update(this.activePosition);
+                this.lines.update(this.activePosition, this.activeAccount.symbol);
                 this.feed.position = this.activePosition;
+                this.feed.accountSymbol = this.activeAccount.symbol;
                 this.overlay.position = this.activePosition;
 
                 this.refreshAccountData();

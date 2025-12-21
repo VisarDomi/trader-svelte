@@ -4,6 +4,7 @@ import { getHistoricalPrices } from "$lib/services/market.js";
 import { ApiClient } from '$lib/api/client.js';
 import type { SessionTokens } from "$lib/types/auth.js";
 import type { QuoteMessage, ChartCandle } from "$lib/types/market.js";
+import { viewport } from "$lib/services/viewport.svelte.js";
 import * as TRADING from "$lib/constants/trading.js";
 import * as AUTH from '$lib/constants/auth.js';
 import type { ChartData, PositionResponse } from "$lib/types/trading.js";
@@ -21,6 +22,9 @@ export class ChartFeed {
     private epic: string = "";
     private _currentPosition: PositionResponse | null = null;
 
+    // Default to empty, will be populated by logic
+    private _accountSymbol: string = "";
+
     currentBid = $state(0);
     currentOfr = $state(0);
 
@@ -33,7 +37,11 @@ export class ChartFeed {
         this.drawPnL(p);
     }
 
-    // Dynamic Init that stores references for hot-swapping
+    set accountSymbol(sym: string) {
+        this._accountSymbol = sym;
+        this.drawPnL(this._currentPosition);
+    }
+
     async initDynamic(
         tokens: SessionTokens,
         epic: string,
@@ -49,13 +57,11 @@ export class ChartFeed {
         this.decimalPlaces = decimalPlaces;
         this._currentPosition = activePosition;
 
-        // One-time Stream Setup
         if (!this.stream) {
             this.stream = new StreamClient(tokens, epic, (msg) => this.handleStreamMessageDynamic(msg));
             this.stream.connect();
         }
 
-        // Load Initial Data
         await this.loadHistory();
         this.drawPnL(activePosition);
     }
@@ -105,19 +111,15 @@ export class ChartFeed {
 
     private processTick(price: number, timestampMs: number) {
         if (!this.series) return;
-
-        // Quantize time to nearest minute
         const time = (Math.floor(timestampMs / 1000 / 60) * 60) as UTCTimestamp;
 
         if (!this.currentCandle) {
             this.currentCandle = { time, open: price, high: price, low: price, close: price };
         } else if (time === this.currentCandle.time) {
-            // Update existing candle
             this.currentCandle.high = Math.max(this.currentCandle.high, price);
             this.currentCandle.low = Math.min(this.currentCandle.low, price);
             this.currentCandle.close = price;
         } else if (time > this.currentCandle.time) {
-            // Create new candle
             this.currentCandle = {
                 time,
                 open: price,
@@ -135,9 +137,11 @@ export class ChartFeed {
         if (position) {
             const p = position.position;
             const initialBalance = p.initialBalance || 0;
+            const isLandscape = viewport.width > viewport.height;
 
             const currentPrice = p.direction === TRADING.BUY_DIRECTION ? this.currentBid : this.currentOfr;
-            const lineInfo = generateCurrentLine(p, currentPrice, initialBalance);
+
+            const lineInfo = generateCurrentLine(p, currentPrice, initialBalance, this._accountSymbol, isLandscape);
 
             const priceLineColor = lineInfo.isProfit ? "#22958a" : "#bf4240";
 
@@ -150,7 +154,6 @@ export class ChartFeed {
         }
     }
 
-    // Compat init signature if called from old tests/logic (mapped to dynamic)
     init(tokens: SessionTokens, epic: string, series: ISeriesApi<"Candlestick">, dataSource: ChartData, decimalPlaces: number, activePosition: PositionResponse | null) {
         return this.initDynamic(tokens, epic, series, dataSource, decimalPlaces, activePosition);
     }
