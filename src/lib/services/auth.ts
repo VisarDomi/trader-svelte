@@ -5,11 +5,10 @@ import { getBaseUrl } from "$lib/utils/helpers.js";
 import type { URL_TYPE } from "$lib/types/url.js";
 import type { SessionTokens, UserCredentials } from "$lib/types/auth.js";
 import { DEFAULT_ERROR } from "$lib/constants/error.js";
-import { getCredentials } from "$lib/services/credentials.js";
 import { session } from "$lib/services/session.js";
 
 export async function login(type: URL_TYPE): Promise<SessionTokens> {
-    const credentials: UserCredentials = getCredentials();
+    const credentials: UserCredentials = session.getCredentials();
     const baseUrl = getBaseUrl(type);
     const url = `${baseUrl}${API.SESSION_ENDPOINT}`;
     const response = await fetch(url, {
@@ -38,10 +37,10 @@ export async function login(type: URL_TYPE): Promise<SessionTokens> {
 }
 
 export async function authenticateAndStoreSession(): Promise<void> {
-    getCredentials(); // Will throw if no creds
+    // Check if we even have credentials saved, will throw if not
+    session.getCredentials();
 
-    // Check throttling
-    const timestampStr = localStorage.getItem(STORAGE.LOGIN_TIMESTAMP_KEY); // Keep direct access here or move to session? Moved to session below.
+    const timestampStr = localStorage.getItem(STORAGE.LOGIN_TIMESTAMP_KEY);
     const hasReal = session.isAuthenticated(AUTH.REAL_TYPE);
     const hasDemo = session.isAuthenticated(AUTH.DEMO_TYPE);
 

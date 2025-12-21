@@ -1,4 +1,3 @@
-import * as STORAGE from '$lib/constants/storage.js';
 import * as ENV from '$lib/env.js';
 import * as AUTH_CONST from '$lib/constants/auth.js';
 import { login } from "$lib/services/auth.js";
@@ -22,12 +21,13 @@ export class Login {
     }
 
     init() {
-        const storedCredentials = localStorage.getItem(STORAGE.USER_CREDENTIALS_KEY);
-        if (storedCredentials) {
-            const c = JSON.parse(storedCredentials) as UserCredentials;
+        try {
+            const c = session.getCredentials();
             this.identifier = c.identifier;
             this.password = c.password;
             this.apiKey = c.apiKey;
+        } catch {
+            // No credentials saved yet, use env defaults (already set in constructor)
         }
 
         this.demoTokens = session.getTokens(AUTH_CONST.DEMO_TYPE);
@@ -55,7 +55,7 @@ export class Login {
             password: this.password,
             apiKey: this.apiKey
         };
-        localStorage.setItem(STORAGE.USER_CREDENTIALS_KEY, JSON.stringify(credentials));
+        session.saveCredentials(credentials);
     }
 
     private async performLogin(type: URL_TYPE) {
