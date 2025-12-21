@@ -14,15 +14,27 @@ export class ChartFeed {
     private series: ISeriesApi<"Candlestick"> | null = null;
     private stream: StreamClient | null = null;
     private historicalLoaded = false;
-    private liveBuffer: QuoteMessage[] = [];
     private currentCandle: ChartCandle | null = null;
-    private dataSource = TRADING.CHART_DATA_SOURCE_BID;
+    private dataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
     private decimalPlaces = 2;
+    private tokens: SessionTokens | null = null;
+    private epic: string = "";
+    private _currentPosition: PositionResponse | null = null;
 
     currentBid = $state(0);
     currentOfr = $state(0);
 
-    async init(
+    get currentChartPrice() {
+        return this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.currentOfr : this.currentBid;
+    }
+
+    set position(p: PositionResponse | null) {
+        this._currentPosition = p;
+        this.drawPnL(p);
+    }
+
+    // Dynamic Init that stores references for hot-swapping
+    async initDynamic(
         tokens: SessionTokens,
         epic: string,
         series: ISeriesApi<"Candlestick">,
@@ -30,27 +42,28 @@ export class ChartFeed {
         decimalPlaces: number,
         activePosition: PositionResponse | null
     ) {
+        this.tokens = tokens;
+        this.epic = epic;
         this.series = series;
         this.dataSource = dataSource;
         this.decimalPlaces = decimalPlaces;
+        this._currentPosition = activePosition;
 
-        // Init Stream
-        this.stream = new StreamClient(tokens, epic, (msg) => this.handleStreamMessage(msg, activePosition));
-        this.stream.connect();
-
-        // Fetch Historical
-        const client = new ApiClient(AUTH.REAL_TYPE, tokens);
-        const data = await getHistoricalPrices(client, epic, dataSource);
-
-        this.series.setData(data);
-        if (data.length > 0) {
-            this.currentCandle = data[data.length - 1];
-            if (this.currentBid === 0) this.currentBid = this.currentCandle.close;
-            if (this.currentOfr === 0) this.currentOfr = this.currentCandle.close;
+        // One-time Stream Setup
+        if (!this.stream) {
+            this.stream = new StreamClient(tokens, epic, (msg) => this.handleStreamMessageDynamic(msg));
+            this.stream.connect();
         }
 
-        this.historicalLoaded = true;
-        this.processBuffer(activePosition);
+        // Load Initial Data
+        await this.loadHistory();
+        this.drawPnL(activePosition);
+    }
+
+    async setDataSource(source: ChartData) {
+        if (this.dataSource === source) return;
+        this.dataSource = source;
+        await this.loadHistory();
     }
 
     destroy() {
@@ -60,31 +73,63 @@ export class ChartFeed {
         }
     }
 
-    private handleStreamMessage(msg: QuoteMessage, activePosition: PositionResponse | null) {
+    private async loadHistory() {
+        if (!this.tokens || !this.series) return;
+
+        this.historicalLoaded = false;
+        this.currentCandle = null;
+
+        const client = new ApiClient(AUTH.REAL_TYPE, this.tokens);
+        const data = await getHistoricalPrices(client, this.epic, this.dataSource);
+
+        this.series.setData(data);
+        if (data.length > 0) {
+            this.currentCandle = data[data.length - 1];
+            if (this.currentBid === 0) this.currentBid = this.currentCandle.close;
+            if (this.currentOfr === 0) this.currentOfr = this.currentCandle.close;
+        }
+
+        this.historicalLoaded = true;
+    }
+
+    private handleStreamMessageDynamic(msg: QuoteMessage) {
         this.currentBid = msg.payload.bid;
         this.currentOfr = msg.payload.ofr;
 
-        if (!this.historicalLoaded) {
-            this.liveBuffer.push(msg);
-        } else {
+        if (this.historicalLoaded) {
             const price = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? msg.payload.ofr : msg.payload.bid;
             this.processTick(price, msg.payload.timestamp);
-            this.updatePnLDisplay(activePosition);
+            this.drawPnL(this._currentPosition);
         }
     }
 
-    private processBuffer(activePosition: PositionResponse | null) {
-        for (const msg of this.liveBuffer) {
-            this.currentBid = msg.payload.bid;
-            this.currentOfr = msg.payload.ofr;
-            const price = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? msg.payload.ofr : msg.payload.bid;
-            this.processTick(price, msg.payload.timestamp);
+    private processTick(price: number, timestampMs: number) {
+        if (!this.series) return;
+
+        // Quantize time to nearest minute
+        const time = (Math.floor(timestampMs / 1000 / 60) * 60) as UTCTimestamp;
+
+        if (!this.currentCandle) {
+            this.currentCandle = { time, open: price, high: price, low: price, close: price };
+        } else if (time === this.currentCandle.time) {
+            // Update existing candle
+            this.currentCandle.high = Math.max(this.currentCandle.high, price);
+            this.currentCandle.low = Math.min(this.currentCandle.low, price);
+            this.currentCandle.close = price;
+        } else if (time > this.currentCandle.time) {
+            // Create new candle
+            this.currentCandle = {
+                time,
+                open: price,
+                high: price,
+                low: price,
+                close: price
+            };
         }
-        this.liveBuffer = [];
-        this.updatePnLDisplay(activePosition);
+        this.series.update(this.currentCandle);
     }
 
-    private updatePnLDisplay(position: PositionResponse | null) {
+    private drawPnL(position: PositionResponse | null) {
         if (!this.series) return;
 
         if (position) {
@@ -105,24 +150,8 @@ export class ChartFeed {
         }
     }
 
-    private processTick(price: number, timestampMs: number) {
-        if (!this.series) return;
-        const time = (Math.floor(timestampMs / 1000 / 60) * 60) as UTCTimestamp;
-        if (!this.currentCandle) {
-            this.currentCandle = { time, open: price, high: price, low: price, close: price };
-        } else if (time === this.currentCandle.time) {
-            this.currentCandle.high = Math.max(this.currentCandle.high, price);
-            this.currentCandle.low = Math.min(this.currentCandle.low, price);
-            this.currentCandle.close = price;
-        } else if (time > this.currentCandle.time) {
-            this.currentCandle = {
-                time,
-                open: price,
-                high: price,
-                low: price,
-                close: price
-            };
-        }
-        this.series.update(this.currentCandle);
+    // Compat init signature if called from old tests/logic (mapped to dynamic)
+    init(tokens: SessionTokens, epic: string, series: ISeriesApi<"Candlestick">, dataSource: ChartData, decimalPlaces: number, activePosition: PositionResponse | null) {
+        return this.initDynamic(tokens, epic, series, dataSource, decimalPlaces, activePosition);
     }
 }

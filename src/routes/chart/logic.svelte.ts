@@ -24,16 +24,13 @@ import type { MarketDetailsResponse } from '$lib/types/market.js';
 import type { Account, LeverageCategory } from '$lib/types/account.js';
 
 export class ChartLogic {
-    // State exposed to View
     layout = new ChartUI();
     overlay = new ChartOverlay();
 
-    // Planning State
     isPlanning = $state(false);
     isExecuting = $state(false);
     plannedTrade = $state<TradeCalculationResult & { direction: Direction, entryPrice: number } | null>(null);
 
-    // Internal State
     private feed = new ChartFeed();
     private lines = new ChartLines();
     private chart: IChartApi | null = null;
@@ -42,14 +39,11 @@ export class ChartLogic {
     private currentEpic = TRADING.NDX_EPIC;
     private decimalPlaces = 2;
     private activePosition: PositionResponse | null = null;
-
-    // Cache for Calculation
     private marketDetails: MarketDetailsResponse | null = null;
     private activeAccount: Account | null = null;
     private userLeverage = 1;
 
     async init(container: HTMLDivElement) {
-        // 1. Auth Check
         try {
             await authenticateAndStoreSession();
         } catch {
@@ -57,34 +51,27 @@ export class ChartLogic {
             return;
         }
 
-        // 2. Context Setup
         this.currentEpic = session.lastEpic;
         const mode = session.mode;
 
-        // Initial token check
-        if (!session.getClient(mode)) {
+        let tokens = session.getTokens(mode);
+        let client = session.getClient(mode);
+
+        if (!client || !tokens) {
             await goto('/login');
             return;
         }
 
-        // 3. Data Fetching
         let pricePrecision = 100;
         let chartDataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
 
         try {
-            // A. Sync Accounts FIRST (Serial).
-            // This might rotate the session token if the preferred account needs to be switched.
-            // We must do this before fetching preferences to avoid 401s.
-            let client = session.getClient(mode)!;
-            const tokens = session.getTokens(mode)!;
-
             const accounts = await getSyncedAccounts(mode, tokens, client);
             this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
 
-            // B. Refresh Client with potentially new tokens from storage
             client = session.getClient(mode)!;
+            tokens = session.getTokens(mode)!;
 
-            // C. Fetch dependent data using the VALID client
             const [md, positionsResp, prefs] = await Promise.all([
                 getMarketDetails(client, this.currentEpic),
                 getPositions(client),
@@ -95,7 +82,6 @@ export class ChartLogic {
             this.decimalPlaces = md.snapshot.decimalPlacesFactor;
             pricePrecision = Math.pow(10, this.decimalPlaces);
 
-            // Determine Leverage for Planning
             const category = md.instrument.type as LeverageCategory;
             if (prefs.leverages[category]) {
                 this.userLeverage = prefs.leverages[category].current;
@@ -103,7 +89,6 @@ export class ChartLogic {
                 this.userLeverage = 100 / md.instrument.marginFactor;
             }
 
-            // Resolve Position
             const foundPos = positionsResp.positions.find(p => p.market.epic === this.currentEpic);
 
             if (foundPos && this.activeAccount) {
@@ -122,10 +107,8 @@ export class ChartLogic {
             console.error("Chart Logic Init Failed", e);
         }
 
-        // 4. Initialize Sub-systems
-        await this.overlay.init(this.currentEpic, () => this.refresh());
+        await this.overlay.init(this.currentEpic, () => this.handlePositionClosed());
 
-        // 5. Chart Instantiation
         const w = window.innerWidth;
         const h = window.innerHeight;
         this.chart = createChart(container, getChartOptions(w, h));
@@ -137,9 +120,8 @@ export class ChartLogic {
         this.lines.init(this.series);
         this.lines.update(this.activePosition);
 
-        // 6. Start Feed
         const finalTokens = session.getTokens(mode)!;
-        await this.feed.init(
+        await this.feed.initDynamic(
             finalTokens,
             this.currentEpic,
             this.series,
@@ -162,15 +144,24 @@ export class ChartLogic {
         }
     }
 
-    async refresh() {
-        location.reload();
+    async handlePositionClosed() {
+        this.activePosition = null;
+        this.feed.position = null;
+        this.lines.update(null);
+        await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
+        this.refreshAccountData();
     }
 
-    private handleChartClick = (param: MouseEventParams) => {
-        // If we have an active position, clicks do nothing
-        if (this.activePosition) return;
+    private async refreshAccountData() {
+        const client = session.getClient(session.mode);
+        if (client) {
+            const accounts = await getSyncedAccounts(session.mode, session.getTokens(session.mode)!, client);
+            this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
+        }
+    }
 
-        // If we are executing a trade, ignore clicks
+    private handleChartClick = async (param: MouseEventParams) => {
+        if (this.activePosition) return;
         if (this.isExecuting) return;
 
         if (!param.point || !this.series || !this.feed.currentBid || !this.feed.currentOfr) return;
@@ -179,31 +170,33 @@ export class ChartLogic {
         const clickPrice = this.series.coordinateToPrice(param.point.y);
         if (clickPrice === null) return;
 
-        // Determine Direction
         let direction: Direction;
-        let entryPrice: number;
+        let targetSource: ChartData;
 
         if (clickPrice > this.feed.currentOfr) {
             direction = TRADING.BUY_DIRECTION;
-            entryPrice = this.feed.currentOfr;
+            targetSource = TRADING.CHART_DATA_SOURCE_BID;
         } else if (clickPrice < this.feed.currentBid) {
             direction = TRADING.SELL_DIRECTION;
-            entryPrice = this.feed.currentBid;
+            targetSource = TRADING.CHART_DATA_SOURCE_OFR;
         } else {
-            // Inside the spread - Ignore
             return;
         }
+
+        await this.feed.setDataSource(targetSource);
+
+        const visualEntry = this.feed.currentChartPrice;
 
         const result = calculatePositionParameters({
             accountBalance: this.activeAccount.balance.available,
             leverage: this.userLeverage,
-            entryPrice,
+            entryPrice: visualEntry,
             lotSize: this.marketDetails.instrument.lotSize || 1,
             minSizeIncrement: this.marketDetails.dealingRules.minSizeIncrement.value,
             minDealSize: this.marketDetails.dealingRules.minDealSize.value,
             decimalPlaces: this.decimalPlaces,
             direction,
-            clickPrice, // Take Profit
+            clickPrice,
             stopLossRatio: TRADING.STOP_LOSS_RATIO
         });
 
@@ -212,7 +205,7 @@ export class ChartLogic {
             this.plannedTrade = {
                 ...result,
                 direction,
-                entryPrice
+                entryPrice: visualEntry
             };
             this.drawPlannedLines();
         } else {
@@ -290,12 +283,34 @@ export class ChartLogic {
 
             session.setInitialBalance(confirmation.dealId, this.activeAccount.balance.deposit);
 
+            // Re-fetch position details
+            const positionsResp = await getPositions(client);
+            const foundPos = positionsResp.positions.find(p => p.market.epic === this.currentEpic);
+
+            // Exit Planning Mode internally, but DO NOT call cancelPlanning()
+            // because that would wipe the lines we are about to update.
+            this.isPlanning = false;
+            this.plannedTrade = null;
+
+            if (foundPos) {
+                foundPos.position.initialBalance = this.activeAccount.balance.deposit;
+                this.activePosition = foundPos;
+
+                // Update lines with the LIVE position data
+                this.lines.update(this.activePosition);
+                this.feed.position = this.activePosition;
+                this.overlay.position = this.activePosition;
+            } else {
+                // Fallback if position isn't found immediately (rare)
+                this.lines.clear();
+            }
+
             notifications.success("Position Opened");
-            location.reload();
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             notifications.error(msg);
+        } finally {
             this.isExecuting = false;
         }
     }

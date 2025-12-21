@@ -3,13 +3,14 @@ import { DateTime } from "luxon";
 import * as API from '$lib/constants/api.js';
 import * as TIME from '$lib/constants/time.js';
 import * as TRADING from "$lib/constants/trading.js";
-import type { MarketPriceResponse, ChartCandle, MarketDetailsResponse } from "$lib/types/market.js";
+import type {MarketPriceResponse, ChartCandle, MarketDetailsResponse} from "$lib/types/market.js";
 import type { ApiClient } from '$lib/api/client.js';
+import type {ChartData} from "$lib/types/trading";
 
 export async function getHistoricalPrices(
     client: ApiClient,
     epic: string,
-    type: typeof TRADING.CHART_DATA_SOURCE_BID | typeof TRADING.CHART_DATA_SOURCE_OFR = TRADING.CHART_DATA_SOURCE_BID
+    type: ChartData = TRADING.CHART_DATA_SOURCE_BID
 ): Promise<ChartCandle[]> {
     const endDateTime = DateTime.utc();
     const fromUTCDateTime = endDateTime.minus({ minutes: TIME.TOTAL_MINUTES_IN_THE_PAST });
