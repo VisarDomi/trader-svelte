@@ -2,7 +2,7 @@ import { DateTime } from 'luxon';
 import * as TRADING from '$lib/constants/trading.js';
 import { roundDownToFactor } from '$lib/utils/trading.js';
 import { formatTimestampToLocalTime } from '$lib/utils/time.js';
-import type { PositionBody, Direction } from '$lib/types/trading.js';
+import type { PositionBody } from '$lib/types/trading.js';
 
 export interface LineInfo {
     level: number;
