@@ -5,8 +5,25 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const mkcertPath = path.join(os.homedir(), '.local/share/mkcert');
-const pwaCertPath = path.join(mkcertPath, 'pwa');
+// Helper to safely get HTTPS config
+function getHttpsConfig() {
+	try {
+		const mkcertPath = path.join(os.homedir(), '.local/share/mkcert');
+		const pwaCertPath = path.join(mkcertPath, 'pwa');
+		const keyPath = path.join(pwaCertPath, 'key.pem');
+		const certPath = path.join(pwaCertPath, 'cert.pem');
+
+		if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+			return {
+				key: fs.readFileSync(keyPath),
+				cert: fs.readFileSync(certPath),
+			};
+		}
+	} catch (e) {
+		// Ignore errors (expected in CI/Netlify environments)
+	}
+	return undefined;
+}
 
 export default defineConfig({
 	plugins: [sveltekit()],
@@ -14,10 +31,7 @@ export default defineConfig({
 	server: {
 		host: '0.0.0.0',
 		port: 24536,
-		https: {
-			key: fs.readFileSync(path.join(pwaCertPath, 'key.pem')),
-			cert: fs.readFileSync(path.join(pwaCertPath, 'cert.pem')),
-		}
+		https: getHttpsConfig()
 	},
 	test: {
 		expect: { requireAssertions: true },
