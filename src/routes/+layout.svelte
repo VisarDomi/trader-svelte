@@ -1,9 +1,19 @@
 <script lang="ts">
     import '$lib/styles.css';
-    import { viewportScanner } from '$lib/utils/dimension.js';
+    import { viewport } from '$lib/services/viewport.svelte.js';
     import { startRestHeartbeat } from '$lib/services/auth.js';
+    import { onMount, onDestroy } from 'svelte';
+
     let { children } = $props();
-    $effect(viewportScanner);
+
+    onMount(() => {
+        viewport.init();
+    });
+
+    onDestroy(() => {
+        viewport.destroy();
+    });
+
     $effect(startRestHeartbeat);
 </script>
 
