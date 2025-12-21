@@ -3,7 +3,6 @@
     import { onDestroy } from 'svelte';
     import { ChartOverlay } from './overlay.svelte.js';
     import * as AUTH from '$lib/constants/auth.js';
-    import * as TRADING from '$lib/constants/trading.js';
 
     let { overlay }: { overlay: ChartOverlay } = $props();
 
@@ -84,7 +83,7 @@
                     </div>
                 </div>
 
-                <!-- 2. Account Info (4 Balances) -->
+                <!-- 2. Account Info (Deposit Only) -->
                 <div
                         role="button"
                         tabindex="0"
@@ -97,23 +96,19 @@
                         flex-direction: column;
                         justify-content: center;
                         font-size: 0.7rem;
-                        min-width: 160px;
+                        min-width: 100px;
                         border-right: 1px solid #444;
                     "
                 >
                     <div style="font-weight: bold; margin-bottom: 0.25rem; color: #ddd; font-size: 0.75rem;">
-                        {overlay.account.accountName}
+                        Deposit
                     </div>
-                    <!-- 2x2 Grid for Balances with full precision -->
-                    <div style="display: grid; grid-template-columns: auto auto; column-gap: 0.75rem; row-gap: 0.1rem; color: #aaa; line-height: 1.2;">
-                        <div>B: <span style="color: white;">{overlay.account.balance.balance.toFixed(2)}</span></div>
-                        <div>D: <span style="color: white;">{overlay.account.balance.deposit.toFixed(2)}</span></div>
-                        <div>A: <span style="color: white;">{overlay.account.balance.available.toFixed(2)}</span></div>
-                        <div>P: <span style="color: {overlay.account.balance.profitLoss >= 0 ? '#26a69a' : '#ef5350'};">{overlay.account.balance.profitLoss.toFixed(2)}</span></div>
+                    <div style="font-weight: bold; font-size: 1rem; color: #fff;">
+                        {overlay.account.symbol}{overlay.account.balance.deposit.toFixed(2)}
                     </div>
                 </div>
 
-                <!-- 3. Position Info -->
+                <!-- 3. Position Info / Close Button -->
                 {#if overlay.position}
                     <div
                             role="button"
@@ -124,19 +119,31 @@
                             padding: 0.5rem 1rem;
                             cursor: pointer;
                             display: flex;
-                            flex-direction: column;
+                            align-items: center;
                             justify-content: center;
-                            min-width: 110px;
-                            background: rgba(255, 255, 255, 0.05);
+                            min-width: 80px;
+                            border-right: 1px solid #444;
+                            font-weight: bold;
                         "
                     >
-                        <div style="font-size: 0.8rem; font-weight: bold; color: {overlay.position.position.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
-                            {overlay.position.position.direction} {overlay.position.position.size}
-                        </div>
-                        <div style="font-size: 0.9rem; font-weight: bold; color: {overlay.position.position.upl >= 0 ? '#26a69a' : '#ef5350'}">
-                            {overlay.position.position.upl.toFixed(2)}
-                        </div>
+                        Position
                     </div>
+                    <button
+                            onclick={() => overlay.closePosition()}
+                            disabled={overlay.isClosing}
+                            style="
+                            background: {overlay.isClosing ? '#444' : '#ef5350'};
+                            border: none;
+                            color: white;
+                            padding: 0 1rem;
+                            cursor: pointer;
+                            font-weight: bold;
+                            border-top-right-radius: 8px;
+                            border-bottom-right-radius: 8px;
+                        "
+                    >
+                        {overlay.isClosing ? '...' : '×'}
+                    </button>
                 {/if}
             </div>
         {/if}

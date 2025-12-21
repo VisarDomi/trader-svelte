@@ -1,9 +1,11 @@
 import { ApiClient } from '$lib/api/client.js';
 import { getSyncedAccounts } from '$lib/services/account.js';
 import { getMarketDetails } from '$lib/services/market.js';
-import { getPositions } from '$lib/services/trading.js';
+import { getPositions, createPosition } from '$lib/services/trading.js';
+import { notifications } from '$lib/services/notifications.svelte.js';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
+import * as TRADING from '$lib/constants/trading.js';
 import type { Account } from '$lib/types/account.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 import type { SessionTokens } from '$lib/types/auth.js';
@@ -14,12 +16,17 @@ export class ChartOverlay {
     account = $state<Account | null>(null);
     position = $state<PositionResponse | null>(null);
     loading = $state(false);
+    isClosing = $state(false);
     mode = $state<URL_TYPE>(AUTH.DEMO_TYPE);
     marketName = $state('');
 
-    async init(epic: string) {
+    // Internal reference to refresh chart after closing
+    private onPositionClosed: (() => void) | null = null;
+
+    async init(epic: string, onPositionClosed?: () => void) {
         if (typeof window === 'undefined') return;
 
+        this.onPositionClosed = onPositionClosed || null;
         this.loading = true;
         this.marketName = epic;
 
@@ -31,7 +38,7 @@ export class ChartOverlay {
     }
 
     destroy() {
-        // No cleanup needed
+        this.onPositionClosed = null;
     }
 
     private async fetchData(epic: string) {
@@ -66,5 +73,49 @@ export class ChartOverlay {
 
     toggle() {
         this.isOpen = !this.isOpen;
+    }
+
+    async closePosition() {
+        if (!this.position) return;
+
+        this.isClosing = true;
+        const storageKey = this.mode === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
+        const tokensStr = localStorage.getItem(storageKey);
+
+        if (!tokensStr) {
+            notifications.error("Session expired");
+            this.isClosing = false;
+            return;
+        }
+
+        try {
+            const tokens: SessionTokens = JSON.parse(tokensStr);
+            const client = new ApiClient(this.mode, tokens);
+
+            const currentDir = this.position.position.direction;
+            const oppositeDir = currentDir === TRADING.BUY_DIRECTION ? TRADING.SELL_DIRECTION : TRADING.BUY_DIRECTION;
+
+            await createPosition(client, {
+                epic: this.position.market.epic,
+                direction: oppositeDir,
+                size: this.position.position.size
+            });
+
+            notifications.success("Position closed");
+
+            // Refresh data
+            await this.fetchData(this.position.market.epic);
+
+            // Notify ChartLogic to refresh lines
+            if (this.onPositionClosed) {
+                this.onPositionClosed();
+            }
+
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            notifications.error(msg);
+        } finally {
+            this.isClosing = false;
+        }
     }
 }
