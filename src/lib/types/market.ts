@@ -1,5 +1,4 @@
 import type { UTCTimestamp } from 'lightweight-charts';
-import * as TRADING from "$lib/constants/trading";
 
 export interface PriceComponent {
     bid: number;

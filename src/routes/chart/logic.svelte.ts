@@ -70,7 +70,6 @@ export class ChartLogic {
             this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
 
             client = session.getClient(mode)!;
-            tokens = session.getTokens(mode)!;
 
             const [md, positionsResp, prefs] = await Promise.all([
                 getMarketDetails(client, this.currentEpic),
@@ -107,7 +106,7 @@ export class ChartLogic {
             console.error("Chart Logic Init Failed", e);
         }
 
-        await this.overlay.init(this.currentEpic, () => this.handlePositionClosed());
+        await this.overlay.init(this.currentEpic, (acc) => this.handlePositionClosed(acc));
 
         const w = window.innerWidth;
         const h = window.innerHeight;
@@ -144,12 +143,18 @@ export class ChartLogic {
         }
     }
 
-    async handlePositionClosed() {
+    // Accepting fresh account from Overlay to avoid double fetch and race conditions
+    async handlePositionClosed(account: Account | null) {
         this.activePosition = null;
         this.feed.position = null;
         this.lines.update(null);
         await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
-        this.refreshAccountData();
+
+        if (account) {
+            this.activeAccount = account;
+        } else {
+            await this.refreshAccountData();
+        }
     }
 
     private async refreshAccountData() {
@@ -288,7 +293,6 @@ export class ChartLogic {
             const foundPos = positionsResp.positions.find(p => p.market.epic === this.currentEpic);
 
             // Exit Planning Mode internally, but DO NOT call cancelPlanning()
-            // because that would wipe the lines we are about to update.
             this.isPlanning = false;
             this.plannedTrade = null;
 
@@ -300,8 +304,11 @@ export class ChartLogic {
                 this.lines.update(this.activePosition);
                 this.feed.position = this.activePosition;
                 this.overlay.position = this.activePosition;
+
+                // IMPORTANT: Update local account balance to reflect the trade's margin
+                // We'll queue a refresh for accuracy, but conceptually we know funds are used
+                this.refreshAccountData();
             } else {
-                // Fallback if position isn't found immediately (rare)
                 this.lines.clear();
             }
 

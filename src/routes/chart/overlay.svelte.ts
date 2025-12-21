@@ -20,10 +20,10 @@ export class ChartOverlay {
     mode = $state<URL_TYPE>(AUTH.DEMO_TYPE);
     marketName = $state('');
 
-    // Internal reference to refresh chart after closing
-    private onPositionClosed: (() => void) | null = null;
+    // Callback now accepts the fresh account
+    private onPositionClosed: ((account: Account | null) => void) | null = null;
 
-    async init(epic: string, onPositionClosed?: () => void) {
+    async init(epic: string, onPositionClosed?: (account: Account | null) => void) {
         if (typeof window === 'undefined') return;
 
         this.onPositionClosed = onPositionClosed || null;
@@ -103,12 +103,12 @@ export class ChartOverlay {
 
             notifications.success("Position closed");
 
-            // Refresh data
+            // Refresh local data to get updated balance
             await this.fetchData(this.position.market.epic);
 
-            // Notify ChartLogic to refresh lines
+            // Notify ChartLogic and pass the updated account
             if (this.onPositionClosed) {
-                this.onPositionClosed();
+                this.onPositionClosed(this.account);
             }
 
         } catch (e) {
