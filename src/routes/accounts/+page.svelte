@@ -176,33 +176,4 @@
 
         </div>
     {/if}
-
-    {#if accounts.toastMessage}
-        <div style="
-            position: fixed;
-            bottom: 2rem;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #333;
-            color: white;
-            padding: 1rem 2rem;
-            border-radius: 8px;
-            border: 1px solid #26a69a;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            z-index: 1000;
-            font-weight: bold;
-            animation: fadeInOut 3s forwards;
-        ">
-            {accounts.toastMessage}
-        </div>
-    {/if}
 </div>
-
-<style>
-    @keyframes fadeInOut {
-        0% { opacity: 0; transform: translate(-50%, 1rem); }
-        10% { opacity: 1; transform: translate(-50%, 0); }
-        90% { opacity: 1; transform: translate(-50%, 0); }
-        100% { opacity: 0; transform: translate(-50%, -1rem); }
-    }
-</style>

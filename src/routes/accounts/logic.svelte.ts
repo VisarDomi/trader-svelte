@@ -1,7 +1,10 @@
 import { goto } from '$app/navigation';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
+import { ApiClient } from '$lib/api/client.js';
 import { getSyncedAccounts, switchAccount } from '$lib/services/account.js';
+import { session } from '$lib/services/session.js';
+import { notifications } from '$lib/services/notifications.svelte.js';
 import type { Account } from '$lib/types/account.js';
 import type { SessionTokens } from '$lib/types/auth.js';
 import type { URL_TYPE } from '$lib/types/url.js';
@@ -11,38 +14,32 @@ export class Accounts {
     demoAccounts = $state<Account[]>([]);
     isLoading = $state(true);
     error = $state('');
-    toastMessage = $state('');
     tradingMode = $state<URL_TYPE>(AUTH.DEMO_TYPE);
 
     async init() {
         this.isLoading = true;
         this.error = '';
         if (typeof window !== 'undefined') {
-            const storedMode = localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE;
-            if (storedMode) {
-                this.tradingMode = storedMode;
-            } else {
-                this.tradingMode = AUTH.DEMO_TYPE;
-                localStorage.setItem(STORAGE.TRADING_MODE_KEY, AUTH.DEMO_TYPE);
-            }
+            this.tradingMode = session.mode;
         }
         await this.loadData();
     }
 
     private async loadData() {
-        const realTokensStr = localStorage.getItem(STORAGE.TOKENS_REAL_KEY);
-        const demoTokensStr = localStorage.getItem(STORAGE.TOKENS_DEMO_KEY);
-        if (!realTokensStr || !demoTokensStr) {
+        const realTokens = session.getTokens(AUTH.REAL_TYPE);
+        const demoTokens = session.getTokens(AUTH.DEMO_TYPE);
+
+        if (!realTokens || !demoTokens) {
             await goto('/login');
             return;
         }
         try {
-            const realTokens: SessionTokens = JSON.parse(realTokensStr);
-            const demoTokens: SessionTokens = JSON.parse(demoTokensStr);
+            const realClient = new ApiClient(AUTH.REAL_TYPE, realTokens);
+            const demoClient = new ApiClient(AUTH.DEMO_TYPE, demoTokens);
 
             const [real, demo] = await Promise.all([
-                getSyncedAccounts(AUTH.REAL_TYPE, realTokens),
-                getSyncedAccounts(AUTH.DEMO_TYPE, demoTokens)
+                getSyncedAccounts(AUTH.REAL_TYPE, realTokens, realClient),
+                getSyncedAccounts(AUTH.DEMO_TYPE, demoTokens, demoClient)
             ]);
 
             this.realAccounts = real;
@@ -50,6 +47,7 @@ export class Accounts {
 
         } catch (e) {
             this.error = e instanceof Error ? e.message : String(e);
+            notifications.error("Failed to load accounts");
         } finally {
             this.isLoading = false;
         }
@@ -58,35 +56,31 @@ export class Accounts {
     async switchTo(account: Account, type: URL_TYPE) {
         this.isLoading = true;
         this.error = '';
-        const storageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
-        const tokensStr = localStorage.getItem(storageKey);
-        if (!tokensStr) {
-            this.error = "No session tokens found.";
+
+        const tokens = session.getTokens(type);
+        if (!tokens) {
+            notifications.error("No session tokens found");
             this.isLoading = false;
             return;
         }
+
         try {
             if (!account.preferred) {
-                const currentTokens: SessionTokens = JSON.parse(tokensStr);
-                const newTokens = await switchAccount(type, currentTokens, account.accountId);
-                localStorage.setItem(storageKey, JSON.stringify(newTokens));
-
-                const lastIdKey = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
-                localStorage.setItem(lastIdKey, account.accountId);
+                const newTokens = await switchAccount(type, tokens, account.accountId);
+                session.saveTokens(type, newTokens);
+                session.setLastAccountId(type, account.accountId);
             }
 
+            session.mode = type;
             this.tradingMode = type;
-            localStorage.setItem(STORAGE.TRADING_MODE_KEY, type);
 
             await this.loadData();
-
-            this.toastMessage = `Switched to ${account.accountName}`;
-            setTimeout(() => {
-                this.toastMessage = '';
-            }, 3000);
+            notifications.success(`Switched to ${account.accountName}`);
 
         } catch (e) {
-            this.error = e instanceof Error ? e.message : String(e);
+            const msg = e instanceof Error ? e.message : String(e);
+            this.error = msg;
+            notifications.error(msg);
             this.isLoading = false;
         }
     }

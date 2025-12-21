@@ -2,6 +2,7 @@ import { goto } from '$app/navigation';
 import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
 import { session } from '$lib/services/session.js';
+import { notifications } from '$lib/services/notifications.svelte.js';
 import { getSyncedAccounts, getPreferences } from '$lib/services/account.js';
 import { createPosition, getConfirmation } from '$lib/services/trading.js';
 import { getMarketDetails } from '$lib/services/market.js';
@@ -14,8 +15,7 @@ export class TradeLogic {
     activeType = $state<URL_TYPE>(AUTH.DEMO_TYPE);
     isLoading = $state(true);
     isTrading = $state(false);
-    error = $state('');
-    message = $state('');
+    error = $state(''); // Keeps validation errors (e.g. insufficient funds) visible in UI
 
     currentAccount = $state<Account | null>(null);
     plannedTrade = $state<TradeCalculationResult & { direction: Direction, entryPrice: number } | null>(null);
@@ -50,6 +50,7 @@ export class TradeLogic {
 
         const client = session.getClient(this.activeType);
         if (!client) {
+            notifications.error("Session expired. Please login.");
             await goto('/login');
             return;
         }
@@ -100,6 +101,7 @@ export class TradeLogic {
 
         } catch (e) {
             this.error = e instanceof Error ? e.message : String(e);
+            notifications.error("Failed to calculate trade parameters");
         } finally {
             this.isLoading = false;
         }
@@ -112,16 +114,14 @@ export class TradeLogic {
 
         const client = session.getClient(this.activeType);
         if (!client) {
-            this.error = "Session expired";
+            notifications.error("Session expired");
             this.isTrading = false;
             return;
         }
 
         try {
-            // 1. CAPTURE SNAPSHOT
             const initialBalanceSnapshot = this.currentAccount.balance.deposit;
 
-            // 2. CREATE POSITION
             const body: TradeRequest = {
                 epic: this.targetEpic,
                 direction: this.plannedTrade.direction,
@@ -131,18 +131,17 @@ export class TradeLogic {
             };
 
             const response = await createPosition(client, body);
-
-            // 3. GET CONFIRMATION
             const confirmation = await getConfirmation(client, response.dealReference);
 
-            // 4. SAVE INITIAL BALANCE KEYED BY DEAL ID
             session.setInitialBalance(confirmation.dealId, initialBalanceSnapshot);
 
-            // 5. REDIRECT
+            notifications.success(`${confirmation.direction} ${confirmation.size} ${this.targetEpic} Executed`);
             await goto('/position');
 
         } catch (e) {
-            this.error = e instanceof Error ? e.message : String(e);
+            const msg = e instanceof Error ? e.message : String(e);
+            this.error = msg;
+            notifications.error(msg);
             this.isTrading = false;
         }
     }
