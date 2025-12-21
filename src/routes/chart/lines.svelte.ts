@@ -1,10 +1,11 @@
 import { type ISeriesApi, type IPriceLine, LineStyle } from "lightweight-charts";
 import type { PositionResponse } from "$lib/types/trading.js";
 import * as CHART from "$lib/constants/chart.js";
-import * as TRADING from "$lib/constants/trading.js";
-import { formatTimestampToLocalTime } from "$lib/utils/time.js";
-import { roundDownToFactor } from "$lib/utils/trading.js";
-import { DateTime } from "luxon";
+import {
+    generateStartingLine,
+    generateWendyLine,
+    generateLamboLine
+} from '$lib/utils/lines.js';
 
 export class ChartLines {
     private series: ISeriesApi<"Candlestick"> | null = null;
@@ -25,71 +26,41 @@ export class ChartLines {
 
         const p = position.position;
         const initialBalance = p.initialBalance || 0;
-        const hasValidInitialBalance = initialBalance !== 0;
 
-        const directionText = p.direction === "BUY" ? "You bought" : "You sold";
-        let startingTitle = `${directionText} ${p.size} ${position.market.epic}`;
-
-        if (p.createdDateUTC) {
-            const dateSeconds = DateTime.fromISO(p.createdDateUTC, { zone: "utc" }).toSeconds();
-            const tradeTime = formatTimestampToLocalTime(dateSeconds as any);
-            startingTitle += ` at ${tradeTime}`;
-        }
-
+        // 1. STARTING LINE
+        const startInfo = generateStartingLine(p, position.market.epic);
         this.entryLine = this.series.createPriceLine({
-            price: p.level,
-            color: "#FFDD00",
+            price: startInfo.level,
+            color: CHART.STARTING_LINE_COLOR,
             lineWidth: 2,
             lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
-            title: startingTitle,
+            title: startInfo.title,
         });
 
-        if (p.profitLevel) {
-            const potentialProfit = Math.abs(p.level - p.profitLevel) * p.size;
-            const roundedPotentialProfit = roundDownToFactor(potentialProfit, TRADING.ACCOUNT_USD_PRICE_PRECISION).toFixed(2);
-            let lamboTitle = `Potential Profit +${roundedPotentialProfit}`;
-
-            if (hasValidInitialBalance) {
-                const optimisticBalance = initialBalance + potentialProfit;
-                const potentialProfitPercentage = (potentialProfit / initialBalance) * 100;
-                const offsetProfitPercentage = (potentialProfitPercentage / (100 + potentialProfitPercentage)) * 100;
-                lamboTitle = `Potential Profit +${roundedPotentialProfit} (${optimisticBalance.toFixed(2)}) (+${potentialProfitPercentage.toFixed(2)}%) (+-${offsetProfitPercentage.toFixed(2)}%)`;
-            }
-
+        // 2. LAMBO (TP)
+        const lamboInfo = generateLamboLine(p, initialBalance);
+        if (lamboInfo) {
             this.tpLine = this.series.createPriceLine({
-                price: p.profitLevel,
-                color: CHART.UP_COLOR,
+                price: lamboInfo.level,
+                color: CHART.LAMBO_LINE_COLOR,
                 lineWidth: 2,
                 lineStyle: LineStyle.Solid,
                 axisLabelVisible: true,
-                title: lamboTitle,
+                title: lamboInfo.title,
             });
         }
 
-        if (p.stopLevel) {
-            const potentialLoss = Math.abs(p.level - p.stopLevel) * p.size;
-            const roundedPotentialLoss = roundDownToFactor(potentialLoss, TRADING.ACCOUNT_USD_PRICE_PRECISION).toFixed(2);
-            let wendyTitle = `Potential Loss -${roundedPotentialLoss}`;
-
-            if (hasValidInitialBalance) {
-                const pessimisticBalance = initialBalance - potentialLoss;
-                const potentialLossPercentage = (potentialLoss / initialBalance) * 100;
-                let offsetPercentageText = "";
-                if (potentialLossPercentage < 100) {
-                    const offsetPercentage = (potentialLossPercentage / (100 - potentialLossPercentage)) * 100;
-                    offsetPercentageText = ` (-+${offsetPercentage.toFixed(2)}%)`;
-                }
-                wendyTitle = `Potential Loss -${roundedPotentialLoss} (${pessimisticBalance.toFixed(2)}) (-${potentialLossPercentage.toFixed(2)}%)${offsetPercentageText}`;
-            }
-
+        // 3. WENDY (SL)
+        const wendyInfo = generateWendyLine(p, initialBalance);
+        if (wendyInfo) {
             this.slLine = this.series.createPriceLine({
-                price: p.stopLevel,
-                color: CHART.DOWN_COLOR,
+                price: wendyInfo.level,
+                color: CHART.WENDY_LINE_COLOR,
                 lineWidth: 2,
                 lineStyle: LineStyle.Solid,
                 axisLabelVisible: true,
-                title: wendyTitle,
+                title: wendyInfo.title,
             });
         }
     }

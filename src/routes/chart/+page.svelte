@@ -21,6 +21,7 @@
     import { getPositions } from "$lib/services/trading.js";
     import { getSyncedAccounts } from "$lib/services/account.js";
     import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
+    import { resolveInitialBalance } from "$lib/utils/position.js";
     import type { SessionTokens } from "$lib/types/auth.js";
     import type { URL_TYPE } from '$lib/types/url.js';
     import type {ChartData, PositionResponse} from '$lib/types/trading.js';
@@ -105,11 +106,11 @@
             pricePrecision = Math.pow(10, decimalPlaces);
 
             const activeAccount = accounts.find(a => a.preferred) || accounts[0];
-            const currentEquity = activeAccount?.balance.available || 0;
-
             const foundPos = positionsResp.positions.find(p => p.market.epic === currentEpic);
-            if (foundPos) {
-                foundPos.position.initialBalance = currentEquity - foundPos.position.upl;
+
+            if (foundPos && activeAccount) {
+                // Apply Initial Balance Logic Shared with /position
+                foundPos.position.initialBalance = resolveInitialBalance(foundPos.position, activeAccount);
                 activePosition = foundPos;
                 if (activePosition.position.direction === TRADING.SELL_DIRECTION) {
                     chartDataSource = TRADING.CHART_DATA_SOURCE_OFR;
@@ -136,6 +137,7 @@
         layout.init(chart, chartContainer);
 
         lines.init(series);
+        // lines.update will now use the enriched activePosition with initialBalance
         lines.update(activePosition);
 
         await feed.init(tokens, currentEpic, series, chartDataSource, decimalPlaces, activePosition);

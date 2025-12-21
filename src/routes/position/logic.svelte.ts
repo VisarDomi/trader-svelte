@@ -1,13 +1,17 @@
 import { goto } from '$app/navigation';
-import { DateTime } from 'luxon';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
 import { getSyncedAccounts } from '$lib/services/account.js';
 import { getPositions, createPosition } from '$lib/services/trading.js';
 import { getMarketDetails } from '$lib/services/market.js';
-import { roundDownToFactor } from '$lib/utils/trading.js';
-import { formatTimestampToLocalTime } from '$lib/utils/time.js';
+import { resolveInitialBalance } from '$lib/utils/position.js';
+import {
+    generateStartingLine,
+    generateWendyLine,
+    generateLamboLine,
+    generateCurrentLine
+} from '$lib/utils/lines.js';
 import type { Account } from '$lib/types/account.js';
 import type { SessionTokens } from '$lib/types/auth.js';
 import type { URL_TYPE } from '$lib/types/url.js';
@@ -90,23 +94,8 @@ export class PositionViewerLogic {
             const found = positionsData.positions.find(p => p.market.epic === this.targetEpic);
 
             if (found && this.currentAccount) {
-                const dealId = found.position.dealId;
-                const storageKey = `IB_${dealId}`;
-                const savedIB = localStorage.getItem(storageKey);
-
-                if (savedIB) {
-                    // Use saved snapshot
-                    found.position.initialBalance = parseFloat(savedIB);
-                } else {
-                    // Fallback: strictly use Deposit
-                    const currentDeposit = this.currentAccount.balance.deposit;
-                    found.position.initialBalance = currentDeposit;
-
-                    // Auto-heal: save this if missing to stop fluctuations?
-                    // User said: "initial balance in this case should be equal to deposit".
-                    // I'll save it to prevent weirdness if deposit changes mid-trade (rare but possible).
-                    localStorage.setItem(storageKey, currentDeposit.toString());
-                }
+                // Use Shared Utility
+                found.position.initialBalance = resolveInitialBalance(found.position, this.currentAccount);
             }
 
             this.currentPosition = found || null;
@@ -159,118 +148,17 @@ export class PositionViewerLogic {
 
         const p = this.currentPosition.position;
         const initialBalance = p.initialBalance || 0;
-        const hasValidInitialBalance = initialBalance !== 0;
 
-        // --- 1. STARTING LINE ---
-        const directionText = p.direction === "BUY" ? "You bought" : "You sold";
-        let startingTitle = `${directionText} ${p.size} ${this.currentPosition.market.epic}`;
-        if (p.createdDateUTC) {
-            const dateSeconds = DateTime.fromISO(p.createdDateUTC, { zone: "utc" }).toSeconds();
-            const tradeTime = formatTimestampToLocalTime(dateSeconds as any);
-            startingTitle += ` at ${tradeTime}`;
-        }
-        const starting = {
-            level: p.level,
-            title: startingTitle
-        };
+        const starting = generateStartingLine(p, this.currentPosition.market.epic);
+        const wendy = generateWendyLine(p, initialBalance);
+        const lambo = generateLamboLine(p, initialBalance);
 
-        // --- 2. WENDY (SL) ---
-        let wendy = null;
-        if (p.stopLevel) {
-            const potentialLoss = Math.abs(p.level - p.stopLevel) * p.size;
-            const roundedPotentialLoss = roundDownToFactor(potentialLoss, TRADING.ACCOUNT_USD_PRICE_PRECISION);
-            let title = `Potential Loss -${roundedPotentialLoss.toFixed(2)}`;
-
-            let pessimisticBalance = 0;
-            let potentialLossPercentage = 0;
-            let offsetPercentageText = "";
-
-            if (hasValidInitialBalance) {
-                pessimisticBalance = initialBalance - potentialLoss;
-                potentialLossPercentage = (potentialLoss / initialBalance) * 100;
-
-                if (potentialLossPercentage < 100) {
-                    const offsetPercentage = (potentialLossPercentage / (100 - potentialLossPercentage)) * 100;
-                    offsetPercentageText = ` (-+${offsetPercentage.toFixed(2)}%)`;
-                }
-                title = `Potential Loss -${roundedPotentialLoss.toFixed(2)} (${pessimisticBalance.toFixed(2)}) (-${potentialLossPercentage.toFixed(2)}%)${offsetPercentageText}`;
-            }
-
-            wendy = {
-                level: p.stopLevel,
-                title: title
-            };
-        }
-
-        // --- 3. LAMBO (TP) ---
-        let lambo = null;
-        if (p.profitLevel) {
-            const potentialProfit = Math.abs(p.level - p.profitLevel) * p.size;
-            const roundedPotentialProfit = roundDownToFactor(potentialProfit, TRADING.ACCOUNT_USD_PRICE_PRECISION);
-            let title = `Potential Profit +${roundedPotentialProfit.toFixed(2)}`;
-
-            let optimisticBalance = 0;
-            let potentialProfitPercentage = 0;
-            let offsetProfitPercentage = 0;
-
-            if (hasValidInitialBalance) {
-                optimisticBalance = initialBalance + potentialProfit;
-                potentialProfitPercentage = (potentialProfit / initialBalance) * 100;
-                offsetProfitPercentage = (potentialProfitPercentage / (100 + potentialProfitPercentage)) * 100;
-
-                title = `Potential Profit +${roundedPotentialProfit.toFixed(2)} (${optimisticBalance.toFixed(2)}) (+${potentialProfitPercentage.toFixed(2)}%) (+-${offsetProfitPercentage.toFixed(2)}%)`;
-            }
-
-            lambo = {
-                level: p.profitLevel,
-                title: title
-            };
-        }
-
-        // --- 4. CURRENT (DYNAMIC) ---
         let current = null;
         if (this.marketDetails) {
             const currentBid = this.marketDetails.snapshot.bid;
             const currentOfr = this.marketDetails.snapshot.offer;
             const currentPrice = p.direction === TRADING.BUY_DIRECTION ? currentBid : currentOfr;
-
-            let profitOrLoss: number;
-            if (p.direction === TRADING.BUY_DIRECTION) {
-                profitOrLoss = (currentBid - p.level) * p.size;
-            } else {
-                profitOrLoss = (p.level - currentOfr) * p.size;
-            }
-
-            const PLUS = "+";
-            const MINUS = "-";
-            const profitOrLossSign = profitOrLoss >= 0 ? PLUS : MINUS;
-            const profitOrLossRounded = roundDownToFactor(Math.abs(profitOrLoss), TRADING.ACCOUNT_USD_PRICE_PRECISION).toFixed(2);
-            let title = `${profitOrLossSign}${profitOrLossRounded}`;
-
-            if (hasValidInitialBalance) {
-                const currentBalance = initialBalance + profitOrLoss;
-                const percentage = (profitOrLoss / initialBalance) * 100;
-                const percentageRounded = Math.abs(percentage).toFixed(2);
-
-                let offsetPercentageText = "";
-                if (percentage >= 0) {
-                    const offsetPercentage = (percentage / (100 + percentage)) * 100;
-                    offsetPercentageText = ` (+-${offsetPercentage.toFixed(2)}%)`;
-                } else {
-                    const absPercentage = Math.abs(percentage);
-                    if (absPercentage < 100) {
-                        const offsetPercentage = (absPercentage / (100 - absPercentage)) * 100;
-                        offsetPercentageText = ` (-+${offsetPercentage.toFixed(2)}%)`;
-                    }
-                }
-                title = `${profitOrLossSign}${profitOrLossRounded} (${currentBalance.toFixed(2)}) (${profitOrLossSign}${percentageRounded}%)${offsetPercentageText}`;
-            }
-
-            current = {
-                level: currentPrice,
-                title: title,
-                isProfit: profitOrLoss >= 0
-            };
+            current = generateCurrentLine(p, currentPrice, initialBalance);
         }
 
         return {

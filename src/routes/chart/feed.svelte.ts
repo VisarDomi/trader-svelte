@@ -6,7 +6,7 @@ import type { QuoteMessage, ChartCandle } from "$lib/types/market.js";
 import * as TRADING from "$lib/constants/trading.js";
 import type {ChartData, PositionResponse} from "$lib/types/trading.js";
 import { getBaseSeriesOptions } from "$lib/utils/chart.js";
-import { roundDownToFactor } from "$lib/utils/trading.js";
+import { generateCurrentLine } from "$lib/utils/lines.js";
 
 export class ChartFeed {
     private series: ISeriesApi<"Candlestick"> | null = null;
@@ -83,45 +83,16 @@ export class ChartFeed {
 
         if (position) {
             const p = position.position;
-            let profitOrLoss: number;
+            const initialBalance = p.initialBalance || 0;
 
-            if (p.direction === TRADING.BUY_DIRECTION) {
-                profitOrLoss = (this.currentBid - p.level) * p.size;
-            } else {
-                profitOrLoss = (p.level - this.currentOfr) * p.size;
-            }
+            const currentPrice = p.direction === TRADING.BUY_DIRECTION ? this.currentBid : this.currentOfr;
+            const lineInfo = generateCurrentLine(p, currentPrice, initialBalance);
 
-            const PLUS = "+";
-            const MINUS = "-";
-            const profitOrLossSign = profitOrLoss >= 0 ? PLUS : MINUS;
-            const priceLineColor = profitOrLoss >= 0 ? "#22958a" : "#bf4240";
-
-            const profitOrLossRounded = roundDownToFactor(Math.abs(profitOrLoss), TRADING.ACCOUNT_USD_PRICE_PRECISION).toFixed(2);
-
-            let title = `${profitOrLossSign}${profitOrLossRounded}`;
-
-            if (p.initialBalance && p.initialBalance > 0) {
-                const currentBalance = p.initialBalance + profitOrLoss;
-                const percentage = (profitOrLoss / p.initialBalance) * 100;
-                const percentageRounded = Math.abs(percentage).toFixed(2);
-
-                let offsetPercentageText = "";
-                if (percentage >= 0) {
-                    const offsetPercentage = (percentage / (100 + percentage)) * 100;
-                    offsetPercentageText = ` (+-${offsetPercentage.toFixed(2)}%)`;
-                } else {
-                    const absPercentage = Math.abs(percentage);
-                    if (absPercentage < 100) {
-                        const offsetPercentage = (absPercentage / (100 - absPercentage)) * 100;
-                        offsetPercentageText = ` (-+${offsetPercentage.toFixed(2)}%)`;
-                    }
-                }
-                title = `${profitOrLossSign}${profitOrLossRounded} (${currentBalance.toFixed(2)}) (${profitOrLossSign}${percentageRounded}%)${offsetPercentageText}`;
-            }
+            const priceLineColor = lineInfo.isProfit ? "#22958a" : "#bf4240";
 
             this.series.applyOptions({
                 priceLineColor,
-                title,
+                title: lineInfo.title,
             } as any);
         } else {
             this.series.applyOptions(getBaseSeriesOptions(Math.pow(10, this.decimalPlaces)));
