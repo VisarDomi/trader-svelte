@@ -60,9 +60,9 @@ export class ChartLogic {
         // 2. Context Setup
         this.currentEpic = session.lastEpic;
         const mode = session.mode;
-        const client = session.getClient(mode);
 
-        if (!client) {
+        // Initial token check
+        if (!session.getClient(mode)) {
             await goto('/login');
             return;
         }
@@ -70,18 +70,28 @@ export class ChartLogic {
         // 3. Data Fetching
         let pricePrecision = 100;
         let chartDataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
-        const tokens = session.getTokens(mode)!;
 
         try {
-            const [md, positionsResp, accounts, prefs] = await Promise.all([
+            // A. Sync Accounts FIRST (Serial).
+            // This might rotate the session token if the preferred account needs to be switched.
+            // We must do this before fetching preferences to avoid 401s.
+            let client = session.getClient(mode)!;
+            const tokens = session.getTokens(mode)!;
+
+            const accounts = await getSyncedAccounts(mode, tokens, client);
+            this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
+
+            // B. Refresh Client with potentially new tokens from storage
+            client = session.getClient(mode)!;
+
+            // C. Fetch dependent data using the VALID client
+            const [md, positionsResp, prefs] = await Promise.all([
                 getMarketDetails(client, this.currentEpic),
                 getPositions(client),
-                getSyncedAccounts(mode, tokens, client),
                 getPreferences(client)
             ]);
 
             this.marketDetails = md;
-            this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
             this.decimalPlaces = md.snapshot.decimalPlacesFactor;
             pricePrecision = Math.pow(10, this.decimalPlaces);
 
@@ -128,8 +138,9 @@ export class ChartLogic {
         this.lines.update(this.activePosition);
 
         // 6. Start Feed
+        const finalTokens = session.getTokens(mode)!;
         await this.feed.init(
-            tokens,
+            finalTokens,
             this.currentEpic,
             this.series,
             chartDataSource,
@@ -175,9 +186,12 @@ export class ChartLogic {
         if (clickPrice > this.feed.currentOfr) {
             direction = TRADING.BUY_DIRECTION;
             entryPrice = this.feed.currentOfr;
-        } else {
+        } else if (clickPrice < this.feed.currentBid) {
             direction = TRADING.SELL_DIRECTION;
             entryPrice = this.feed.currentBid;
+        } else {
+            // Inside the spread - Ignore
+            return;
         }
 
         const result = calculatePositionParameters({
