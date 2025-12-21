@@ -113,7 +113,6 @@ export class ChartLogic {
         }
 
         // 4. Initialize Sub-systems
-        // Pass a callback to refresh logic when overlay closes a position
         await this.overlay.init(this.currentEpic, () => this.refresh());
 
         // 5. Chart Instantiation
@@ -152,10 +151,7 @@ export class ChartLogic {
         }
     }
 
-    // Called when position is closed via Overlay
     async refresh() {
-        // Simple reload to reset state cleanly
-        // Alternatively, re-fetch positions and update lines/feed
         location.reload();
     }
 
@@ -172,14 +168,9 @@ export class ChartLogic {
         const clickPrice = this.series.coordinateToPrice(param.point.y);
         if (clickPrice === null) return;
 
-        // Calculate Trade
+        // Determine Direction
         let direction: Direction;
         let entryPrice: number;
-
-        // Simple logic: if click is above offer -> Buy (Target is above), if click is below bid -> Sell (Target is below)
-        // Wait, standard logic:
-        // Buy: Entry at Offer. Target (Lambo) > Offer. Stop (Wendy) < Offer.
-        // Sell: Entry at Bid. Target (Lambo) < Bid. Stop (Wendy) > Bid.
 
         if (clickPrice > this.feed.currentOfr) {
             direction = TRADING.BUY_DIRECTION;
@@ -198,7 +189,7 @@ export class ChartLogic {
             minDealSize: this.marketDetails.dealingRules.minDealSize.value,
             decimalPlaces: this.decimalPlaces,
             direction,
-            clickPrice, // This is the TP level
+            clickPrice, // Take Profit
             stopLossRatio: TRADING.STOP_LOSS_RATIO
         });
 
@@ -216,12 +207,10 @@ export class ChartLogic {
     };
 
     private drawPlannedLines() {
-        if (!this.plannedTrade || !this.marketDetails) return;
+        if (!this.plannedTrade || !this.marketDetails || !this.activeAccount) return;
 
-        // Construct a "Mock" Position Response to feed into ChartLines
-        // This reuses the exact same visualization logic
         const mockBody: PositionBody = {
-            contractSize: 0, // Irrelevant for lines
+            contractSize: 0,
             createdDate: new Date().toISOString(),
             createdDateUTC: new Date().toISOString(),
             dealId: "planning",
@@ -235,7 +224,7 @@ export class ChartLogic {
             guaranteedStop: false,
             stopLevel: this.plannedTrade.stopLevel,
             profitLevel: this.plannedTrade.profitLevel,
-            initialBalance: 0 // Will result in simple lines without % offset calculations which is fine for planning
+            initialBalance: this.activeAccount.balance.deposit
         };
 
         const mockResponse: PositionResponse = {
@@ -248,7 +237,7 @@ export class ChartLogic {
                 instrumentType: this.marketDetails.instrument.type,
                 lotSize: this.marketDetails.instrument.lotSize,
                 streamingPricesAvailable: true
-            } as any, // Cast to avoid filling every single field
+            } as any,
             position: mockBody
         };
 
@@ -262,12 +251,12 @@ export class ChartLogic {
     }
 
     async confirmTrade() {
-        if (!this.plannedTrade) return;
+        if (!this.plannedTrade || !this.activeAccount) return;
 
         this.isExecuting = true;
         const client = session.getClient(session.mode);
 
-        if (!client || !this.activeAccount) {
+        if (!client) {
             notifications.error("Session Error");
             this.isExecuting = false;
             return;
@@ -285,12 +274,9 @@ export class ChartLogic {
             const response = await createPosition(client, body);
             const confirmation = await getConfirmation(client, response.dealReference);
 
-            // Persist initial balance for the real position
             session.setInitialBalance(confirmation.dealId, this.activeAccount.balance.deposit);
 
             notifications.success("Position Opened");
-
-            // Reload page to enter "Active Position" state cleanly
             location.reload();
 
         } catch (e) {

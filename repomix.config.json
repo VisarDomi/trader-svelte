@@ -2,7 +2,7 @@
     "output": {
         "filePath": "repomix/repomix-output.txt",
         "style": "plain",
-        "copyToClipboard": true
+        "copyToClipboard": false
     },
     "include": [
         "**/*.svelte",
