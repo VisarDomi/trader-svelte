@@ -70,6 +70,7 @@ export class ChartLogic {
             this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
 
             client = session.getClient(mode)!;
+            tokens = session.getTokens(mode)!;
 
             const [md, positionsResp, prefs] = await Promise.all([
                 getMarketDetails(client, this.currentEpic),
@@ -143,7 +144,6 @@ export class ChartLogic {
         }
     }
 
-    // Accepting fresh account from Overlay to avoid double fetch and race conditions
     async handlePositionClosed(account: Account | null) {
         this.activePosition = null;
         this.feed.position = null;
@@ -192,8 +192,11 @@ export class ChartLogic {
 
         const visualEntry = this.feed.currentChartPrice;
 
+        // Use Deposit (Total Equity) for Full Port sizing, ignoring current margins
+        const basisBalance = this.activeAccount.balance.deposit;
+
         const result = calculatePositionParameters({
-            accountBalance: this.activeAccount.balance.available,
+            accountBalance: basisBalance,
             leverage: this.userLeverage,
             entryPrice: visualEntry,
             lotSize: this.marketDetails.instrument.lotSize || 1,
@@ -214,7 +217,9 @@ export class ChartLogic {
             };
             this.drawPlannedLines();
         } else {
-            notifications.error("Cannot plan trade: Insufficient funds or invalid params");
+            const maxPosSize = (basisBalance * this.userLeverage) / (visualEntry * (this.marketDetails.instrument.lotSize || 1));
+            const minSize = this.marketDetails.dealingRules.minDealSize.value;
+            notifications.error(`Plan Failed. Deposit: ${basisBalance.toFixed(2)}, MaxSize: ${maxPosSize.toFixed(2)}, MinReq: ${minSize}`);
         }
     };
 
@@ -288,11 +293,9 @@ export class ChartLogic {
 
             session.setInitialBalance(confirmation.dealId, this.activeAccount.balance.deposit);
 
-            // Re-fetch position details
             const positionsResp = await getPositions(client);
             const foundPos = positionsResp.positions.find(p => p.market.epic === this.currentEpic);
 
-            // Exit Planning Mode internally, but DO NOT call cancelPlanning()
             this.isPlanning = false;
             this.plannedTrade = null;
 
@@ -300,13 +303,10 @@ export class ChartLogic {
                 foundPos.position.initialBalance = this.activeAccount.balance.deposit;
                 this.activePosition = foundPos;
 
-                // Update lines with the LIVE position data
                 this.lines.update(this.activePosition);
                 this.feed.position = this.activePosition;
                 this.overlay.position = this.activePosition;
 
-                // IMPORTANT: Update local account balance to reflect the trade's margin
-                // We'll queue a refresh for accuracy, but conceptually we know funds are used
                 this.refreshAccountData();
             } else {
                 this.lines.clear();

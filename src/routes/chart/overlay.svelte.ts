@@ -1,7 +1,7 @@
 import { ApiClient } from '$lib/api/client.js';
 import { getSyncedAccounts } from '$lib/services/account.js';
 import { getMarketDetails } from '$lib/services/market.js';
-import { getPositions, createPosition } from '$lib/services/trading.js';
+import { getPositions, createPosition, getConfirmation } from '$lib/services/trading.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
 import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
@@ -20,7 +20,6 @@ export class ChartOverlay {
     mode = $state<URL_TYPE>(AUTH.DEMO_TYPE);
     marketName = $state('');
 
-    // Callback now accepts the fresh account
     private onPositionClosed: ((account: Account | null) => void) | null = null;
 
     async init(epic: string, onPositionClosed?: (account: Account | null) => void) {
@@ -95,18 +94,20 @@ export class ChartOverlay {
             const currentDir = this.position.position.direction;
             const oppositeDir = currentDir === TRADING.BUY_DIRECTION ? TRADING.SELL_DIRECTION : TRADING.BUY_DIRECTION;
 
-            await createPosition(client, {
+            const response = await createPosition(client, {
                 epic: this.position.market.epic,
                 direction: oppositeDir,
                 size: this.position.position.size
             });
 
+            // Wait for confirmation so backend releases margin/updates balance
+            await getConfirmation(client, response.dealReference);
+
             notifications.success("Position closed");
 
-            // Refresh local data to get updated balance
+            // NOW fetch data, which should include the updated balance
             await this.fetchData(this.position.market.epic);
 
-            // Notify ChartLogic and pass the updated account
             if (this.onPositionClosed) {
                 this.onPositionClosed(this.account);
             }
