@@ -17,8 +17,6 @@ export class ChartOverlay {
     mode = $state<URL_TYPE>(AUTH.DEMO_TYPE);
     marketName = $state('');
 
-    private pollInterval: ReturnType<typeof setInterval> | null = null;
-
     async init(epic: string) {
         if (typeof window === 'undefined') return;
 
@@ -30,22 +28,10 @@ export class ChartOverlay {
 
         await this.fetchData(epic);
         this.loading = false;
-
-        this.startPolling(epic);
     }
 
     destroy() {
-        if (this.pollInterval) {
-            clearInterval(this.pollInterval);
-            this.pollInterval = null;
-        }
-    }
-
-    private startPolling(epic: string) {
-        if (this.pollInterval) clearInterval(this.pollInterval);
-        this.pollInterval = setInterval(() => {
-            this.fetchData(epic);
-        }, 2000);
+        // No cleanup needed
     }
 
     private async fetchData(epic: string) {

@@ -1,8 +1,8 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import { PositionViewerLogic } from './logic.svelte.js';
+    import AccountCard from '$lib/components/AccountCard.svelte';
     import * as TRADING from '$lib/constants/trading.js';
-    import * as AUTH from '$lib/constants/auth.js';
 
     const logic = new PositionViewerLogic();
 
@@ -14,7 +14,6 @@
         logic.destroy();
     });
 
-    // Helper to format prices safely
     function fmt(price: number | undefined | null): string {
         if (price === undefined || price === null) return '—';
         return price.toFixed(logic.precision);
@@ -28,45 +27,11 @@
     </div>
 
     {#if logic.currentAccount}
-        <!-- Account Details Card (Updated to show 4 numbers) -->
-        <div style="
-            margin-bottom: 2rem;
-            padding: 1.5rem;
-            background: #262626;
-            border-radius: 4px;
-            border-left: 4px solid {logic.activeType === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
-        ">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
-                <div>
-                    <span style="font-weight: bold; font-size: 1.1rem; color: #fff;">{logic.currentAccount.accountName}</span>
-                    <span style="font-size: 0.8rem; color: #aaa; margin-left: 0.5rem;">({logic.currentAccount.currency})</span>
-                </div>
-                <div style="font-size: 0.8rem; color: #aaa; background: #333; padding: 2px 6px; border-radius: 4px;">
-                    {logic.targetEpic}
-                </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; font-size: 1rem;">
-                <div>
-                    <div style="font-size: 0.8rem; color: #aaa;">Balance</div>
-                    <div style="color: #fff; font-weight: bold;">{logic.currentAccount.balance.balance.toFixed(2)}</div>
-                </div>
-                <div>
-                    <div style="font-size: 0.8rem; color: #aaa;">Available</div>
-                    <div style="color: #fff; font-weight: bold;">{logic.currentAccount.balance.available.toFixed(2)}</div>
-                </div>
-                <div>
-                    <div style="font-size: 0.8rem; color: #aaa;">Deposit</div>
-                    <div style="color: #fff; font-weight: bold;">{logic.currentAccount.balance.deposit.toFixed(2)}</div>
-                </div>
-                <div>
-                    <div style="font-size: 0.8rem; color: #aaa;">P&L</div>
-                    <div style="font-weight: bold; color: {logic.currentAccount.balance.profitLoss >= 0 ? '#26a69a' : '#ef5350'}">
-                        {logic.currentAccount.balance.profitLoss.toFixed(2)}
-                    </div>
-                </div>
-            </div>
-        </div>
+        <AccountCard
+                account={logic.currentAccount}
+                mode={logic.activeType}
+                badgeText={logic.targetEpic}
+        />
     {/if}
 
     {#if logic.error}
@@ -78,10 +43,8 @@
     {#if logic.isLoading && !logic.currentPosition}
         <p>Loading position details...</p>
     {:else if logic.currentPosition}
-        <!-- Position Dashboard -->
         <div style="background: #1a1a1a; padding: 1.5rem; border-radius: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 2rem;">
 
-            <!-- 1. Headline (Dir, Size, P&L) -->
             <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 1.5rem; border-bottom: 1px solid #333;">
                 <div>
                     <div style="font-size: 2.5rem; font-weight: bold; color: {logic.currentPosition.position.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}; line-height: 1;">
@@ -99,7 +62,6 @@
                 </div>
             </div>
 
-            <!-- DEBUG CARD: The 4 Lines -->
             {#if logic.debugInfo}
                 <div style="background: #220033; padding: 1rem; border: 1px dashed #ff00ff; border-radius: 4px; font-family: monospace; font-size: 0.85rem; color: #ffccff;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -108,7 +70,6 @@
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <!-- 1. LAMBO -->
                         {#if logic.debugInfo.lambo}
                             <div style="border: 1px solid #26a69a; padding: 0.5rem; color: #26a69a;">
                                 <strong>LAMBO (TP):</strong> {logic.debugInfo.lambo.level}
@@ -118,7 +79,6 @@
                             <div style="border: 1px solid #444; padding: 0.5rem; color: #666;">LAMBO (TP): Not Set</div>
                         {/if}
 
-                        <!-- 2. CURRENT -->
                         {#if logic.debugInfo.current}
                             <div style="border: 1px solid {logic.debugInfo.current.isProfit ? '#26a69a' : '#ef5350'}; padding: 0.5rem; color: {logic.debugInfo.current.isProfit ? '#26a69a' : '#ef5350'};">
                                 <strong>CURRENT:</strong> {logic.debugInfo.current.level}
@@ -128,13 +88,11 @@
                             <div style="border: 1px solid #444; padding: 0.5rem; color: #666;">CURRENT: Loading...</div>
                         {/if}
 
-                        <!-- 3. STARTING -->
                         <div style="border: 1px solid #FFDD00; padding: 0.5rem; color: #FFDD00;">
                             <strong>STARTING:</strong> {logic.debugInfo.starting.level}
                             <div style="color: #ccc;">{logic.debugInfo.starting.title}</div>
                         </div>
 
-                        <!-- 4. WENDY -->
                         {#if logic.debugInfo.wendy}
                             <div style="border: 1px solid #ef5350; padding: 0.5rem; color: #ef5350;">
                                 <strong>WENDY (SL):</strong> {logic.debugInfo.wendy.level}
@@ -147,7 +105,6 @@
                 </div>
             {/if}
 
-            <!-- 2. Price Data -->
             <div>
                 <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Price Information</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
@@ -164,7 +121,6 @@
                 </div>
             </div>
 
-            <!-- 3. Stops & Limits -->
             <div>
                 <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Protection</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
@@ -189,7 +145,6 @@
                 </div>
             </div>
 
-            <!-- 4. Market Meta -->
             <div>
                 <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Market Details</h4>
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; font-size: 0.9rem;">
@@ -214,7 +169,6 @@
                 </div>
             </div>
 
-            <!-- 5. Trade Metadata -->
             <div style="font-size: 0.8rem; color: #666; display: flex; flex-direction: column; gap: 0.25rem;">
                 <div>Deal ID: {logic.currentPosition.position.dealId}</div>
                 <div>Deal Ref: {logic.currentPosition.position.dealReference}</div>

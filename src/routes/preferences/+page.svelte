@@ -1,7 +1,9 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { PreferencesLogic } from './logic.svelte.js';
+    import AccountCard from '$lib/components/AccountCard.svelte';
     import * as AUTH from '$lib/constants/auth.js';
+
     const logic = new PreferencesLogic();
     onMount(() => {
         logic.init();
@@ -15,31 +17,11 @@
     </div>
 
     {#if logic.currentAccount}
-        <div style="
-            margin-bottom: 2rem;
-            padding: 1rem;
-            background: #262626;
-            border-radius: 4px;
-            border-left: 4px solid {logic.activeType === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        ">
-            <div>
-                <div style="font-weight: bold; font-size: 1.1rem; color: #fff;">
-                    {logic.currentAccount.accountName} ({logic.currentAccount.currency})
-                </div>
-                <div style="font-size: 0.85rem; color: #aaa; margin-top: 0.25rem;">
-                    ID: {logic.currentAccount.accountId}
-                </div>
-            </div>
-            <div style="text-align: right;">
-                <div style="font-size: 0.85rem; color: #aaa;">Balance</div>
-                <div style="font-weight: bold; font-size: 1.1rem;">
-                    {logic.currentAccount.symbol}{logic.currentAccount.balance.balance.toFixed(2)}
-                </div>
-            </div>
-        </div>
+        <AccountCard
+                account={logic.currentAccount}
+                mode={logic.activeType}
+                badgeText={`ID: ${logic.currentAccount.accountId}`}
+        />
     {/if}
 
     {#if logic.isLoading}
@@ -50,8 +32,6 @@
         </div>
     {:else if logic.data}
         <div style="background: #1a1a1a; padding: 1.5rem; border-radius: 8px; border: 1px solid #333;">
-
-            <!-- NOTE: Success messages now handled by Global Toast -->
 
             <div style="margin-bottom: 2rem;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
