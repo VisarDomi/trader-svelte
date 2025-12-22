@@ -25,9 +25,15 @@ export class TradeStore {
 
     /**
      * Prepares a trade based on user input (Chart Click).
+     * @param entryPrice - The estimated execution price (Bid or Ask)
+     * @param targetPrice - The chart coordinate clicked (Take Profit Target)
+     * @param direction - Buy or Sell
+     * @param market - Market Details
+     * @param userLeverage - Selected Leverage
      */
     plan(
-        price: number,
+        entryPrice: number,
+        targetPrice: number,
         direction: Direction,
         market: MarketDetailsResponse,
         userLeverage: number
@@ -40,7 +46,8 @@ export class TradeStore {
                 accountStore.balance,
                 userLeverage,
                 direction,
-                price
+                entryPrice,
+                targetPrice
             );
 
             if (!plan) {

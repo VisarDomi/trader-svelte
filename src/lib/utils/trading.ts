@@ -20,12 +20,12 @@ export interface TradeCalculationParams {
     accountBalance: number;
     leverage: number;
     entryPrice: number;
+    targetPrice: number;
     lotSize: number;
     minSizeIncrement: number;
     minDealSize: number;
     decimalPlaces: number;
     direction: Direction;
-    clickPrice: number;
     stopLossRatio: number;
 }
 
@@ -42,17 +42,18 @@ export function calculatePositionParameters(params: TradeCalculationParams): Tra
         accountBalance,
         leverage,
         entryPrice,
+        targetPrice,
         lotSize,
         minSizeIncrement,
         minDealSize,
         decimalPlaces,
         direction,
-        clickPrice,
         stopLossRatio
     } = params;
 
     if (leverage < 1 || entryPrice <= 0) return null;
 
+    // 1. Calculate Position Size based on Entry Price (Cost basis)
     const rawSize = (accountBalance * leverage) / (lotSize * entryPrice);
     const size = roundDownToStep(rawSize, minSizeIncrement);
 
@@ -60,6 +61,7 @@ export function calculatePositionParameters(params: TradeCalculationParams): Tra
         return null;
     }
 
+    // 2. Calculate Stop Loss distance based on Risk Ratio
     const marginRequired = (size * lotSize * entryPrice) / leverage;
     const lossAmount = accountBalance * stopLossRatio;
     const priceDiff = lossAmount / (size * lotSize);
@@ -72,7 +74,9 @@ export function calculatePositionParameters(params: TradeCalculationParams): Tra
     }
 
     const stopLevel = roundPrice(unroundedStopPrice, decimalPlaces);
-    const profitLevel = roundPrice(clickPrice, decimalPlaces);
+
+    // 3. Set Profit Level to the User's Target Price (Click location)
+    const profitLevel = roundPrice(targetPrice, decimalPlaces);
 
     return {
         size,

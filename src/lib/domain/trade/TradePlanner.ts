@@ -14,7 +14,8 @@ export class TradePlanner {
         accountBalance: number,
         userLeverage: number,
         direction: Direction,
-        clickPrice: number
+        entryPrice: number,
+        targetPrice: number
     ): PlannedTrade | null {
         if (accountBalance <= 0) {
             throw new Error("Insufficient funds to plan trade.");
@@ -23,13 +24,13 @@ export class TradePlanner {
         const params: TradeCalculationParams = {
             accountBalance,
             leverage: userLeverage,
-            entryPrice: clickPrice,
+            entryPrice,
+            targetPrice,
             lotSize: market.instrument.lotSize || 1,
             minSizeIncrement: market.dealingRules.minSizeIncrement.value,
             minDealSize: market.dealingRules.minDealSize.value,
             decimalPlaces: market.snapshot.decimalPlacesFactor,
             direction,
-            clickPrice,
             stopLossRatio: TRADING.STOP_LOSS_RATIO
         };
 
@@ -42,7 +43,7 @@ export class TradePlanner {
         return {
             ...result,
             direction,
-            entryPrice: clickPrice
+            entryPrice
         };
     }
 }

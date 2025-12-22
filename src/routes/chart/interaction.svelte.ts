@@ -2,7 +2,7 @@ import type { ISeriesApi, MouseEventParams } from 'lightweight-charts';
 import * as TRADING from '$lib/constants/trading.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
 import type { ChartData, Direction } from '$lib/types/trading.js';
-import type { TradeManager } from '$lib/stores/trade.svelte.js';
+import {type TradeStore} from '$lib/stores/trade.svelte.js';
 import type { MarketStore } from '$lib/stores/market.svelte.js';
 import type { PositionStore } from '$lib/stores/position.svelte.js';
 
@@ -12,7 +12,7 @@ export class ChartInteraction {
     private userLeverage = 1;
 
     constructor(
-        private readonly tradeManager: TradeManager,
+        private readonly tradeManager: TradeStore,
         private readonly marketStore: MarketStore,
         private readonly positionStore: PositionStore
     ) {}
@@ -43,21 +43,27 @@ export class ChartInteraction {
         return !!(this.positionStore.activePosition || this.tradeManager.isExecuting);
     }
 
-    private processPriceSelection(price: number) {
+    private processPriceSelection(clickedPrice: number) {
         const bid = this.marketStore.bid;
         const ask = this.marketStore.offer;
 
         // Determine Direction based on click relative to spread
-        const { direction, source } = this.determineDirection(price, bid, ask);
+        const { direction, source } = this.determineDirection(clickedPrice, bid, ask);
 
         if (!direction || !source) return; // Clicked inside spread or invalid
 
         // Switch Chart Data Source to match direction for visual clarity
         this.marketStore.setDataSource(source);
 
+        // Execution Price Logic:
+        // Buy -> Pay Ask
+        // Sell -> Sell at Bid
+        const executionPrice = direction === TRADING.BUY_DIRECTION ? ask : bid;
+
         // Delegate calculation to TradeManager
         this.tradeManager.plan(
-            source === TRADING.CHART_DATA_SOURCE_OFR ? bid : ask, // Execution Price
+            executionPrice,  // The price we get filled at
+            clickedPrice,    // The price where we clicked (Target/TP)
             direction,
             this.marketDetails!,
             this.userLeverage
