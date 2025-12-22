@@ -17,8 +17,8 @@ export class ChartUI {
             this.isPwa = isPWA();
         }
 
-        // Centralized resize logic using Svelte 5 effects.
         $effect(() => {
+            // Reactive dependency on viewport changes
             const width = viewport.width;
             const height = viewport.height;
             const maxW = viewport.maxWidth;
@@ -35,9 +35,17 @@ export class ChartUI {
         this.container = container;
 
         if (typeof window !== 'undefined') {
-            // Only apply scroll hack in iOS PWA mode
             if (this.isIosDevice && this.isPwa) {
                 window.addEventListener('scroll', this.handleScroll);
+
+                // 1. Prevention: Stop iOS from interpreting gestures as zoom
+                document.addEventListener('gesturestart', this.preventZoom);
+                document.addEventListener('gesturechange', this.preventZoom);
+                document.addEventListener('gestureend', this.preventZoom);
+
+                // 2. Cure: Watch for drift and force reflow
+                window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
+                window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
             }
         }
 
@@ -55,20 +63,59 @@ export class ChartUI {
     destroy() {
         if (typeof window === 'undefined') return;
         window.removeEventListener('scroll', this.handleScroll);
+
+        document.removeEventListener('gesturestart', this.preventZoom);
+        document.removeEventListener('gesturechange', this.preventZoom);
+        document.removeEventListener('gestureend', this.preventZoom);
+
+        window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
+        window.visualViewport?.removeEventListener('scroll', this.handleZoomCheck);
     }
+
+    private preventZoom = (e: Event) => {
+        e.preventDefault();
+    };
+
+    /**
+     * JS Solution for "Stuck Zoom":
+     * If Visual Viewport scale drifts, we perform a "Layout Thrash".
+     * Hiding the body forces the render engine to discard the current bad frame
+     * and recalculate the viewport relative to the screen dimensions.
+     */
+    private handleZoomCheck = () => {
+        if (!window.visualViewport) return;
+
+        const currentScale = window.visualViewport.scale;
+
+        // Threshold check (1.0 vs 1.389 etc)
+        if (Math.abs(currentScale - 1.0) > 0.05) {
+            console.warn(`[Zoom Watchdog] Drift ${currentScale} detected. Thrashing layout.`);
+
+            // 1. Force hard reset of display
+            document.body.style.display = 'none';
+
+            // 2. Force synchronous reflow (read a geometric property)
+            // This makes the browser apply the 'none' immediately
+            void document.body.offsetHeight;
+
+            // 3. Restore
+            document.body.style.display = '';
+
+            // 4. Force scroll reset
+            window.scrollTo(0, 0);
+        }
+    };
 
     private getScrollTarget(chartH: number, winH: number): number {
         return CHART_CONST.TOPBAR_HEIGHT + (chartH - winH);
     }
 
     private handleScroll = () => {
-        // Explicitly check for PWA here too
         if (!this.isIosDevice || !this.isPwa || !this.isDataLoaded || !this.container) return;
         const chartH = this.container.clientHeight;
         const winH = window.innerHeight;
         const target = this.getScrollTarget(chartH, winH);
 
-        // Prevent scrolling "above" the chart (showing address bar) if we are locked in
         if (window.scrollY < target) {
             window.scrollTo({
                 top: target,
@@ -83,13 +130,11 @@ export class ChartUI {
         let width: number;
         let height: number;
 
-        // Use PWA specific logic only if strictly in iOS PWA mode
         if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
             const dims = viewport.getChartDimensions();
             width = dims.width;
             height = dims.height;
         } else {
-            // Standard behavior for Desktop / Android / Non-PWA
             width = viewport.width;
             height = viewport.height;
         }
