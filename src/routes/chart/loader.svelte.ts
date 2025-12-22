@@ -3,6 +3,7 @@ import { api } from '$lib/services/api.svelte.js';
 import { authenticateAndStoreSession } from "$lib/services/auth.js";
 import { getMarketDetails } from "$lib/services/market.js";
 import { getPreferences } from "$lib/services/account.js";
+import { LeverageService } from '$lib/domain/account/LeverageService.js';
 
 // Stores types
 import type { AccountStore } from '$lib/stores/account.svelte.js';
@@ -11,7 +12,6 @@ import type { MarketStore } from '$lib/stores/market.svelte.js';
 
 // Types
 import type { MarketDetailsResponse } from '$lib/types/market.js';
-import type { LeverageCategory } from '$lib/types/account.js';
 import type { ChartData } from "$lib/types/trading";
 import * as TRADING from '$lib/constants/trading.js';
 
@@ -41,7 +41,7 @@ export class ChartDataLoader {
     }
 
     async loadContext(epic: string): Promise<ChartContext | null> {
-        // 1. Init Base Stores
+        // 1. Init Base Stores (Parallel)
         await Promise.all([
             this.accountStore.init(),
             this.positionStore.init(epic)
@@ -51,21 +51,14 @@ export class ChartDataLoader {
         if (!client) return null;
 
         try {
-            // 2. Fetch Config
+            // 2. Fetch Configuration (Parallel)
             const [md, prefs] = await Promise.all([
                 getMarketDetails(client, epic),
                 getPreferences(client)
             ]);
 
-            // 3. Calculate Derived Config
-            let userLeverage = 1;
-            const category = md.instrument.type as LeverageCategory;
-            if (prefs.leverages[category]) {
-                userLeverage = prefs.leverages[category].current;
-            } else if (md.instrument.marginFactorUnit === 'PERCENTAGE') {
-                userLeverage = 100 / md.instrument.marginFactor;
-            }
-
+            // 3. Resolve Domain Logic
+            const userLeverage = LeverageService.getEffectiveLeverage(md, prefs);
             const precision = Math.pow(10, md.snapshot.decimalPlacesFactor);
 
             return {

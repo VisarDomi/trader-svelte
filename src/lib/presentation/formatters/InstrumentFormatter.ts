@@ -1,11 +1,10 @@
 import type { MarketDetailsResponse } from '$lib/types/market.js';
-import type { LeverageCategory } from '$lib/types/account.js';
 import type { AccountPreferences } from '$lib/types/account.js';
+import { LeverageService } from '$lib/domain/account/LeverageService.js';
 
 export class InstrumentFormatter {
     private readonly PROFIT_COLOR = '#26a69a';
     private readonly LOSS_COLOR = '#ef5350';
-    private readonly TEXT_COLOR = '#d1d4dc';
 
     constructor(private preferences: AccountPreferences | null) {}
 
@@ -18,24 +17,27 @@ export class InstrumentFormatter {
     }
 
     getLeverageDisplay(market: MarketDetailsResponse): string {
-        const category = market.instrument.type as LeverageCategory;
+        // Use shared domain logic
+        const leverage = LeverageService.getEffectiveLeverage(market, this.preferences);
 
-        // 1. User Preference Override
-        if (this.preferences?.leverages[category]) {
-            return `1:${this.preferences.leverages[category].current}`;
+        // If the service returned a valid leverage > 1, format it
+        if (leverage > 1) {
+            // Check if it's a default (just for display nuance)
+            // We can check if prefs exist to decide if we add "(Default)" text,
+            // but strictly speaking "1:20" is cleaner.
+            // Let's stick to the previous behavior of identifying defaults if useful,
+            // or just standardizing.
+
+            // Re-implementing specific "Default" label logic if needed,
+            // or simplifying to just the number.
+            // Let's keep it simple:
+            return `1:${leverage}`;
         }
 
-        // 2. Default from Instrument
-        if (market.instrument.marginFactorUnit === 'PERCENTAGE' && market.instrument.marginFactor > 0) {
-            const lev = Math.round(100 / market.instrument.marginFactor);
-            return `1:${lev} (Default)`;
-        }
-
-        // 3. Raw Fallback
+        // Fallback for non-percentage or weird cases
         return `${market.instrument.marginFactor}%`;
     }
 
-    // Helper to keep the view clean
     formatPrice(price: number, decimalPlaces: number): string {
         return price.toFixed(decimalPlaces);
     }
