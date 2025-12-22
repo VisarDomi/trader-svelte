@@ -15,10 +15,13 @@ class ViewportService {
         if (typeof window !== 'undefined') {
             this.width = window.innerWidth;
             this.height = window.innerHeight;
-
-            this.maxWidth = parseFloat(localStorage.getItem(STORAGE.MAX_LONG_KEY) || '0');
-            this.maxHeight = parseFloat(localStorage.getItem(STORAGE.MAX_SHORT_KEY) || '0');
+            this.loadCache();
         }
+    }
+
+    private loadCache() {
+        this.maxWidth = parseFloat(localStorage.getItem(STORAGE.MAX_LONG_KEY) || '0');
+        this.maxHeight = parseFloat(localStorage.getItem(STORAGE.MAX_SHORT_KEY) || '0');
     }
 
     init() {
@@ -39,6 +42,19 @@ class ViewportService {
         window.visualViewport?.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
     }
 
+    resetCache() {
+        if (typeof window === 'undefined') return;
+
+        localStorage.removeItem(STORAGE.MAX_LONG_KEY);
+        localStorage.removeItem(STORAGE.MAX_SHORT_KEY);
+
+        this.maxWidth = 0;
+        this.maxHeight = 0;
+
+        // Force a rescan of current clean state
+        this.scan();
+    }
+
     private handleResize = () => {
         this.scan();
     }
@@ -54,6 +70,7 @@ class ViewportService {
 
         const sources = [
             { w: screen.width, h: screen.height },
+            { w: window.innerWidth, h: window.innerHeight } // Also consider window for max capture
         ];
 
         let changed = false;

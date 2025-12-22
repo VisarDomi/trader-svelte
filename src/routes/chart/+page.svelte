@@ -3,6 +3,7 @@
     import { ChartLogic } from './logic.svelte.js';
     import TopBar from './TopBar.svelte';
     import Overlay from './Overlay.svelte';
+    import PwaDebug from '$lib/components/PwaDebug.svelte';
     import * as CHART_CONST from '$lib/constants/chart.js';
     import * as TRADING from '$lib/constants/trading.js';
 
@@ -20,6 +21,7 @@
 
 <TopBar layout={logic.layout} />
 <Overlay overlay={logic.overlay} />
+<PwaDebug />
 
 <!-- Planning Mode Confirmation Popup -->
 {#if logic.isPlanning && logic.plannedTrade}
