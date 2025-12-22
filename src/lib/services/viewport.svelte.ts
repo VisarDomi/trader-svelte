@@ -1,6 +1,7 @@
 import * as STORAGE from "$lib/constants/storage.js";
 import * as EVENTS from "$lib/constants/events.js";
 import { TOO_MANY_PIXELS } from "$lib/constants/viewport.js";
+import { isPWA } from "$lib/utils/platform.js";
 
 class ViewportService {
     width = $state(0);
@@ -46,6 +47,10 @@ class ViewportService {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
 
+        // If NOT in PWA mode, we do NOT use the caching logic.
+        // We simply trust the browser's reported dimensions.
+        if (!isPWA()) return;
+
         const sources = [
             { w: window.innerWidth, h: window.innerHeight },
             { w: window.outerWidth, h: window.outerHeight },
@@ -81,10 +86,16 @@ class ViewportService {
 
     /**
      * Returns the 'best' dimensions for the chart container.
-     * On iOS, this uses the cached 'max' values to prevent jumping when the URL bar collapses.
-     * On Desktop/Android, it matches the window.
+     * On iOS PWA, this uses the cached 'max' values to prevent jumping when the URL bar collapses.
+     * On Desktop/Android/Browser, it matches the window.
      */
     getChartDimensions() {
+        // Non-PWA Mode: Always return current window dimensions
+        if (!isPWA()) {
+            return { width: this.width, height: this.height };
+        }
+
+        // PWA Mode: Use cached max logic
         const isLandscape = this.width > this.height;
 
         // Simple fallback if no max data yet

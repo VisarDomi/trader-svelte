@@ -13,7 +13,10 @@
 <div style="padding: 1rem; max-width: 800px; margin: 0 auto;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h1>Preferences</h1>
-        <a href="/accounts" style="color: #d1d4dc;">← Back</a>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <a href="/viewport" style="color: #666; font-size: 0.8rem; text-decoration: none; border: 1px solid #333; padding: 4px 8px; border-radius: 4px;">Viewport Debug</a>
+            <a href="/accounts" style="color: #d1d4dc;">← Back</a>
+        </div>
     </div>
 
     {#if logic.currentAccount}

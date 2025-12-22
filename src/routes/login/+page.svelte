@@ -1,6 +1,8 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { Login } from './logic.svelte.js';
+    import ViewportDebug from '$lib/components/ViewportDebug.svelte';
+
     const login = new Login();
     onMount(() => {
         login.init();
@@ -32,22 +34,46 @@
     </button>
 </div>
 
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2rem;">
+<!-- Changed from Grid to Flex Column to prevent width overflow -->
+<div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 2rem; max-width: 100%;">
     <!-- REAL STATUS -->
-    <div style="border: 1px solid #26a69a; padding: 1rem; border-radius: 8px;">
+    <div style="border: 1px solid #26a69a; padding: 1rem; border-radius: 8px; overflow: hidden;">
         <h3>REAL (Charts)</h3>
         <p>Status: <strong>{login.realStatus}</strong></p>
         <button onclick={() => login.retryReal()}>Retry Real</button>
-        {#if login.realTokens}<div style="font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: green;">Token: {login.realTokens.cst.substring(0,100)}...</div>{/if}
+        {#if login.realTokens}
+            <div style="
+                font-size: 0.7rem;
+                margin-top: 5px;
+                color: green;
+                word-break: break-all; /* Forces wrap on long tokens */
+                white-space: normal;
+            ">
+                Token: {login.realTokens.cst.substring(0,100)}...
+            </div>
+        {/if}
     </div>
 
     <!-- DEMO STATUS -->
-    <div style="border: 1px solid #ef5350; padding: 1rem; border-radius: 8px;">
+    <div style="border: 1px solid #ef5350; padding: 1rem; border-radius: 8px; overflow: hidden;">
         <h3>DEMO (Trading)</h3>
         <p>Status: <strong>{login.demoStatus}</strong></p>
         <button onclick={() => login.retryDemo()}>Retry Demo</button>
-        {#if login.demoTokens}<div style="font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: green;">Token: {login.demoTokens.cst.substring(0,100)}...</div>{/if}
+        {#if login.demoTokens}
+            <div style="
+                font-size: 0.7rem;
+                margin-top: 5px;
+                color: green;
+                word-break: break-all; /* Forces wrap on long tokens */
+                white-space: normal;
+            ">
+                Token: {login.demoTokens.cst.substring(0,100)}...
+            </div>
+        {/if}
     </div>
 </div>
 
 <p style="margin-top: 1rem;"><a href="/">← Back Home</a></p>
+
+<!-- Added debug component to monitor dimensions during login -->
+<ViewportDebug />

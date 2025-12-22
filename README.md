@@ -2,6 +2,9 @@
 
 Click on the graph to open a position with all of your deposited cash. Stop loss at 50%.
 
+## bugs
+* how can resizing be so hard... - it's not netlify only, localhost also breaks... howdid i break this stuff?
+
 ## dev notes: pwa
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -1,11 +1,12 @@
 import type { IChartApi } from "lightweight-charts";
-import { isIOS } from "$lib/utils/platform.js";
+import { isIOS, isPWA } from "$lib/utils/platform.js";
 import { viewport } from "$lib/services/viewport.svelte.js";
 import { getTimeScaleHeight } from "$lib/utils/chart.js";
 import * as CHART_CONST from '$lib/constants/chart.js';
 
 export class ChartUI {
     isIosDevice = $state(false);
+    isPwa = $state(false);
     isDataLoaded = $state(false);
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
@@ -13,19 +14,16 @@ export class ChartUI {
     constructor() {
         if (typeof window !== 'undefined') {
             this.isIosDevice = isIOS();
+            this.isPwa = isPWA();
         }
 
         // Centralized resize logic using Svelte 5 effects.
-        // This replaces manual window event listeners.
         $effect(() => {
-            // Accessing viewport properties registers this effect as a dependency.
-            // When viewport changes, this runs automatically.
             const width = viewport.width;
             const height = viewport.height;
             const maxW = viewport.maxWidth;
             const maxH = viewport.maxHeight;
 
-            // Only update if we have the chart instance ready
             if (this.container && this.chart) {
                 this.updateDimensions();
             }
@@ -37,9 +35,8 @@ export class ChartUI {
         this.container = container;
 
         if (typeof window !== 'undefined') {
-            // Scroll handling is specific to iOS PWA 'bounce' behavior,
-            // which ViewportService doesn't handle. Keeping this local.
-            if (this.isIosDevice) {
+            // Only apply scroll hack in iOS PWA mode
+            if (this.isIosDevice && this.isPwa) {
                 window.addEventListener('scroll', this.handleScroll);
             }
         }
@@ -50,9 +47,6 @@ export class ChartUI {
 
     setDataLoaded(loaded: boolean) {
         this.isDataLoaded = loaded;
-        // Effect will handle dimension updates, but we can trigger one now to be safe
-        // or rely on the reactive state if we made dimensions reactive.
-        // For now, imperative call ensures immediate update.
         if (loaded) {
             setTimeout(() => this.updateDimensions(), 0);
         }
@@ -68,7 +62,8 @@ export class ChartUI {
     }
 
     private handleScroll = () => {
-        if (!this.isIosDevice || !this.isDataLoaded || !this.container) return;
+        // Explicitly check for PWA here too
+        if (!this.isIosDevice || !this.isPwa || !this.isDataLoaded || !this.container) return;
         const chartH = this.container.clientHeight;
         const winH = window.innerHeight;
         const target = this.getScrollTarget(chartH, winH);
@@ -88,12 +83,13 @@ export class ChartUI {
         let width: number;
         let height: number;
 
-        if (this.isIosDevice && this.isDataLoaded) {
+        // Use PWA specific logic only if strictly in iOS PWA mode
+        if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
             const dims = viewport.getChartDimensions();
             width = dims.width;
             height = dims.height;
         } else {
-            // Standard behavior for Desktop / Android
+            // Standard behavior for Desktop / Android / Non-PWA
             width = viewport.width;
             height = viewport.height;
         }
@@ -110,7 +106,7 @@ export class ChartUI {
             }
         });
 
-        if (this.isIosDevice && this.isDataLoaded) {
+        if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
             const scrollTarget = this.getScrollTarget(height, window.innerHeight);
             window.scrollTo({
                 top: scrollTarget,
