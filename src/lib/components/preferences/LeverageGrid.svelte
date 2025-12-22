@@ -27,7 +27,7 @@
                     {#each info.available as option}
                         <button
                                 class="opt-btn"
-                                class.selected={currentSelected === option}
+                                class:selected={currentSelected === option}
                                 onclick={() => onSelect(category, option)}
                         >
                             1:{option}
