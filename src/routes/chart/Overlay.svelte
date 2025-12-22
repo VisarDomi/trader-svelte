@@ -5,14 +5,21 @@
     import * as AUTH from '$lib/constants/auth.js';
     import * as TRADING from '$lib/constants/trading.js';
 
+    // Stores
+    import { accountStore } from '$lib/stores/account.svelte.js';
+    import { positionStore } from '$lib/stores/position.svelte.js';
+    import { session } from '$lib/services/session.js';
+
     let { overlay }: { overlay: ChartOverlay } = $props();
+
+    const mode = session.mode; // Read once on mount is fine for UI coloring
 
     onDestroy(() => {
         overlay.destroy();
     });
 </script>
 
-{#if overlay.account}
+{#if accountStore.activeAccount}
     <div style="
         position: fixed;
         left: 0;
@@ -38,8 +45,8 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                min-height: 4rem; /* Increased height */
-                border-left: 4px solid {overlay.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
+                min-height: 4rem;
+                border-left: 4px solid {mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
             "
         >
             {#if overlay.isOpen}
@@ -79,7 +86,7 @@
                         display: flex;
                         align-items: center;
                         border-right: 1px solid #444;
-                        max-width: 100px; /* Constrain width to force wrap */
+                        max-width: 100px;
                     "
                 >
                     <div style="font-size: 0.8rem; font-weight: bold; line-height: 1.1; word-wrap: break-word;">
@@ -87,7 +94,7 @@
                     </div>
                 </div>
 
-                <!-- 2. Account Info (Mode + Name + Deposit) -->
+                <!-- 2. Account Info -->
                 <div
                         role="button"
                         tabindex="0"
@@ -108,10 +115,10 @@
                         font-size: 0.6rem;
                         font-weight: 900;
                         letter-spacing: 1px;
-                        color: {overlay.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
+                        color: {mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
                         margin-bottom: 2px;
                     ">
-                        {overlay.mode}
+                        {mode}
                     </div>
                     <div style="
                         font-weight: bold;
@@ -121,15 +128,15 @@
                         line-height: 1;
                         word-wrap: break-word;
                     ">
-                        {overlay.account.accountName}
+                        {accountStore.activeAccount.accountName}
                     </div>
                     <div style="font-weight: bold; font-size: 0.9rem; color: #fff;">
-                        {overlay.account.symbol}{overlay.account.balance.deposit.toFixed(2)}
+                        {accountStore.activeAccount.symbol}{accountStore.activeAccount.balance.deposit.toFixed(2)}
                     </div>
                 </div>
 
                 <!-- 3. Position Info / Close Button -->
-                {#if overlay.position}
+                {#if positionStore.activePosition}
                     <div
                             role="button"
                             tabindex="0"
@@ -152,17 +159,18 @@
                             font-weight: bold;
                             font-size: 0.85rem;
                             line-height: 1.1;
-                            color: {overlay.position.position.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}
+                            color: {positionStore.activePosition.position.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}
                         ">
-                            {overlay.position.position.direction}<br>{overlay.position.position.size}
+                            {positionStore.activePosition.position.direction}<br>
+                            {positionStore.activePosition.position.size}
                         </div>
                     </div>
 
                     <button
                             onclick={() => overlay.closePosition()}
-                            disabled={overlay.isClosing}
+                            disabled={positionStore.isClosing}
                             style="
-                            background: {overlay.isClosing ? '#444' : '#ef5350'};
+                            background: {positionStore.isClosing ? '#444' : '#ef5350'};
                             border: none;
                             color: white;
                             padding: 0 0.5rem;
@@ -171,12 +179,12 @@
                             border-top-right-radius: 8px;
                             border-bottom-right-radius: 8px;
                             font-size: 0.8rem;
-                            width: 60px; /* Force wrap */
+                            width: 60px;
                             line-height: 1.1;
                             white-space: normal;
                         "
                     >
-                        {overlay.isClosing ? 'Closing...' : 'Close Position'}
+                        {positionStore.isClosing ? '...' : 'Close'}
                     </button>
                 {/if}
             </div>

@@ -7,6 +7,9 @@
     import * as CHART_CONST from '$lib/constants/chart.js';
     import * as TRADING from '$lib/constants/trading.js';
 
+    // Stores
+    import { tradeManager } from '$lib/stores/trade.svelte.js';
+
     let chartContainer: HTMLDivElement;
     const logic = new ChartLogic();
 
@@ -24,10 +27,10 @@
 <PwaDebug />
 
 <!-- Planning Mode Confirmation Popup -->
-{#if logic.isPlanning && logic.plannedTrade}
+{#if tradeManager.isPlanning && tradeManager.plannedTrade}
     <div style="
         position: fixed;
-        top: 8rem; /* Adjusted position */
+        top: 8rem;
         left: 50%;
         transform: translateX(-50%);
         background: rgba(20, 20, 20, 0.95);
@@ -43,16 +46,20 @@
         <h3 style="margin-bottom: 1rem; color: #d1d4dc;">Open Position?</h3>
 
         <div style="margin-bottom: 1.5rem; font-size: 1.1rem;">
-            <div style="font-weight: bold; color: {logic.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
-                {logic.plannedTrade.direction}
+            <div style="font-weight: bold; color: {tradeManager.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
+                {tradeManager.plannedTrade.direction}
             </div>
-            <div style="color: #fff; margin-top: 0.25rem;">Size: {logic.plannedTrade.size}</div>
+            <div style="color: #fff; margin-top: 0.25rem;">Size: {tradeManager.plannedTrade.size}</div>
+            <!-- Added details for better visibility -->
+            <div style="color: #888; font-size: 0.8rem; margin-top: 0.5rem;">
+                TP: {tradeManager.plannedTrade.profitLevel} | SL: {tradeManager.plannedTrade.stopLevel}
+            </div>
         </div>
 
         <div style="display: flex; gap: 1rem; justify-content: center;">
             <button
                     onclick={() => logic.cancelPlanning()}
-                    disabled={logic.isExecuting}
+                    disabled={tradeManager.isExecuting}
                     style="
                     padding: 0.75rem 1.5rem;
                     background: transparent;
@@ -66,10 +73,10 @@
             </button>
             <button
                     onclick={() => logic.confirmTrade()}
-                    disabled={logic.isExecuting}
+                    disabled={tradeManager.isExecuting}
                     style="
                     padding: 0.75rem 1.5rem;
-                    background: {logic.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'};
+                    background: {tradeManager.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'};
                     border: none;
                     color: white;
                     border-radius: 4px;
@@ -77,7 +84,7 @@
                     font-weight: bold;
                 "
             >
-                {logic.isExecuting ? '...' : 'OPEN'}
+                {tradeManager.isExecuting ? '...' : 'OPEN'}
             </button>
         </div>
     </div>

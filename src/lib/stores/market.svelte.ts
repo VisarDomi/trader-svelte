@@ -3,11 +3,9 @@ import { getHistoricalPrices } from '$lib/services/market.js';
 import { api } from '$lib/services/api.svelte.js';
 import { session } from '$lib/services/session.js';
 import * as TRADING from '$lib/constants/trading.js';
-import * as AUTH from '$lib/constants/auth.js';
 import type { ChartData } from '$lib/types/trading.js';
 import type { ChartCandle, QuoteMessage } from '$lib/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
-import {AccountStore} from "$stores/account.svelte";
 
 export class MarketStore {
     // State Runes
@@ -31,6 +29,12 @@ export class MarketStore {
         this.epic = epic;
         this.dataSource = dataSource;
         this.isLoaded = false;
+
+        // Reset prices to prevent stale data
+        this.bid = 0;
+        this.offer = 0;
+        this.lastCandle = null;
+        this.history = [];
 
         this.connectStream();
         await this.loadHistory();
@@ -61,8 +65,12 @@ export class MarketStore {
     }
 
     private async loadHistory() {
-        const client = api.getClientForMode(AUTH.REAL_TYPE); // Charts always use Real data if possible
-        if (!client) return;
+        // CHANGED: Use active client (Demo or Real) instead of forcing Real
+        const client = api.client;
+        if (!client) {
+            console.warn("No API client available for history loading");
+            return;
+        }
 
         this.isLoaded = false;
         try {
@@ -101,7 +109,7 @@ export class MarketStore {
             return;
         }
 
-        // Clone to trigger reactivity
+        // Clone to ensure reactivity triggers
         const c = { ...this.lastCandle };
 
         if (time === c.time) {
@@ -117,7 +125,6 @@ export class MarketStore {
                 low: price,
                 close: price
             };
-            // Return early as we created a new object reference above
             return;
         }
 

@@ -8,24 +8,30 @@ export class ChartPainter {
     constructor(store: MarketStore) {
         this.store = store;
 
-        // Reactive effect: When history changes (re-fetch or data source switch), set data
+        // Reactive effect: When history changes
         $effect(() => {
-            if (this.series && this.store.isLoaded && this.store.history.length > 0) {
-                this.series.setData(this.store.history);
+            const loaded = this.store.isLoaded;
+            const history = this.store.history;
+
+            if (this.series && loaded && history.length > 0) {
+                this.series.setData(history);
             }
         });
 
-        // Reactive effect: When the last candle updates (streaming), update the series
+        // Reactive effect: When the last candle updates (streaming)
         $effect(() => {
-            if (this.series && this.store.isLoaded && this.store.lastCandle) {
-                this.series.update(this.store.lastCandle);
+            const candle = this.store.lastCandle;
+            const loaded = this.store.isLoaded;
+
+            if (this.series && loaded && candle) {
+                this.series.update(candle);
             }
         });
     }
 
     init(series: ISeriesApi<"Candlestick">) {
         this.series = series;
-        // Initial paint if store is already loaded
+        // Immediate paint if data exists (handles race condition)
         if (this.store.isLoaded && this.store.history.length > 0) {
             this.series.setData(this.store.history);
         }
