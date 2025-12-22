@@ -13,7 +13,6 @@ import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
 // Stores & Logic
 import { marketStore } from '$lib/stores/market.svelte.js';
-import { accountStore } from '$lib/stores/account.svelte.js';
 import { positionStore } from '$lib/stores/position.svelte.js';
 import { tradeManager } from '$lib/stores/trade.svelte.js';
 import { session } from '$lib/services/session.js';
@@ -42,10 +41,6 @@ export class ChartLogic {
 
         // Master Effect: Update Lines whenever relevant state changes
         $effect(() => {
-            // Register dependencies
-            const _tick = marketStore.lastCandle;
-            const _vp = viewport.width;
-
             if (tradeManager.isPlanning) {
                 this.lines.update(tradeManager.getMockPosition());
             } else {
@@ -62,18 +57,17 @@ export class ChartLogic {
         this.currentEpic = session.lastEpic;
         this.watchdog.start();
 
-        // 2. Initialize Chart UI (Empty)
+        // 2. Initialize Chart UI
         this.initChart(container);
 
         // 3. Load Data Context
         const context = await this.loader.loadContext(this.currentEpic);
-        if (!context) return; // Error handled in loader
+        if (!context) return;
 
-        // 4. Configure Chart Components with loaded Context
+        // 4. Configure Chart Components
         if (this.chart) {
             this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(context.precision));
 
-            // Connect Components to the Series
             this.painter.init(this.series);
             this.lines.init(this.series);
             this.interaction.configure(this.series, context.marketDetails, context.userLeverage);
@@ -92,7 +86,6 @@ export class ChartLogic {
 
     destroy() {
         this.watchdog.stop();
-
         this.layout.destroy();
         this.painter.destroy();
         marketStore.disconnect();
@@ -113,13 +106,13 @@ export class ChartLogic {
         this.layout.init(this.chart, container);
     }
 
-    // Proxy methods for UI access
+    // Handles the Visual Reaction to a confirmed trade
     async confirmTrade() {
         const result = await tradeManager.execute();
-        if (result) {
-            positionStore.set(result);
-            accountStore.updateBalance(result.position.initialBalance || 0);
 
+        // Note: tradeManager updates PositionStore/AccountStore internally.
+        // We only care about updating the Chart Source (Bid/Ask) here.
+        if (result) {
             const source = result.position.direction === TRADING.SELL_DIRECTION
                 ? TRADING.CHART_DATA_SOURCE_OFR
                 : TRADING.CHART_DATA_SOURCE_BID;
@@ -129,6 +122,9 @@ export class ChartLogic {
 
     cancelPlanning() {
         tradeManager.cancel();
+        // Reset chart to Bid on cancel, or keep previous?
+        // Defaulting to BID is safe, or checking current position logic.
+        // Assuming BID as default safe state if no position exists.
         marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
     }
 

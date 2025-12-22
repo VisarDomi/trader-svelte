@@ -3,7 +3,6 @@ import {
     type TradeCalculationResult
 } from '$lib/utils/trading.js';
 import { createPosition, getConfirmation } from '$lib/services/trading.js';
-import { resolveInitialBalance } from '$lib/utils/position.js';
 import { session } from '$lib/services/session.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
 import { api } from '$lib/services/api.svelte.js';
@@ -13,6 +12,7 @@ import type { MarketDetailsResponse } from '$lib/types/market.js';
 
 // Dependencies
 import { accountStore } from './account.svelte.js';
+import { positionStore } from './position.svelte.js';
 
 export class TradeManager {
     // State
@@ -75,7 +75,8 @@ export class TradeManager {
 
     /**
      * Executes the currently planned trade.
-     * Returns the created Position object if successful.
+     * Updates PositionStore and AccountStore on success.
+     * Returns the result for any UI-specific reactions (like switching chart data source).
      */
     async execute(): Promise<PositionResponse | null> {
         if (!this.plannedTrade || !this.currentMarket) return null;
@@ -115,16 +116,15 @@ export class TradeManager {
             this.isPlanning = false;
             this.plannedTrade = null;
 
-            // 5. Construct a "Fake" PositionResponse to return immediately
-            // so the UI updates without waiting for a full re-fetch
+            // 5. Construct "Fake" PositionResponse for immediate UI update
             const newPositionBody: PositionBody = {
-                contractSize: 0, // Unknown immediately, usually fine
+                contractSize: 0,
                 createdDate: confirmation.date,
                 createdDateUTC: confirmation.date,
                 dealId: confirmation.dealId,
                 dealReference: confirmation.dealReference,
                 size: confirmation.size,
-                leverage: 1, // We don't know exact leverage used by backend, but UI just needs existence
+                leverage: 1,
                 upl: 0,
                 direction: confirmation.direction,
                 level: confirmation.level,
@@ -135,10 +135,16 @@ export class TradeManager {
                 initialBalance: snapshotBalance
             };
 
-            return {
-                market: this.currentMarket.snapshot as any, // Cast for simplicity
+            const result: PositionResponse = {
+                market: this.currentMarket.snapshot as any,
                 position: newPositionBody
             };
+
+            // 6. Update Application State
+            positionStore.set(result);
+            accountStore.updateBalance(snapshotBalance);
+
+            return result;
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
