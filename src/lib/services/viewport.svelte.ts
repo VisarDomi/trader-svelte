@@ -110,4 +110,4 @@ class ViewportService {
     }
 }
 
-export const viewport = new ViewportService();
+export const viewport = new ViewportService(); //broken state
