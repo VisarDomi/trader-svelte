@@ -1,30 +1,30 @@
-import {
-    calculatePositionParameters,
-    type TradeCalculationResult
-} from '$lib/utils/trading.js';
-import { createPosition, getConfirmation } from '$lib/services/trading.js';
-import { session } from '$lib/services/session.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
 import { api } from '$lib/services/api.svelte.js';
-import * as TRADING from '$lib/constants/trading.js';
-import type { Direction, TradeRequest, PositionBody, PositionResponse } from '$lib/types/trading.js';
+import { TradePlanner, type PlannedTrade } from '$lib/domain/trade/TradePlanner.js';
+import { TradeExecutor } from '$lib/domain/trade/TradeExecutor.js';
+
+import type { Direction, PositionResponse, PositionBody } from '$lib/types/trading.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
 
 // Dependencies
 import { accountStore } from './account.svelte.js';
 import { positionStore } from './position.svelte.js';
 
-export class TradeManager {
+export class TradeStore {
     // State
     isPlanning = $state(false);
     isExecuting = $state(false);
-    plannedTrade = $state<TradeCalculationResult & { direction: Direction, entryPrice: number } | null>(null);
+    plannedTrade = $state<PlannedTrade | null>(null);
 
-    // Context required for calculation (passed in during plan phase)
+    // Internal Services
+    private planner = new TradePlanner();
+    private executor = new TradeExecutor();
+
+    // Context
     private currentMarket: MarketDetailsResponse | null = null;
 
     /**
-     * Called when user clicks the chart. Calculates potential trade parameters.
+     * Prepares a trade based on user input (Chart Click).
      */
     plan(
         price: number,
@@ -33,38 +33,30 @@ export class TradeManager {
         userLeverage: number
     ) {
         this.currentMarket = market;
-        const balance = accountStore.available;
 
-        if (balance <= 0) {
-            notifications.error("Insufficient funds to plan trade.");
-            return;
-        }
+        try {
+            const plan = this.planner.calculate(
+                market,
+                accountStore.available,
+                userLeverage,
+                direction,
+                price
+            );
 
-        const calculation = calculatePositionParameters({
-            accountBalance: balance,
-            leverage: userLeverage,
-            entryPrice: price,
-            lotSize: market.instrument.lotSize || 1,
-            minSizeIncrement: market.dealingRules.minSizeIncrement.value,
-            minDealSize: market.dealingRules.minDealSize.value,
-            decimalPlaces: market.snapshot.decimalPlacesFactor,
-            direction: direction,
-            clickPrice: price,
-            stopLossRatio: TRADING.STOP_LOSS_RATIO
-        });
+            if (!plan) {
+                notifications.error("Calculated size below minimum deal size.");
+                this.cancel();
+                return;
+            }
 
-        if (!calculation) {
-            notifications.error("Calculated size below minimum deal size.");
+            this.plannedTrade = plan;
+            this.isPlanning = true;
+
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            notifications.error(msg);
             this.cancel();
-            return;
         }
-
-        this.plannedTrade = {
-            ...calculation,
-            direction,
-            entryPrice: price
-        };
-        this.isPlanning = true;
     }
 
     cancel() {
@@ -75,8 +67,6 @@ export class TradeManager {
 
     /**
      * Executes the currently planned trade.
-     * Updates PositionStore and AccountStore on success.
-     * Returns the result for any UI-specific reactions (like switching chart data source).
      */
     async execute(): Promise<PositionResponse | null> {
         if (!this.plannedTrade || !this.currentMarket) return null;
@@ -91,56 +81,24 @@ export class TradeManager {
         }
 
         try {
-            const tradeReq: TradeRequest = {
-                epic: this.currentMarket.instrument.epic,
-                direction: this.plannedTrade.direction,
-                size: this.plannedTrade.size,
-                stopLevel: this.plannedTrade.stopLevel,
-                profitLevel: this.plannedTrade.profitLevel
-            };
-
-            // 1. Send Request
-            const response = await createPosition(client, tradeReq);
-
-            // 2. Wait for Confirmation (Poll)
-            const confirmation = await getConfirmation(client, response.dealReference);
-
-            // 3. Update Local Balance State immediately
-            // (We assume the whole deposit was used/risk calculated on current balance)
+            // Snapshot balance before execution
             const snapshotBalance = accountStore.balance;
-            session.setInitialBalance(confirmation.dealId, snapshotBalance);
+            const currency = accountStore.activeAccount?.currency || "USD";
 
-            notifications.success(`${confirmation.direction} ${confirmation.size} Executed`);
+            const result = await this.executor.execute(
+                client,
+                this.plannedTrade,
+                this.currentMarket,
+                currency,
+                snapshotBalance
+            );
 
-            // 4. Reset Self
-            this.isPlanning = false;
-            this.plannedTrade = null;
+            notifications.success(`${result.position.direction} ${result.position.size} Executed`);
 
-            // 5. Construct "Fake" PositionResponse for immediate UI update
-            const newPositionBody: PositionBody = {
-                contractSize: 0,
-                createdDate: confirmation.date,
-                createdDateUTC: confirmation.date,
-                dealId: confirmation.dealId,
-                dealReference: confirmation.dealReference,
-                size: confirmation.size,
-                leverage: 1,
-                upl: 0,
-                direction: confirmation.direction,
-                level: confirmation.level,
-                currency: accountStore.activeAccount?.currency || "USD",
-                guaranteedStop: confirmation.guaranteedStop,
-                stopLevel: confirmation.stopLevel,
-                profitLevel: confirmation.profitLevel,
-                initialBalance: snapshotBalance
-            };
+            // Reset Self
+            this.cancel();
 
-            const result: PositionResponse = {
-                market: this.currentMarket.snapshot as any,
-                position: newPositionBody
-            };
-
-            // 6. Update Application State
+            // Update Application State
             positionStore.set(result);
             accountStore.updateBalance(snapshotBalance);
 
@@ -155,7 +113,10 @@ export class TradeManager {
         }
     }
 
-    // Helper for the Line Renderer to visualize the "Ghost" position during planning
+    /**
+     * Creates a temporary "Position" object from the current plan.
+     * Used by the Chart Lines to visualize the trade before it happens.
+     */
     getMockPosition(): PositionResponse | null {
         if (!this.plannedTrade || !this.currentMarket) return null;
 
@@ -184,4 +145,4 @@ export class TradeManager {
     }
 }
 
-export const tradeManager = new TradeManager();
+export const tradeManager = new TradeStore();
