@@ -3,69 +3,63 @@ import type { IChartApi, ISeriesApi, MouseEventParams } from 'lightweight-charts
 import { goto } from '$app/navigation';
 import { viewport } from '$lib/services/viewport.svelte.js';
 
-// Sub-systems
+// Architecture Components
 import { ChartUI } from './ui.svelte.js';
-import { ChartFeed } from './feed.svelte.js';
-import { ChartOverlay } from './overlay.svelte.js';
+import { ChartPainter } from './painter.svelte.js';
 import { ChartLines } from './lines.svelte.js';
+import { ChartOverlay } from './overlay.svelte.js'; // We'll keep old overlay for now
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
-// Services & Utils
-import * as TRADING from '$lib/constants/trading.js';
-import { session } from '$lib/services/session.js';
-import { notifications } from '$lib/services/notifications.svelte.js';
+// Stores & Logic
+import { marketStore } from '$lib/stores/market.svelte.js';
+import { accountStore } from '$lib/stores/account.svelte.js';
+import { positionStore } from '$lib/stores/position.svelte.js';
+import { tradeManager } from '$lib/stores/trade.svelte.js';
 import { authenticateAndStoreSession, startRestHeartbeat } from "$lib/services/auth.js";
 import { getMarketDetails } from "$lib/services/market.js";
-import { getPositions, createPosition, getConfirmation } from "$lib/services/trading.js";
-import { getSyncedAccounts, getPreferences } from "$lib/services/account.js";
+import { getPreferences } from "$lib/services/account.js";
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
-import { resolveInitialBalance } from "$lib/utils/position.js";
-import { calculatePositionParameters, type TradeCalculationResult } from "$lib/utils/trading.js";
-import type { ChartData, PositionResponse, Direction, TradeRequest, PositionBody } from '$lib/types/trading.js';
+import { session } from '$lib/services/session.js';
+import { api } from '$lib/services/api.svelte.js';
+
+import * as TRADING from '$lib/constants/trading.js';
+import type { LeverageCategory } from '$lib/types/account.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
-import type { Account, LeverageCategory } from '$lib/types/account.js';
+import type {ChartData, Direction} from "$lib/types/trading";
 
 export class ChartLogic {
+    // UI Helpers
     layout = new ChartUI();
     overlay = new ChartOverlay();
+    lines = new ChartLines();
 
-    isPlanning = $state(false);
-    isExecuting = $state(false);
-    plannedTrade = $state<TradeCalculationResult & { direction: Direction, entryPrice: number } | null>(null);
+    // Core Logic
+    painter = new ChartPainter(marketStore);
+    watchdog: Watchdog;
 
-    private feed = new ChartFeed();
-    private lines = new ChartLines();
-    private watchdog: Watchdog;
+    // Local Config
     private chart: IChartApi | null = null;
     private series: ISeriesApi<"Candlestick"> | null = null;
-
-    private currentEpic = TRADING.NDX_EPIC;
-    private decimalPlaces = 2;
-    private activePosition: PositionResponse | null = null;
+    private currentEpic = "";
     private marketDetails: MarketDetailsResponse | null = null;
-    private activeAccount: Account | null = null;
     private userLeverage = 1;
-    private currentDataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
-
     private stopAuthHeartbeat: (() => void) | null = null;
-    private isRestarting = false;
 
     constructor() {
-        this.watchdog = new Watchdog(() => this.restartEngine());
+        this.watchdog = new Watchdog(() => this.handleFreeze());
 
+        // Master Effect: Update Lines whenever relevant state changes
         $effect(() => {
-            const _w = viewport.width;
-            const _h = viewport.height;
+            // Trigger on: Viewport resize, Market price tick, Planning state, Active Position
+            const _tick = marketStore.lastCandle;
+            const _vp = viewport.width;
 
-            if (this.activeAccount?.symbol) {
-                let posToUpdate = this.activePosition;
-                if (this.isPlanning && this.plannedTrade && this.marketDetails) {
-                    posToUpdate = this.getMockPlanningPosition();
-                }
-
-                this.lines.update(posToUpdate, this.activeAccount.symbol);
-                this.feed.accountSymbol = this.activeAccount.symbol;
-                this.feed.updateLayout();
+            if (tradeManager.isPlanning) {
+                // Draw Ghost Lines
+                this.lines.update(tradeManager.getMockPosition());
+            } else {
+                // Draw Real Position Lines
+                this.lines.update(positionStore.activePosition);
             }
         });
     }
@@ -79,36 +73,46 @@ export class ChartLogic {
             return;
         }
 
+        this.currentEpic = session.lastEpic;
         this.watchdog.start();
-        if (typeof document !== 'undefined') {
-            document.addEventListener('visibilitychange', this.handleVisibilityChange);
+
+        // 1. Initialize Chart UI
+        this.initChart(container);
+
+        // 2. Load Core Data (Parallel)
+        await Promise.all([
+            accountStore.init(),
+            positionStore.init(this.currentEpic),
+            this.loadMarketConfig()
+        ]);
+
+        // 3. Initialize Feed (Starts Stream & History)
+        // We set data source based on current position direction
+        let source: ChartData = TRADING.CHART_DATA_SOURCE_BID;
+        if (positionStore.activePosition?.position.direction === TRADING.SELL_DIRECTION) {
+            source = TRADING.CHART_DATA_SOURCE_OFR;
         }
 
-        this.currentEpic = session.lastEpic;
-
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        this.chart = createChart(container, getChartOptions(w, h));
-        this.chart.subscribeClick(this.handleChartClick);
-        this.layout.init(this.chart, container);
-
-        await this.loadDataAndFeed(true);
+        await marketStore.init(this.currentEpic, source);
         this.layout.setDataLoaded(true);
+
+        // 4. Initialize Legacy Overlay (Optional, can be refactored later)
+        this.overlay.init(this.currentEpic, () => {
+            // If overlay closes position, refresh our store
+            positionStore.refresh();
+            accountStore.refresh();
+        });
     }
 
     destroy() {
         this.watchdog.stop();
-        if (typeof document !== 'undefined') {
-            document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-        }
-        if (this.stopAuthHeartbeat) {
-            this.stopAuthHeartbeat();
-            this.stopAuthHeartbeat = null;
-        }
+        if (this.stopAuthHeartbeat) this.stopAuthHeartbeat();
 
         this.layout.destroy();
-        this.feed.destroy();
+        this.painter.destroy();
+        marketStore.disconnect();
         this.overlay.destroy();
+
         if (this.chart) {
             this.chart.unsubscribeClick(this.handleChartClick);
             this.chart.remove();
@@ -116,333 +120,112 @@ export class ChartLogic {
         }
     }
 
-    private handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible' && !this.isRestarting) {
-            this.watchdog.checkNow();
-        }
-    };
-
-    private async restartEngine() {
-        if (this.isRestarting) return;
-        this.isRestarting = true;
-        console.log('[Engine] Freeze detected. Restarting...');
-
-        // 1. Teardown
-        // We destroy the feed (Network/WS) but NOT the visual series.
-        // The chart will appear "frozen" with old data during the re-auth/fetch phase.
-        this.feed.destroy();
-
-        if (this.stopAuthHeartbeat) {
-            this.stopAuthHeartbeat();
-            this.stopAuthHeartbeat = null;
-        }
-
-        // 2. Re-Auth
-        try {
-            await authenticateAndStoreSession();
-            this.stopAuthHeartbeat = startRestHeartbeat();
-        } catch (e) {
-            console.error("[Engine] Session invalid on resume", e);
-            await goto('/login');
-            return;
-        }
-
-        // 3. Hydration
-        // Pass false to reuse existing series.
-        // Old data remains on screen until 'loadHistory' inside this call finishes its fetch and swaps the data.
-        await this.loadDataAndFeed(false);
-
-        console.log('[Engine] Restart complete.');
-        this.isRestarting = false;
+    private initChart(container: HTMLDivElement) {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        this.chart = createChart(container, getChartOptions(w, h));
+        this.chart.subscribeClick(this.handleChartClick);
+        this.layout.init(this.chart, container);
     }
 
-    private async loadDataAndFeed(createSeries: boolean) {
-        const mode = session.mode;
-        let tokens = session.getTokens(mode);
-        let client = session.getClient(mode);
-
-        if (!client || !tokens) {
-            await goto('/login');
-            return;
-        }
+    private async loadMarketConfig() {
+        const client = api.client;
+        if (!client) return;
 
         try {
-            // These fetches happen BEFORE clearing any visual state
-            const accounts = await getSyncedAccounts(mode, tokens, client);
-            this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
-
-            client = session.getClient(mode)!;
-            tokens = session.getTokens(mode)!;
-
-            const [md, positionsResp, prefs] = await Promise.all([
+            const [md, prefs] = await Promise.all([
                 getMarketDetails(client, this.currentEpic),
-                getPositions(client),
                 getPreferences(client)
             ]);
-
             this.marketDetails = md;
-            this.decimalPlaces = md.snapshot.decimalPlacesFactor;
 
+            // Determine Leverage
             const category = md.instrument.type as LeverageCategory;
             if (prefs.leverages[category]) {
                 this.userLeverage = prefs.leverages[category].current;
-            } else if (md.instrument.marginFactorUnit === 'PERCENTAGE' && md.instrument.marginFactor > 0) {
+            } else if (md.instrument.marginFactorUnit === 'PERCENTAGE') {
                 this.userLeverage = 100 / md.instrument.marginFactor;
             }
 
-            const foundPos = positionsResp.positions.find(p => p.market.epic === this.currentEpic);
-            if (foundPos && this.activeAccount) {
-                foundPos.position.initialBalance = resolveInitialBalance(foundPos.position, this.activeAccount);
-                this.activePosition = foundPos;
-
-                if (this.activePosition.position.direction === TRADING.SELL_DIRECTION) {
-                    this.currentDataSource = TRADING.CHART_DATA_SOURCE_OFR;
-                } else {
-                    this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
-                }
-            } else {
-                this.activePosition = null;
-                // Preserve current view if restarting without a position, or default to BID
-                this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
-            }
-
-            // Only create series on first load. On restart, we keep the existing one.
-            if (createSeries && this.chart) {
-                const pricePrecision = Math.pow(10, this.decimalPlaces);
-                this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(pricePrecision));
+            // Create Series with correct precision
+            const precision = Math.pow(10, md.snapshot.decimalPlacesFactor);
+            if (this.chart) {
+                this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(precision));
+                this.painter.init(this.series);
                 this.lines.init(this.series);
             }
-
-            // Update Overlay & Lines (Visual update happens here)
-            await this.overlay.init(this.currentEpic, (acc) => this.handlePositionClosed(acc));
-
-            if (this.activeAccount) {
-                this.lines.update(this.activePosition, this.activeAccount.symbol);
-                this.feed.accountSymbol = this.activeAccount.symbol;
-            } else {
-                this.lines.update(this.activePosition, "");
-            }
-
-            // Start Feed: This will fetch history and THEN swap the chart data
-            if (this.series) {
-                await this.feed.initDynamic(
-                    tokens,
-                    this.currentEpic,
-                    this.series,
-                    this.currentDataSource,
-                    this.decimalPlaces,
-                    this.activePosition
-                );
-            }
-
         } catch (e) {
-            console.error("Chart Logic Load Failed", e);
-            notifications.error("Connection failed. Retrying...");
+            console.error("Config Load Failed", e);
         }
     }
 
-    async handlePositionClosed(account: Account | null) {
-        this.activePosition = null;
-        this.feed.position = null;
-        this.lines.update(null, account?.symbol || "");
-        this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
-        await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
+    private handleChartClick = (param: MouseEventParams) => {
+        if (positionStore.activePosition || tradeManager.isExecuting) return;
+        if (!this.series || !this.marketDetails) return;
+        if (!param.point) return;
 
-        if (account) {
-            this.activeAccount = account;
-            this.feed.accountSymbol = account.symbol;
-        } else {
-            await this.refreshAccountData();
-        }
-    }
+        const price = this.series.coordinateToPrice(param.point.y);
+        if (!price) return;
 
-    private async refreshAccountData() {
-        const client = session.getClient(session.mode);
-        if (client) {
-            const accounts = await getSyncedAccounts(session.mode, session.getTokens(session.mode)!, client);
-            this.activeAccount = accounts.find(a => a.preferred) || accounts[0];
-            if (this.activeAccount) {
-                this.feed.accountSymbol = this.activeAccount.symbol;
-            }
-        }
-    }
+        const bid = marketStore.bid;
+        const ask = marketStore.offer;
 
-    private handleChartClick = async (param: MouseEventParams) => {
-        // Prevent interaction during restart/sync
-        if (this.isRestarting) return;
-        if (this.activePosition) return;
-        if (this.isExecuting) return;
-
-        if (!param.point || !this.series || !this.feed.currentBid || !this.feed.currentOfr) return;
-        if (!this.marketDetails || !this.activeAccount) return;
-
-        const clickPrice = this.series.coordinateToPrice(param.point.y);
-        if (clickPrice === null) return;
-
-        const snapshotBid = this.feed.currentBid;
-        const snapshotOfr = this.feed.currentOfr;
-
+        // Determine Direction based on click relative to spread
         let direction: Direction;
-        let targetSource: ChartData;
-        let executionPrice: number;
+        let targetSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
 
-        if (clickPrice > snapshotOfr) {
+        if (price > ask) {
             direction = TRADING.BUY_DIRECTION;
             targetSource = TRADING.CHART_DATA_SOURCE_BID;
-            executionPrice = snapshotOfr;
-        } else if (clickPrice < snapshotBid) {
+        } else if (price < bid) {
             direction = TRADING.SELL_DIRECTION;
             targetSource = TRADING.CHART_DATA_SOURCE_OFR;
-            executionPrice = snapshotBid;
         } else {
-            return;
+            return; // Clicked inside spread
         }
 
-        this.currentDataSource = targetSource;
-        await this.feed.setDataSource(targetSource);
+        // Switch Chart Data Source to match direction (Bid vs Ask chart)
+        marketStore.setDataSource(targetSource);
 
-        const basisBalance = this.activeAccount.balance.deposit;
-
-        const result = calculatePositionParameters({
-            accountBalance: basisBalance,
-            leverage: this.userLeverage,
-            entryPrice: executionPrice,
-            lotSize: this.marketDetails.instrument.lotSize || 1,
-            minSizeIncrement: this.marketDetails.dealingRules.minSizeIncrement.value,
-            minDealSize: this.marketDetails.dealingRules.minDealSize.value,
-            decimalPlaces: this.decimalPlaces,
+        // Delegate to TradeManager
+        tradeManager.plan(
+            targetSource === TRADING.CHART_DATA_SOURCE_OFR ? bid : ask, // Execution Price
             direction,
-            clickPrice,
-            stopLossRatio: TRADING.STOP_LOSS_RATIO
-        });
-
-        if (result) {
-            this.isPlanning = true;
-            this.plannedTrade = {
-                ...result,
-                direction,
-                entryPrice: executionPrice
-            };
-            this.drawPlannedLines();
-        } else {
-            const maxPosSize = (basisBalance * this.userLeverage) / (executionPrice * (this.marketDetails.instrument.lotSize || 1));
-            const minSize = this.marketDetails.dealingRules.minDealSize.value;
-            notifications.error(`Plan Failed. Deposit: ${basisBalance.toFixed(2)}, MaxSize: ${maxPosSize.toFixed(2)}, MinReq: ${minSize}`);
-        }
+            this.marketDetails,
+            this.userLeverage
+        );
     };
 
-    private getMockPlanningPosition(): PositionResponse | null {
-        if (!this.plannedTrade || !this.marketDetails || !this.activeAccount) return null;
+    async confirmTrade() {
+        const result = await tradeManager.execute();
+        if (result) {
+            // Update Stores
+            positionStore.set(result);
+            accountStore.updateBalance(result.position.initialBalance || 0);
 
-        const mockBody: PositionBody = {
-            contractSize: 0,
-            createdDate: new Date().toISOString(),
-            createdDateUTC: new Date().toISOString(),
-            dealId: "planning",
-            dealReference: "planning",
-            size: this.plannedTrade.size,
-            leverage: this.userLeverage,
-            upl: 0,
-            direction: this.plannedTrade.direction,
-            level: this.plannedTrade.entryPrice,
-            currency: this.marketDetails.instrument.currency,
-            guaranteedStop: false,
-            stopLevel: this.plannedTrade.stopLevel,
-            profitLevel: this.plannedTrade.profitLevel,
-            initialBalance: this.activeAccount.balance.deposit
-        };
-
-        return {
-            market: {
-                ...this.marketDetails.snapshot,
-                epic: this.currentEpic,
-                instrumentName: this.marketDetails.instrument.name,
-                symbol: this.marketDetails.instrument.symbol,
-                expiry: '-',
-                instrumentType: this.marketDetails.instrument.type,
-                lotSize: this.marketDetails.instrument.lotSize,
-                streamingPricesAvailable: true
-            } as any,
-            position: mockBody
-        };
-    }
-
-    private drawPlannedLines() {
-        const mock = this.getMockPlanningPosition();
-        if (mock && this.activeAccount) {
-            this.lines.update(mock, this.activeAccount.symbol);
+            // Adjust Data Source based on resulted trade
+            const source = result.position.direction === TRADING.SELL_DIRECTION
+                ? TRADING.CHART_DATA_SOURCE_OFR
+                : TRADING.CHART_DATA_SOURCE_BID;
+            marketStore.setDataSource(source);
         }
     }
 
     cancelPlanning() {
-        this.isPlanning = false;
-        this.plannedTrade = null;
-        this.lines.clear();
-        this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
-        this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
+        tradeManager.cancel();
+        // Revert to Bid chart by default if cancelled
+        marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
     }
 
-    async confirmTrade() {
-        if (!this.plannedTrade || !this.activeAccount) return;
-
-        this.isExecuting = true;
-        const client = session.getClient(session.mode);
-
-        if (!client) {
-            notifications.error("Session Error");
-            this.isExecuting = false;
-            return;
-        }
-
+    private async handleFreeze() {
+        console.warn("Freeze detected, reloading...");
+        marketStore.disconnect();
         try {
-            const body: TradeRequest = {
-                epic: this.currentEpic,
-                direction: this.plannedTrade.direction,
-                size: this.plannedTrade.size,
-                stopLevel: this.plannedTrade.stopLevel,
-                profitLevel: this.plannedTrade.profitLevel
-            };
-
-            const response = await createPosition(client, body);
-            const confirmation = await getConfirmation(client, response.dealReference);
-
-            session.setInitialBalance(confirmation.dealId, this.activeAccount.balance.deposit);
-
-            const positionsResp = await getPositions(client);
-            const foundPos = positionsResp.positions.find(p => p.market.epic === this.currentEpic);
-
-            this.isPlanning = false;
-            this.plannedTrade = null;
-
-            if (foundPos) {
-                foundPos.position.initialBalance = this.activeAccount.balance.deposit;
-                this.activePosition = foundPos;
-
-                this.lines.update(this.activePosition, this.activeAccount.symbol);
-                this.feed.position = this.activePosition;
-                this.feed.accountSymbol = this.activeAccount.symbol;
-                this.overlay.position = this.activePosition;
-
-                if (foundPos.position.direction === TRADING.SELL_DIRECTION) {
-                    this.currentDataSource = TRADING.CHART_DATA_SOURCE_OFR;
-                    await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_OFR);
-                } else {
-                    this.currentDataSource = TRADING.CHART_DATA_SOURCE_BID;
-                    await this.feed.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
-                }
-
-                this.refreshAccountData();
-            } else {
-                this.lines.clear();
-            }
-
-            notifications.success("Position Opened");
-
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            notifications.error(msg);
-        } finally {
-            this.isExecuting = false;
+            await authenticateAndStoreSession();
+            // Reload history to fill gap
+            await marketStore.init(this.currentEpic, marketStore.dataSource);
+        } catch {
+            await goto('/login');
         }
     }
 }
