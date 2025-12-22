@@ -25,10 +25,6 @@ export class AccountStore {
         return this.activeAccount?.balance.deposit || 0;
     }
 
-    get available() {
-        return this.activeAccount?.balance.available || 0;
-    }
-
     /**
      * initializes the store based on the CURRENT active session mode.
      * Primarily for the Chart view to get the active trading account.
@@ -144,7 +140,6 @@ export class AccountStore {
     updateBalance(amount: number) {
         if (this.activeAccount) {
             this.activeAccount.balance.deposit = amount;
-            this.activeAccount.balance.available = amount;
         }
     }
 }

@@ -37,7 +37,7 @@ export class TradeStore {
         try {
             const plan = this.planner.calculate(
                 market,
-                accountStore.available,
+                accountStore.balance,
                 userLeverage,
                 direction,
                 price
