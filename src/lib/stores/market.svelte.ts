@@ -1,12 +1,10 @@
-import { StreamClient } from '$lib/api/stream.js';
-import { fetchPriceHistory, mapToCandles } from '$lib/services/market.js';
+import { MarketRepository } from '../repositories/MarketRepository.ts';
+import { MarketFeed, type FeedUpdate } from '../services/market/MarketFeed.ts';
 import { api } from '$lib/services/api.svelte.js';
 import { session } from '$lib/services/session.js';
-import { CandleAggregator } from '$lib/domain/market/CandleAggregator.js';
 import * as TRADING from '$lib/constants/trading.js';
 import type { ChartData } from '$lib/types/trading.js';
-import type { ChartCandle, QuoteMessage, PriceSnapshot } from '$lib/types/market.js';
-import type { UTCTimestamp } from 'lightweight-charts';
+import type { ChartCandle } from '$lib/types/market.js';
 
 export class MarketStore {
     // --- Public State (Runes) ---
@@ -25,17 +23,20 @@ export class MarketStore {
     epic = $state("");
     dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
 
-    // --- Internal State ---
-    private stream: StreamClient | null = null;
-    private aggregator = new CandleAggregator();
+    // --- Dependencies ---
+    private feed: MarketFeed;
 
-    // Data Containers
+    // Data Containers (Internal State)
     private bidHistory: ChartCandle[] = [];
     private askHistory: ChartCandle[] = [];
     private liveBidCandle: ChartCandle | null = null;
     private liveAskCandle: ChartCandle | null = null;
 
-    // Computed Helpers
+    constructor() {
+        // Initialize Feed with a callback bound to this store
+        this.feed = new MarketFeed((update) => this.handleFeedUpdate(update));
+    }
+
     get currentPrice() {
         return this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.offer : this.bid;
     }
@@ -45,8 +46,32 @@ export class MarketStore {
         this.epic = epic;
         this.dataSource = dataSource;
 
-        this.connectStream();
-        await this.loadHistory();
+        const client = api.client;
+        const tokens = session.getTokens(session.mode);
+
+        if (!client || !tokens) return;
+
+        try {
+            // 1. Load History via Repository
+            const repo = new MarketRepository(client);
+            const { bid, ask } = await repo.getHistory(epic);
+
+            this.bidHistory = bid;
+            this.askHistory = ask;
+
+            // 2. Initialize Feed State
+            this.initializeLiveCandles();
+            this.feed.initialize(this.liveBidCandle, this.liveAskCandle);
+
+            // 3. Start Streaming
+            this.feed.connect(tokens, epic);
+
+            this.syncViewToSource();
+            this.isLoaded = true;
+
+        } catch (e) {
+            console.error("Failed to init market store", e);
+        }
     }
 
     setDataSource(source: ChartData) {
@@ -56,14 +81,11 @@ export class MarketStore {
     }
 
     disconnect() {
-        if (this.stream) {
-            this.stream.disconnect();
-            this.stream = null;
-        }
+        this.feed.disconnect();
         this.isLoaded = false;
     }
 
-    // --- Private Implementation ---
+    // --- Internal Logic ---
 
     private resetState() {
         this.isLoaded = false;
@@ -75,41 +97,6 @@ export class MarketStore {
         this.askHistory = [];
         this.liveBidCandle = null;
         this.liveAskCandle = null;
-    }
-
-    private connectStream() {
-        if (this.stream) return;
-
-        const tokens = session.getTokens(session.mode);
-        if (!tokens) return;
-
-        this.stream = new StreamClient(tokens, this.epic, (msg) => this.handleQuote(msg));
-        this.stream.connect();
-    }
-
-    private async loadHistory() {
-        const client = api.client;
-        if (!client) {
-            console.warn("No API client available for history loading");
-            return;
-        }
-
-        try {
-            const rawHistory: PriceSnapshot[] = await fetchPriceHistory(client, this.epic);
-
-            this.bidHistory = mapToCandles(rawHistory, TRADING.CHART_DATA_SOURCE_BID);
-            this.askHistory = mapToCandles(rawHistory, TRADING.CHART_DATA_SOURCE_OFR);
-
-            // Extract the last candle from history to serve as the initial "Live" candle.
-            // This prevents timestamp overlap errors in Lightweight Charts.
-            this.initializeLiveCandles();
-
-            this.syncViewToSource();
-            this.isLoaded = true;
-
-        } catch (e) {
-            console.error("Failed to load history", e);
-        }
     }
 
     private initializeLiveCandles() {
@@ -133,32 +120,27 @@ export class MarketStore {
         }
     }
 
-    private handleQuote(msg: QuoteMessage) {
-        this.bid = msg.payload.bid;
-        this.offer = msg.payload.ofr;
+    private handleFeedUpdate(u: FeedUpdate) {
+        this.bid = u.tick.bid;
+        this.offer = u.tick.offer;
 
-        if (!this.isLoaded) return;
-
-        const time = (Math.floor(msg.payload.timestamp / 1000 / 60) * 60) as UTCTimestamp;
-
-        // Process Bid
-        const bidResult = this.aggregator.processTick(this.liveBidCandle, this.bid, time);
-        if (bidResult.completedCandle) {
-            this.bidHistory.push(bidResult.completedCandle);
+        // Update Internal Containers
+        this.liveBidCandle = u.bidResult.liveCandle;
+        if (u.bidResult.completedCandle) {
+            this.bidHistory.push(u.bidResult.completedCandle);
         }
-        this.liveBidCandle = bidResult.liveCandle;
 
-        // Process Ask
-        const askResult = this.aggregator.processTick(this.liveAskCandle, this.offer, time);
-        if (askResult.completedCandle) {
-            this.askHistory.push(askResult.completedCandle);
+        this.liveAskCandle = u.askResult.liveCandle;
+        if (u.askResult.completedCandle) {
+            this.askHistory.push(u.askResult.completedCandle);
         }
-        this.liveAskCandle = askResult.liveCandle;
 
-        // Update View
-        this.lastCandle = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR
-            ? this.liveAskCandle
-            : this.liveBidCandle;
+        // Update View (Reactivity)
+        if (this.isLoaded) {
+            this.lastCandle = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR
+                ? this.liveAskCandle
+                : this.liveBidCandle;
+        }
     }
 }
 
