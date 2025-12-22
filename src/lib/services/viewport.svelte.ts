@@ -1,7 +1,7 @@
 import * as STORAGE from "$lib/constants/storage.js";
 import * as EVENTS from "$lib/constants/events.js";
 import { TOO_MANY_PIXELS } from "$lib/constants/viewport.js";
-import { isPWA } from "$lib/utils/platform.js";
+import { isPWA, isIOS } from "$lib/utils/platform.js";
 
 class ViewportService {
     width = $state(0);
@@ -44,19 +44,16 @@ class ViewportService {
     }
 
     private scan() {
+        // 1. Always update current dimensions so the app is reactive on all platforms
         this.width = window.innerWidth;
         this.height = window.innerHeight;
 
-        // If NOT in PWA mode, we do NOT use the caching logic.
-        // We simply trust the browser's reported dimensions.
-        if (!isPWA()) return;
+        // 2. Only run the "Max Cache" logic on iOS PWA
+        // We exclude Android PWA (which handles resize nicely) and Desktop
+        if (!isPWA() || !isIOS()) return;
 
         const sources = [
-            { w: window.innerWidth, h: window.innerHeight },
-            { w: window.outerWidth, h: window.outerHeight },
             { w: screen.width, h: screen.height },
-            { w: screen.availWidth, h: screen.availHeight },
-            { w: window.visualViewport?.width || 0, h: window.visualViewport?.height || 0 }
         ];
 
         let changed = false;
@@ -67,7 +64,6 @@ class ViewportService {
             const short = Math.min(s.w, s.h);
 
             // Logic: We want to capture the LARGEST dimension seen (hiding the address bar)
-            // But we ignore absurdly large values (desktop monitors if debugging, or bugs)
             if (long > this.maxWidth && long < TOO_MANY_PIXELS) {
                 this.maxWidth = long;
                 changed = true;
@@ -90,12 +86,12 @@ class ViewportService {
      * On Desktop/Android/Browser, it matches the window.
      */
     getChartDimensions() {
-        // Non-PWA Mode: Always return current window dimensions
-        if (!isPWA()) {
+        // Strict Safety: If not iOS PWA, ignore cache completely.
+        // This fixes the "Localhost breaks" issue if you have old junk in localStorage.
+        if (!isPWA() || !isIOS()) {
             return { width: this.width, height: this.height };
         }
 
-        // PWA Mode: Use cached max logic
         const isLandscape = this.width > this.height;
 
         // Simple fallback if no max data yet
@@ -110,4 +106,4 @@ class ViewportService {
     }
 }
 
-export const viewport = new ViewportService(); //broken state
+export const viewport = new ViewportService();
