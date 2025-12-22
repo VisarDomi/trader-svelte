@@ -11,7 +11,7 @@ import { ChartInteraction } from './interaction.svelte.js';
 import { ChartDataLoader } from './loader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
-// Stores & Logic (Singletons imported here as Composition Root)
+// Stores & Logic (Composition Root)
 import { marketStore } from '$lib/stores/market.svelte.js';
 import { accountStore } from '$lib/stores/account.svelte.js';
 import { positionStore } from '$lib/stores/position.svelte.js';
@@ -21,12 +21,12 @@ import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
 import * as TRADING from '$lib/constants/trading.js';
 
 export class ChartLogic {
-    // UI Helpers
-    layout = new ChartUI();
-
-    // Components with Injected Dependencies
+    // UI Helpers (Injected with dependencies)
+    layout = new ChartUI(viewport);
     overlay = new ChartOverlay(accountStore, positionStore, session);
     lines = new ChartLines(marketStore, accountStore);
+
+    // Core Logic
     painter = new ChartPainter(marketStore);
     interaction = new ChartInteraction(tradeManager, marketStore, positionStore);
     loader = new ChartDataLoader(accountStore, positionStore, marketStore);
@@ -39,7 +39,6 @@ export class ChartLogic {
     private currentEpic = "";
 
     constructor() {
-        // Watchdog now delegates recovery to the Loader
         this.watchdog = new Watchdog(() => this.handleFreeze());
 
         // Master Effect: Update Lines whenever relevant state changes
@@ -91,7 +90,7 @@ export class ChartLogic {
         this.watchdog.stop();
         this.layout.destroy();
         this.painter.destroy();
-        this.loader.disconnectStream(); // Use loader to manage disconnect
+        this.loader.disconnectStream();
         this.overlay.destroy();
 
         if (this.chart) {
@@ -127,7 +126,6 @@ export class ChartLogic {
 
     private async handleFreeze() {
         console.warn("Freeze detected, reloading stream...");
-        // Delegate low-level store management to Loader
         await this.loader.reconnectStream(this.currentEpic);
     }
 }

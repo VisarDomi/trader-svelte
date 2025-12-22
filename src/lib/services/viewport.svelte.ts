@@ -3,7 +3,7 @@ import * as EVENTS from "$lib/constants/events.js";
 import { TOO_MANY_PIXELS } from "$lib/constants/viewport.js";
 import { isPWA, isIOS } from "$lib/utils/platform.js";
 
-class ViewportService {
+export class ViewportService {
     width = $state(0);
     height = $state(0);
 

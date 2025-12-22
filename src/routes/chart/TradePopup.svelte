@@ -1,14 +1,24 @@
 <script lang="ts">
-    import * as TRADING from '$constants/trading.js';
-    import { tradeManager } from '$stores/trade.svelte.js';
+    import * as TRADING from '$lib/constants/trading.js';
+    import type { TradeCalculationResult, Direction } from '$lib/types/trading.js';
 
-    let { onConfirm, onCancel } = $props<{
-        onConfirm: () => void,
-        onCancel: () => void
+    // Pure component: Data passed in via props, no store imports
+    let {
+        isOpen,
+        plannedTrade,
+        isExecuting,
+        onConfirm,
+        onCancel
+    } = $props<{
+        isOpen: boolean;
+        plannedTrade: (TradeCalculationResult & { direction: Direction, entryPrice: number }) | null;
+        isExecuting: boolean;
+        onConfirm: () => void;
+        onCancel: () => void;
     }>();
 </script>
 
-{#if tradeManager.isPlanning && tradeManager.plannedTrade}
+{#if isOpen && plannedTrade}
     <div style="
         position: fixed;
         top: 8rem;
@@ -27,19 +37,19 @@
         <h3 style="margin-bottom: 1rem; color: #d1d4dc;">Open Position?</h3>
 
         <div style="margin-bottom: 1.5rem; font-size: 1.1rem;">
-            <div style="font-weight: bold; color: {tradeManager.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
-                {tradeManager.plannedTrade.direction}
+            <div style="font-weight: bold; color: {plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
+                {plannedTrade.direction}
             </div>
-            <div style="color: #fff; margin-top: 0.25rem;">Size: {tradeManager.plannedTrade.size}</div>
+            <div style="color: #fff; margin-top: 0.25rem;">Size: {plannedTrade.size}</div>
             <div style="color: #888; font-size: 0.8rem; margin-top: 0.5rem;">
-                TP: {tradeManager.plannedTrade.profitLevel} | SL: {tradeManager.plannedTrade.stopLevel}
+                TP: {plannedTrade.profitLevel} | SL: {plannedTrade.stopLevel}
             </div>
         </div>
 
         <div style="display: flex; gap: 1rem; justify-content: center;">
             <button
                     onclick={onCancel}
-                    disabled={tradeManager.isExecuting}
+                    disabled={isExecuting}
                     style="
                     padding: 0.75rem 1.5rem;
                     background: transparent;
@@ -53,10 +63,10 @@
             </button>
             <button
                     onclick={onConfirm}
-                    disabled={tradeManager.isExecuting}
+                    disabled={isExecuting}
                     style="
                     padding: 0.75rem 1.5rem;
-                    background: {tradeManager.plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'};
+                    background: {plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'};
                     border: none;
                     color: white;
                     border-radius: 4px;
@@ -64,7 +74,7 @@
                     font-weight: bold;
                 "
             >
-                {tradeManager.isExecuting ? '...' : 'OPEN'}
+                {isExecuting ? '...' : 'OPEN'}
             </button>
         </div>
     </div>

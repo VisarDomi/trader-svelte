@@ -75,7 +75,7 @@ export class PositionStore {
             notifications.success("Position Closed");
 
             this.activePosition = null;
-            await accountStore.refresh(); // Update balance
+            await accountStore.refreshActive(); // Update balance
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

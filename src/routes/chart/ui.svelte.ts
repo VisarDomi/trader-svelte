@@ -1,8 +1,8 @@
 import type { IChartApi } from "lightweight-charts";
 import { isIOS, isPWA } from "$lib/utils/platform.js";
-import { viewport } from "$lib/services/viewport.svelte.js";
 import { getTimeScaleHeight } from "$lib/utils/chart.js";
 import * as CHART_CONST from '$lib/constants/chart.js';
+import type { ViewportService } from "$lib/services/viewport.svelte.js";
 
 export class ChartUI {
     isIosDevice = $state(false);
@@ -11,18 +11,18 @@ export class ChartUI {
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
 
-    constructor() {
+    constructor(private readonly viewportService: ViewportService) {
         if (typeof window !== 'undefined') {
             this.isIosDevice = isIOS();
             this.isPwa = isPWA();
         }
 
         $effect(() => {
-            // Reactive dependency on viewport changes
-            const width = viewport.width;
-            const height = viewport.height;
-            const maxW = viewport.maxWidth;
-            const maxH = viewport.maxHeight;
+            // Reactive dependency on viewport changes via injected service
+            const width = this.viewportService.width;
+            const height = this.viewportService.height;
+            const maxW = this.viewportService.maxWidth;
+            const maxH = this.viewportService.maxHeight;
 
             if (this.container && this.chart) {
                 this.updateDimensions();
@@ -38,12 +38,12 @@ export class ChartUI {
             if (this.isIosDevice && this.isPwa) {
                 window.addEventListener('scroll', this.handleScroll);
 
-                // 1. Prevention: Stop iOS from interpreting gestures as zoom
+                // 1. Prevention
                 document.addEventListener('gesturestart', this.preventZoom);
                 document.addEventListener('gesturechange', this.preventZoom);
                 document.addEventListener('gestureend', this.preventZoom);
 
-                // 2. Cure: Watch for drift and force reflow
+                // 2. Cure
                 window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
                 window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
             }
@@ -76,32 +76,15 @@ export class ChartUI {
         e.preventDefault();
     };
 
-    /**
-     * JS Solution for "Stuck Zoom":
-     * If Visual Viewport scale drifts, we perform a "Layout Thrash".
-     * Hiding the body forces the render engine to discard the current bad frame
-     * and recalculate the viewport relative to the screen dimensions.
-     */
     private handleZoomCheck = () => {
         if (!window.visualViewport) return;
-
         const currentScale = window.visualViewport.scale;
 
-        // Threshold check (1.0 vs 1.389 etc)
         if (Math.abs(currentScale - 1.0) > 0.05) {
             console.warn(`[Zoom Watchdog] Drift ${currentScale} detected. Thrashing layout.`);
-
-            // 1. Force hard reset of display
             document.body.style.display = 'none';
-
-            // 2. Force synchronous reflow (read a geometric property)
-            // This makes the browser apply the 'none' immediately
             void document.body.offsetHeight;
-
-            // 3. Restore
             document.body.style.display = '';
-
-            // 4. Force scroll reset
             window.scrollTo(0, 0);
         }
     };
@@ -131,12 +114,12 @@ export class ChartUI {
         let height: number;
 
         if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
-            const dims = viewport.getChartDimensions();
+            const dims = this.viewportService.getChartDimensions();
             width = dims.width;
             height = dims.height;
         } else {
-            width = viewport.width;
-            height = viewport.height;
+            width = this.viewportService.width;
+            height = this.viewportService.height;
         }
 
         this.container.style.width = `${width}px`;

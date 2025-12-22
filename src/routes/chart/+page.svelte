@@ -7,6 +7,9 @@
     import PwaDebug from '$lib/components/PwaDebug.svelte';
     import * as CHART_CONST from '$lib/constants/chart.js';
 
+    // Import stores just for binding to View
+    import { tradeManager } from '$lib/stores/trade.svelte.js';
+
     let chartContainer: HTMLDivElement;
     const logic = new ChartLogic();
 
@@ -23,7 +26,14 @@
 <Overlay overlay={logic.overlay} />
 <PwaDebug />
 
+<!--
+    The Page now acts as the "Controller", explicitly passing state
+    from the global store to the pure component
+-->
 <TradePopup
+        isOpen={tradeManager.isPlanning}
+        plannedTrade={tradeManager.plannedTrade}
+        isExecuting={tradeManager.isExecuting}
         onConfirm={() => logic.confirmTrade()}
         onCancel={() => logic.cancelPlanning()}
 />
