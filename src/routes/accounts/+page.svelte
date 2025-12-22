@@ -1,15 +1,16 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { Accounts } from './logic.svelte.js';
+    import { accountStore } from '$lib/stores/account.svelte.js';
+    import { session } from '$lib/services/session.js';
     import * as AUTH from '$lib/constants/auth.js';
-    const accounts = new Accounts();
+
     onMount(() => {
-        accounts.init();
+        accountStore.loadAll();
     });
 
     // Helper to determine if an account is the SINGLE active trading account
     function isTradingAccount(account: any, type: string) {
-        return account.preferred && accounts.tradingMode === type;
+        return account.preferred && session.mode === type;
     }
 </script>
 
@@ -21,11 +22,11 @@
         </div>
     </div>
 
-    {#if accounts.isLoading}
+    {#if accountStore.isLoading}
         <p>Loading...</p>
-    {:else if accounts.error}
+    {:else if accountStore.error}
         <div style="color: #ef5350; border: 1px solid #ef5350; padding: 1rem; border-radius: 4px;">
-            {accounts.error}
+            {accountStore.error}
         </div>
     {:else}
         <div style="display: flex; flex-direction: column; gap: 2rem;">
@@ -34,11 +35,11 @@
                 <h2 style="color: #26a69a; border-bottom: 1px solid #26a69a; padding-bottom: 0.5rem; margin-bottom: 1rem;">
                     Real Accounts
                 </h2>
-                {#if accounts.realAccounts.length === 0}
+                {#if accountStore.realAccounts.length === 0}
                     <p>No real accounts found.</p>
                 {:else}
                     <div style="display: grid; gap: 1rem;">
-                        {#each accounts.realAccounts as account}
+                        {#each accountStore.realAccounts as account}
                             {@const isActive = isTradingAccount(account, AUTH.REAL_TYPE)}
                             <svelte:element
                                     this={isActive ? 'a' : 'div'}
@@ -65,7 +66,7 @@
                                             <button
                                                     onclick={(e) => {
                                                     e.stopPropagation();
-                                                    accounts.switchTo(account, AUTH.REAL_TYPE);
+                                                    accountStore.switchTo(account, AUTH.REAL_TYPE);
                                                 }}
                                                     style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
                                             >
@@ -106,11 +107,11 @@
                 <h2 style="color: #ef5350; border-bottom: 1px solid #ef5350; padding-bottom: 0.5rem; margin-bottom: 1rem;">
                     Demo Accounts
                 </h2>
-                {#if accounts.demoAccounts.length === 0}
+                {#if accountStore.demoAccounts.length === 0}
                     <p>No demo accounts found.</p>
                 {:else}
                     <div style="display: grid; gap: 1rem;">
-                        {#each accounts.demoAccounts as account}
+                        {#each accountStore.demoAccounts as account}
                             {@const isActive = isTradingAccount(account, AUTH.DEMO_TYPE)}
                             <svelte:element
                                     this={isActive ? 'a' : 'div'}
@@ -137,7 +138,7 @@
                                             <button
                                                     onclick={(e) => {
                                                     e.stopPropagation();
-                                                    accounts.switchTo(account, AUTH.DEMO_TYPE);
+                                                    accountStore.switchTo(account, AUTH.DEMO_TYPE);
                                                 }}
                                                     style="padding: 4px 8px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"
                                             >
