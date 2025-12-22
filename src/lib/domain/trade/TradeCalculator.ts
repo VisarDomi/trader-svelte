@@ -1,5 +1,5 @@
 import * as TRADING from '$lib/constants/trading.js';
-import { roundDownToFactor } from '$lib/utils/trading.js';
+import { roundDownToFactor } from '$lib/utils/math.js';
 import type { Direction } from '$lib/types/trading.js';
 
 export interface PnLResult {
