@@ -3,15 +3,17 @@ import { DateTime } from "luxon";
 import * as API from '$lib/constants/api.js';
 import * as TIME from '$lib/constants/time.js';
 import * as TRADING from "$lib/constants/trading.js";
-import type {MarketPriceResponse, ChartCandle, MarketDetailsResponse} from "$lib/types/market.js";
+import type { MarketPriceResponse, ChartCandle, MarketDetailsResponse, PriceSnapshot } from "$lib/types/market.js";
 import type { ApiClient } from '$lib/api/client.js';
-import type {ChartData} from "$lib/types/trading";
+import type { ChartData } from "$lib/types/trading";
 
-export async function getHistoricalPrices(
+/**
+ * Fetches the raw price snapshots (containing both Bid and Ask) from the API.
+ */
+export async function fetchPriceHistory(
     client: ApiClient,
-    epic: string,
-    type: ChartData = TRADING.CHART_DATA_SOURCE_BID
-): Promise<ChartCandle[]> {
+    epic: string
+): Promise<PriceSnapshot[]> {
     const endDateTime = DateTime.utc();
     const fromUTCDateTime = endDateTime.minus({ minutes: TIME.TOTAL_MINUTES_IN_THE_PAST });
     const fromUTC = fromUTCDateTime.startOf(TIME.SECOND_KEY).toISO({ suppressMilliseconds: true }).slice(0, -1);
@@ -27,8 +29,21 @@ export async function getHistoricalPrices(
     const endpoint = `${API.PRICES_ENDPOINT}/${epic}`;
     const data = await client.get<MarketPriceResponse>(endpoint, params);
 
-    // Map based on requested type (Bid or Ask)
-    return data.prices.map(p => {
+    // Sort logic is typically stable, but ensure time ascending
+    return data.prices.sort((a, b) =>
+        new Date(a.snapshotTimeUTC).getTime() - new Date(b.snapshotTimeUTC).getTime()
+    );
+}
+
+/**
+ * Maps raw price snapshots to ChartCandles based on the selected data source (Bid vs Offer).
+ * This is a synchronous pure function.
+ */
+export function mapToCandles(
+    snapshots: PriceSnapshot[],
+    type: ChartData = TRADING.CHART_DATA_SOURCE_BID
+): ChartCandle[] {
+    return snapshots.map(p => {
         const priceSet = type === TRADING.CHART_DATA_SOURCE_OFR ? {
             open: p.openPrice.ask,
             high: p.highPrice.ask,
@@ -48,7 +63,19 @@ export async function getHistoricalPrices(
             low: priceSet.low,
             close: priceSet.close
         };
-    }).sort((a, b) => (a.time as number) - (b.time as number));
+    });
+}
+
+/**
+ * @deprecated Use fetchPriceHistory + mapToCandles for better performance caching
+ */
+export async function getHistoricalPrices(
+    client: ApiClient,
+    epic: string,
+    type: ChartData = TRADING.CHART_DATA_SOURCE_BID
+): Promise<ChartCandle[]> {
+    const raw = await fetchPriceHistory(client, epic);
+    return mapToCandles(raw, type);
 }
 
 export function getMarketDetails(

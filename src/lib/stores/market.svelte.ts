@@ -1,10 +1,10 @@
 import { StreamClient } from '$lib/api/stream.js';
-import { getHistoricalPrices } from '$lib/services/market.js';
+import { fetchPriceHistory, mapToCandles } from '$lib/services/market.js';
 import { api } from '$lib/services/api.svelte.js';
 import { session } from '$lib/services/session.js';
 import * as TRADING from '$lib/constants/trading.js';
 import type { ChartData } from '$lib/types/trading.js';
-import type { ChartCandle, QuoteMessage } from '$lib/types/market.js';
+import type { ChartCandle, QuoteMessage, PriceSnapshot } from '$lib/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
 
 export class MarketStore {
@@ -19,7 +19,9 @@ export class MarketStore {
     epic = $state("");
     dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
 
+    // Internal Cache
     private stream: StreamClient | null = null;
+    private rawHistory: PriceSnapshot[] = [];
 
     get currentPrice() {
         return this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.offer : this.bid;
@@ -35,15 +37,27 @@ export class MarketStore {
         this.offer = 0;
         this.lastCandle = null;
         this.history = [];
+        this.rawHistory = [];
 
         this.connectStream();
         await this.loadHistory();
     }
 
+    /**
+     * Switches the chart data source (Bid <-> Ask).
+     * Now performs a synchronous memory map instead of a network request.
+     */
     async setDataSource(source: ChartData) {
         if (this.dataSource === source) return;
         this.dataSource = source;
-        await this.loadHistory();
+
+        // If we have raw data, just remap it instantly
+        if (this.rawHistory.length > 0) {
+            this.updateHistoryFromCache();
+        } else {
+            // Fallback if somehow called before init
+            await this.loadHistory();
+        }
     }
 
     disconnect() {
@@ -65,7 +79,6 @@ export class MarketStore {
     }
 
     private async loadHistory() {
-        // CHANGED: Use active client (Demo or Real) instead of forcing Real
         const client = api.client;
         if (!client) {
             console.warn("No API client available for history loading");
@@ -74,19 +87,27 @@ export class MarketStore {
 
         this.isLoaded = false;
         try {
-            const data = await getHistoricalPrices(client, this.epic, this.dataSource);
-            this.history = data;
+            // Fetch raw data containing BOTH Bid and Ask
+            this.rawHistory = await fetchPriceHistory(client, this.epic);
 
-            if (data.length > 0) {
-                this.lastCandle = { ...data[data.length - 1] };
+            // Map to the currently selected view
+            this.updateHistoryFromCache();
 
-                // Initialize current price if stream hasn't hit yet
-                if (this.bid === 0) this.bid = this.lastCandle.close;
-                if (this.offer === 0) this.offer = this.lastCandle.close;
-            }
             this.isLoaded = true;
         } catch (e) {
             console.error("Failed to load history", e);
+        }
+    }
+
+    private updateHistoryFromCache() {
+        this.history = mapToCandles(this.rawHistory, this.dataSource);
+
+        if (this.history.length > 0) {
+            this.lastCandle = { ...this.history[this.history.length - 1] };
+
+            // Initialize current price if stream hasn't hit yet
+            if (this.bid === 0) this.bid = this.lastCandle.close;
+            if (this.offer === 0) this.offer = this.lastCandle.close;
         }
     }
 
@@ -117,7 +138,10 @@ export class MarketStore {
             c.low = Math.min(c.low, price);
             c.close = price;
         } else if (time > c.time) {
-            // New Minute
+            // New Minute - Push old candle to history and start new
+            // Note: We don't push to rawHistory here to keep it simple,
+            // as rawHistory is just for the initial load cache.
+            // The chart renderer listens to 'history' + 'lastCandle' combined.
             this.lastCandle = {
                 time,
                 open: price,
