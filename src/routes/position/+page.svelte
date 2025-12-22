@@ -4,45 +4,40 @@
     import * as TRADING from '$lib/constants/trading.js';
     import { session } from '$lib/services/session.js';
 
-    // Stores
     import { positionStore } from '$lib/stores/position.svelte.js';
     import { accountStore } from '$lib/stores/account.svelte.js';
     import { viewport } from '$lib/services/viewport.svelte.js';
 
-    // Utils
-    import {
-        generateStartingLine,
-        generateWendyLine,
-        generateLamboLine,
-        generateCurrentLine
-    } from '$lib/utils/lines.js';
+    import { EntryLine } from '$lib/presentation/lines/EntryLine.js';
+    import { StopLossLine } from '$lib/presentation/lines/StopLossLine.js';
+    import { TakeProfitLine } from '$lib/presentation/lines/TakeProfitLine.js';
+    import { CurrentPriceLine } from '$lib/presentation/lines/CurrentPriceLine.js';
 
     let pollInterval: ReturnType<typeof setInterval>;
     const precision = 2;
 
-    // Derived State for Debug Info
     let debugInfo = $derived.by(() => {
-        const p = positionStore.activePosition?.position;
-        const m = positionStore.activePosition?.market;
+        const positionResponse = positionStore.activePosition;
+        if (!positionResponse) return null;
 
-        if (!p || !m) return null;
-
+        const p = positionResponse.position;
+        const m = positionResponse.market;
         const initialBalance = p.initialBalance || 0;
         const isLandscape = viewport.width > viewport.height;
         const symbol = accountStore.activeSymbol;
 
-        const starting = generateStartingLine(p, m.epic, isLandscape);
-        const wendy = generateWendyLine(p, initialBalance, symbol, isLandscape);
-        const lambo = generateLamboLine(p, initialBalance, symbol, isLandscape);
+        const entryLine = new EntryLine(p, m.epic);
+        const slLine = new StopLossLine(p, initialBalance, symbol);
+        const tpLine = new TakeProfitLine(p, initialBalance, symbol);
 
         const currentPrice = p.direction === TRADING.BUY_DIRECTION ? m.bid : m.offer;
-        const current = generateCurrentLine(p, currentPrice, initialBalance, symbol, isLandscape);
+        const currentLine = new CurrentPriceLine(p, currentPrice, initialBalance, symbol);
 
         return {
-            starting,
-            wendy,
-            lambo,
-            current,
+            starting: entryLine.getData(isLandscape),
+            wendy: slLine.getData(isLandscape),
+            lambo: tpLine.getData(isLandscape),
+            current: currentLine.getData(isLandscape),
             initialBalance
         };
     });
@@ -92,7 +87,6 @@
 
         <div style="background: #1a1a1a; padding: 1.5rem; border-radius: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 2rem;">
 
-            <!-- Header: Direction & PnL -->
             <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 1.5rem; border-bottom: 1px solid #333;">
                 <div>
                     <div style="font-size: 2.5rem; font-weight: bold; color: {pos.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}; line-height: 1;">
@@ -110,7 +104,6 @@
                 </div>
             </div>
 
-            <!-- Debug Info / Chart Lines (Uses centralized colors now) -->
             {#if debugInfo}
                 <div style="background: #220033; padding: 1rem; border: 1px dashed #ff00ff; border-radius: 4px; font-family: monospace; font-size: 0.85rem; color: #ffccff;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -128,15 +121,19 @@
                             <div style="border: 1px solid #444; padding: 0.5rem; color: #666;">LAMBO (TP): Not Set</div>
                         {/if}
 
-                        <div style="border: 1px solid {debugInfo.current.color}; padding: 0.5rem; color: {debugInfo.current.color};">
-                            <strong>CURRENT:</strong> {debugInfo.current.price}
-                            <div style="color: #ccc;">{debugInfo.current.title}</div>
-                        </div>
+                        {#if debugInfo.current}
+                            <div style="border: 1px solid {debugInfo.current.color}; padding: 0.5rem; color: {debugInfo.current.color};">
+                                <strong>CURRENT:</strong> {debugInfo.current.price}
+                                <div style="color: #ccc;">{debugInfo.current.title}</div>
+                            </div>
+                        {/if}
 
-                        <div style="border: 1px solid {debugInfo.starting.color}; padding: 0.5rem; color: {debugInfo.starting.color};">
-                            <strong>STARTING:</strong> {debugInfo.starting.price}
-                            <div style="color: #ccc;">{debugInfo.starting.title}</div>
-                        </div>
+                        {#if debugInfo.starting}
+                            <div style="border: 1px solid {debugInfo.starting.color}; padding: 0.5rem; color: {debugInfo.starting.color};">
+                                <strong>STARTING:</strong> {debugInfo.starting.price}
+                                <div style="color: #ccc;">{debugInfo.starting.title}</div>
+                            </div>
+                        {/if}
 
                         {#if debugInfo.wendy}
                             <div style="border: 1px solid {debugInfo.wendy.color}; padding: 0.5rem; color: {debugInfo.wendy.color};">
@@ -150,7 +147,6 @@
                 </div>
             {/if}
 
-            <!-- Price Info -->
             <div>
                 <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Price Information</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
@@ -167,7 +163,6 @@
                 </div>
             </div>
 
-            <!-- Protection -->
             <div>
                 <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Protection</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">

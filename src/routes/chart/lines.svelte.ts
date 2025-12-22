@@ -1,23 +1,20 @@
 import { type ISeriesApi, type IPriceLine, LineStyle } from "lightweight-charts";
-import type { PositionResponse } from "$lib/types/trading.js";
 import { viewport } from "$lib/services/viewport.svelte.js";
 import * as TRADING from "$lib/constants/trading.js";
-import {
-    generateStartingLine,
-    generateWendyLine,
-    generateLamboLine,
-    generateCurrentLine,
-    type LinePresentation
-} from '$lib/utils/lines.js';
 
-// Types for Injection
+import type { PositionResponse } from "$lib/types/trading.js";
 import type { MarketStore } from '$lib/stores/market.svelte.js';
 import type { AccountStore } from '$lib/stores/account.svelte.js';
+
+import { EntryLine } from '$lib/presentation/lines/EntryLine.js';
+import { StopLossLine } from '$lib/presentation/lines/StopLossLine.js';
+import { TakeProfitLine } from '$lib/presentation/lines/TakeProfitLine.js';
+import { CurrentPriceLine } from '$lib/presentation/lines/CurrentPriceLine.js';
+import type { LineData } from '$lib/presentation/lines/types.js';
 
 export class ChartLines {
     private series: ISeriesApi<"Candlestick"> | null = null;
 
-    // Fixed Lines
     private entryLine: IPriceLine | null = null;
     private tpLine: IPriceLine | null = null;
     private slLine: IPriceLine | null = null;
@@ -31,58 +28,50 @@ export class ChartLines {
         this.series = series;
     }
 
-    update(position: PositionResponse | null) {
+    update(positionResponse: PositionResponse | null) {
         if (!this.series) return;
 
         this.clear();
+        this.series.applyOptions({ priceLineColor: "", title: "" } as any);
 
-        // Reset base line style
-        this.series.applyOptions({
-            priceLineColor: "",
-            title: ""
-        } as any);
+        if (!positionResponse) return;
 
-        if (!position) return;
-
-        const p = position.position;
-        const initialBalance = p.initialBalance || 0;
-        const accountSymbol = this.accountStore.activeSymbol;
+        const position = positionResponse.position;
+        const market = positionResponse.market;
         const isLandscape = viewport.width > viewport.height;
-        const epic = position.market.epic;
+        const initialBalance = position.initialBalance || 0;
+        const symbol = this.accountStore.activeSymbol;
 
         // 1. Static Lines
-        const entryData = generateStartingLine(p, epic, isLandscape);
-        this.entryLine = this.createLine(entryData);
+        const entry = new EntryLine(position, market.epic);
+        this.entryLine = this.renderLine(entry.getData(isLandscape));
 
-        const tpData = generateLamboLine(p, initialBalance, accountSymbol, isLandscape);
-        if (tpData) this.tpLine = this.createLine(tpData);
+        const tp = new TakeProfitLine(position, initialBalance, symbol);
+        this.tpLine = this.renderLine(tp.getData(isLandscape));
 
-        const slData = generateWendyLine(p, initialBalance, accountSymbol, isLandscape);
-        if (slData) this.slLine = this.createLine(slData);
+        const sl = new StopLossLine(position, initialBalance, symbol);
+        this.slLine = this.renderLine(sl.getData(isLandscape));
 
-        // 2. Dynamic Line (Current Price PnL)
+        // 2. Dynamic Line (Current Price)
         if (this.marketStore.lastCandle) {
-            const currentPrice = p.direction === TRADING.BUY_DIRECTION
+            const currentPrice = position.direction === TRADING.BUY_DIRECTION
                 ? this.marketStore.bid
                 : this.marketStore.offer;
 
-            const lineInfo = generateCurrentLine(
-                p,
-                currentPrice,
-                initialBalance,
-                accountSymbol,
-                isLandscape
-            );
+            const current = new CurrentPriceLine(position, currentPrice, initialBalance, symbol);
+            const data = current.getData(isLandscape);
 
             this.series.applyOptions({
-                priceLineColor: lineInfo.color,
-                title: lineInfo.title,
+                priceLineColor: data.color,
+                title: data.title,
             } as any);
         }
     }
 
-    private createLine(data: LinePresentation): IPriceLine {
-        return this.series!.createPriceLine({
+    private renderLine(data: LineData | null): IPriceLine | null {
+        if (!data || !this.series) return null;
+
+        return this.series.createPriceLine({
             price: data.price,
             color: data.color,
             lineWidth: 2,
