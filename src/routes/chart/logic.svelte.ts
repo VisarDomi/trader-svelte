@@ -1,16 +1,14 @@
-import { createChart, CandlestickSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts';
 import { viewport } from '$lib/services/viewport.svelte.js';
 import * as TRADING from '$lib/constants/trading.js';
 
 // Components / Services
+import { ChartController } from './ChartController.js'; // New Dependency
 import { ChartUI } from './ui.svelte.js';
 import { ChartRenderer } from './ChartRenderer.svelte.js';
 import { ChartOverlay } from './overlay.svelte.js';
 import { ChartInputHandler, type TradeIntent } from './ChartInputHandler.svelte.js';
 import { ChartDataLoader } from './loader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
-import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
-import { isPWA } from "$lib/utils/platform.js";
 
 // Types
 import type { MarketStore } from '$lib/stores/market.svelte.js';
@@ -21,16 +19,16 @@ import type { SessionManager } from '$lib/services/session.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
 
 export class ChartLogic {
+    // Sub-Controllers
     layout = new ChartUI(viewport);
     overlay: ChartOverlay;
+    controller = new ChartController(); // View Wrapper
 
+    // Logic Helpers
     private renderer: ChartRenderer;
     private inputHandler: ChartInputHandler;
     private loader: ChartDataLoader;
     private watchdog: Watchdog;
-
-    private chart: IChartApi | null = null;
-    private series: ISeriesApi<"Candlestick"> | null = null;
 
     // State
     private currentEpic = "";
@@ -44,6 +42,7 @@ export class ChartLogic {
         private tradeStore: TradeStore,
         private session: SessionManager
     ) {
+        // Initialize helpers
         this.overlay = new ChartOverlay(accountStore, positionStore, session);
         this.loader = new ChartDataLoader(accountStore, positionStore, marketStore);
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
@@ -56,27 +55,33 @@ export class ChartLogic {
     }
 
     async init(container: HTMLDivElement) {
+        // 1. Session Check
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
         this.currentEpic = this.session.lastEpic;
         this.watchdog.start();
 
-        this.initChart(container);
+        // 2. View Initialization
+        this.controller.init(container);
+        this.layout.init(this.controller.chart, container);
 
+        // 3. Data Context Loading
         const context = await this.loader.loadContext(this.currentEpic);
         if (!context) return;
 
-        // Store Context
         this.userLeverage = context.userLeverage;
         this.marketDetails = context.marketDetails;
 
-        if (this.chart) {
-            this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(context.precision));
-            this.renderer.init(this.series);
-            this.inputHandler.configure(this.series, context.marketDetails);
-        }
+        // 4. Series & Logic Wiring
+        this.controller.createMainSeries(context.precision);
 
+        // Pass the concrete series to the helpers that need it
+        this.renderer.init(this.controller.series);
+        this.inputHandler.configure(this.controller.series, context.marketDetails);
+        this.controller.subscribeClick(this.inputHandler.handleChartClick);
+
+        // 5. Start Data Stream
         await this.loader.initStream(
             this.currentEpic,
             this.positionStore.activePosition?.position.direction
@@ -93,11 +98,9 @@ export class ChartLogic {
         this.loader.disconnectStream();
         this.overlay.destroy();
 
-        if (this.chart) {
-            this.chart.unsubscribeClick(this.inputHandler.handleChartClick);
-            this.chart.remove();
-            this.chart = null;
-        }
+        // Clean up Controller interactions
+        this.controller.unsubscribeClick(this.inputHandler.handleChartClick);
+        this.controller.destroy();
     }
 
     // --- Actions ---
@@ -139,22 +142,6 @@ export class ChartLogic {
             this.marketDetails,
             this.userLeverage
         );
-    }
-
-    private initChart(container: HTMLDivElement) {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        const config = {
-            width,
-            height,
-            isPwa: isPWA(),
-            isMobile: width <= 768,
-            isLandscape: width > height
-        };
-
-        this.chart = createChart(container, getChartOptions(config));
-        this.chart.subscribeClick(this.inputHandler.handleChartClick);
-        this.layout.init(this.chart, container);
     }
 
     private async handleFreeze() {
