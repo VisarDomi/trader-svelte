@@ -3,7 +3,8 @@
 Click on the graph to open a position with all of your deposited cash. Stop loss at 50%.
 
 ## bugs
-* how can resizing be so hard... - it's not netlify only, localhost also breaks... howdid i break this stuff?
+* resizing on pwa
+* should not be able to open a second position on the same account, even if we change instruments
 
 ## dev notes: pwa
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -28,3 +29,4 @@ you may need to go through some hoops to download it on the iphone, but you can 
 install the profile
 important hidden step - go to general-about-certificate settings - trust the certificate (again...)
 https is now ready for 192.168.1.197 - pwa and hls is unlocked for local network
+

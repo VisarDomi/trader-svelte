@@ -1,11 +1,16 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { InstrumentLogic } from './logic.svelte.js';
-    const logic = new InstrumentLogic();
+    import { goto } from '$app/navigation';
+    import { instrumentStore } from '$lib/stores/instrument.svelte.js';
 
     onMount(() => {
-        logic.init();
+        instrumentStore.load();
     });
+
+    function handleSelect(epic: string) {
+        instrumentStore.select(epic);
+        goto('/chart');
+    }
 </script>
 
 <div style="padding: 1rem; max-width: 900px; margin: 0 auto;">
@@ -14,20 +19,20 @@
         <a href="/chart" style="color: #d1d4dc;">← Back</a>
     </div>
 
-    {#if logic.isLoading}
+    {#if instrumentStore.isLoading}
         <p>Fetching detailed market data...</p>
-    {:else if logic.error}
+    {:else if instrumentStore.error}
         <div style="color: #ef5350; border: 1px solid #ef5350; padding: 1rem; border-radius: 4px;">
-            {logic.error}
+            {instrumentStore.error}
         </div>
     {:else}
         <div style="display: grid; gap: 2rem;">
-            {#each logic.instruments as m}
+            {#each instrumentStore.instruments as m}
                 <div
                         role="button"
                         tabindex="0"
-                        onclick={() => logic.select(m.instrument.epic)}
-                        onkeydown={(e) => e.key === 'Enter' && logic.select(m.instrument.epic)}
+                        onclick={() => handleSelect(m.instrument.epic)}
+                        onkeydown={(e) => e.key === 'Enter' && handleSelect(m.instrument.epic)}
                         style="
                         display: block;
                         width: 100%;
@@ -71,7 +76,7 @@
                                 {m.snapshot.marketStatus}
                             </div>
                             <div style="color: #aaa; font-size: 0.9rem; margin-top: 0.25rem;">
-                                Lev: <span style="color: white; font-weight: bold;">{logic.getUserLeverage(m)}</span>
+                                Lev: <span style="color: white; font-weight: bold;">{instrumentStore.getLeverageDisplay(m)}</span>
                             </div>
                         </div>
                     </div>
