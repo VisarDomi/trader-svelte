@@ -4,37 +4,38 @@ import * as TRADING from '$lib/constants/trading.js';
 
 // Components / Services
 import { ChartUI } from './ui.svelte.js';
-import { ChartRenderer } from './ChartRenderer.svelte.js'; // NEW
+import { ChartRenderer } from './ChartRenderer.svelte.js';
 import { ChartOverlay } from './overlay.svelte.js';
-import { ChartInteraction } from './interaction.svelte.js';
+import { ChartInputHandler, type TradeIntent } from './ChartInputHandler.svelte.js';
 import { ChartDataLoader } from './loader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
 import { isPWA } from "$lib/utils/platform.js";
 
-// Types - Dependency Injection
+// Types
 import type { MarketStore } from '$lib/stores/market.svelte.js';
 import type { AccountStore } from '$lib/stores/account.svelte.js';
 import type { PositionStore } from '$lib/stores/position.svelte.js';
 import type { TradeStore } from '$lib/stores/trade.svelte.js';
 import type { SessionManager } from '$lib/services/session.js';
+import type { MarketDetailsResponse } from '$lib/types/market.js';
 
 export class ChartLogic {
-    // Public Layout State
     layout = new ChartUI(viewport);
     overlay: ChartOverlay;
 
-    // Internal Managers
     private renderer: ChartRenderer;
-    private interaction: ChartInteraction;
+    private inputHandler: ChartInputHandler;
     private loader: ChartDataLoader;
     private watchdog: Watchdog;
 
-    // Lightweight Charts References
     private chart: IChartApi | null = null;
     private series: ISeriesApi<"Candlestick"> | null = null;
 
+    // State
     private currentEpic = "";
+    private userLeverage = 1;
+    private marketDetails: MarketDetailsResponse | null = null;
 
     constructor(
         private marketStore: MarketStore,
@@ -43,46 +44,44 @@ export class ChartLogic {
         private tradeStore: TradeStore,
         private session: SessionManager
     ) {
-        // Initialize Dependencies
         this.overlay = new ChartOverlay(accountStore, positionStore, session);
         this.loader = new ChartDataLoader(accountStore, positionStore, marketStore);
-        this.interaction = new ChartInteraction(tradeStore, marketStore, positionStore);
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
-
         this.watchdog = new Watchdog(() => this.handleFreeze());
+
+        this.inputHandler = new ChartInputHandler(
+            (intent) => this.handleTradeIntent(intent),
+            () => this.isInteractionBlocked()
+        );
     }
 
     async init(container: HTMLDivElement) {
-        // 1. Check Session
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
         this.currentEpic = this.session.lastEpic;
         this.watchdog.start();
 
-        // 2. Setup Chart DOM
         this.initChart(container);
 
-        // 3. Load Business Data (Context)
         const context = await this.loader.loadContext(this.currentEpic);
         if (!context) return;
 
-        // 4. Configure Series
+        // Store Context
+        this.userLeverage = context.userLeverage;
+        this.marketDetails = context.marketDetails;
+
         if (this.chart) {
             this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(context.precision));
-
-            // Wire up Renderer and Interaction
             this.renderer.init(this.series);
-            this.interaction.configure(this.series, context.marketDetails, context.userLeverage);
+            this.inputHandler.configure(this.series, context.marketDetails);
         }
 
-        // 5. Start Data Stream
         await this.loader.initStream(
             this.currentEpic,
             this.positionStore.activePosition?.position.direction
         );
 
-        // 6. Final UI Prep
         this.layout.setDataLoaded(true);
         this.overlay.init(this.currentEpic);
     }
@@ -95,7 +94,7 @@ export class ChartLogic {
         this.overlay.destroy();
 
         if (this.chart) {
-            this.chart.unsubscribeClick(this.interaction.handleChartClick);
+            this.chart.unsubscribeClick(this.inputHandler.handleChartClick);
             this.chart.remove();
             this.chart = null;
         }
@@ -115,21 +114,36 @@ export class ChartLogic {
 
     cancelPlanning() {
         this.tradeStore.cancel();
-        // Reset to Bid if we cancelled, unless we have an active Sell position
-        // This logic might need refinement based on exact preference,
-        // but defaulting to Bid (standard view) or keeping current is safe.
-        // For now, let's keep the existing behavior:
         if (!this.positionStore.activePosition) {
             this.marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
         }
     }
 
-    // --- Private ---
+    // --- Private Interaction Logic ---
+
+    private isInteractionBlocked(): boolean {
+        return !!(this.positionStore.activePosition || this.tradeStore.isExecuting);
+    }
+
+    private handleTradeIntent(intent: TradeIntent) {
+        if (!this.marketDetails) return;
+
+        // 1. Visual Feedback
+        this.marketStore.setDataSource(intent.source);
+
+        // 2. Business Logic
+        this.tradeStore.plan(
+            intent.entryPrice,
+            intent.targetPrice,
+            intent.direction,
+            this.marketDetails,
+            this.userLeverage
+        );
+    }
 
     private initChart(container: HTMLDivElement) {
         const width = window.innerWidth;
         const height = window.innerHeight;
-
         const config = {
             width,
             height,
@@ -139,7 +153,7 @@ export class ChartLogic {
         };
 
         this.chart = createChart(container, getChartOptions(config));
-        this.chart.subscribeClick(this.interaction.handleChartClick);
+        this.chart.subscribeClick(this.inputHandler.handleChartClick);
         this.layout.init(this.chart, container);
     }
 
