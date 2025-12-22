@@ -7,6 +7,7 @@ Click on the graph to open a position with all of your deposited cash. Stop loss
 * should not be able to open a second position on the same account, even if we change instruments
 * position viewing breaks if leverage is changed - we need to save the leverage when opening a position instead of calling the api
 * localstorage is bloated - do a better job of handling data
+* can't open a position...
 
 ## dev notes: pwa
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

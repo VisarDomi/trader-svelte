@@ -18,7 +18,6 @@
     } from '$lib/utils/lines.js';
 
     let pollInterval: ReturnType<typeof setInterval>;
-    // Default precision if market details aren't fully loaded
     const precision = 2;
 
     // Derived State for Debug Info
@@ -49,7 +48,6 @@
     });
 
     onMount(async () => {
-        // Ensure we know what account/epic we are looking at
         const epic = session.lastEpic;
         if (epic) {
             await Promise.all([
@@ -57,8 +55,6 @@
                 positionStore.init(epic)
             ]);
         }
-
-        // Start Polling for PnL updates
         pollInterval = setInterval(() => {
             positionStore.refresh();
         }, 1000);
@@ -114,7 +110,7 @@
                 </div>
             </div>
 
-            <!-- Debug Info / Chart Lines -->
+            <!-- Debug Info / Chart Lines (Uses centralized colors now) -->
             {#if debugInfo}
                 <div style="background: #220033; padding: 1rem; border: 1px dashed #ff00ff; border-radius: 4px; font-family: monospace; font-size: 0.85rem; color: #ffccff;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -124,27 +120,27 @@
 
                     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                         {#if debugInfo.lambo}
-                            <div style="border: 1px solid #26a69a; padding: 0.5rem; color: #26a69a;">
-                                <strong>LAMBO (TP):</strong> {debugInfo.lambo.level}
+                            <div style="border: 1px solid {debugInfo.lambo.color}; padding: 0.5rem; color: {debugInfo.lambo.color};">
+                                <strong>LAMBO (TP):</strong> {debugInfo.lambo.price}
                                 <div style="color: #ccc;">{debugInfo.lambo.title}</div>
                             </div>
                         {:else}
                             <div style="border: 1px solid #444; padding: 0.5rem; color: #666;">LAMBO (TP): Not Set</div>
                         {/if}
 
-                        <div style="border: 1px solid {debugInfo.current.isProfit ? '#26a69a' : '#ef5350'}; padding: 0.5rem; color: {debugInfo.current.isProfit ? '#26a69a' : '#ef5350'};">
-                            <strong>CURRENT:</strong> {debugInfo.current.level}
+                        <div style="border: 1px solid {debugInfo.current.color}; padding: 0.5rem; color: {debugInfo.current.color};">
+                            <strong>CURRENT:</strong> {debugInfo.current.price}
                             <div style="color: #ccc;">{debugInfo.current.title}</div>
                         </div>
 
-                        <div style="border: 1px solid #FFDD00; padding: 0.5rem; color: #FFDD00;">
-                            <strong>STARTING:</strong> {debugInfo.starting.level}
+                        <div style="border: 1px solid {debugInfo.starting.color}; padding: 0.5rem; color: {debugInfo.starting.color};">
+                            <strong>STARTING:</strong> {debugInfo.starting.price}
                             <div style="color: #ccc;">{debugInfo.starting.title}</div>
                         </div>
 
                         {#if debugInfo.wendy}
-                            <div style="border: 1px solid #ef5350; padding: 0.5rem; color: #ef5350;">
-                                <strong>WENDY (SL):</strong> {debugInfo.wendy.level}
+                            <div style="border: 1px solid {debugInfo.wendy.color}; padding: 0.5rem; color: {debugInfo.wendy.color};">
+                                <strong>WENDY (SL):</strong> {debugInfo.wendy.price}
                                 <div style="color: #ccc;">{debugInfo.wendy.title}</div>
                             </div>
                         {:else}
@@ -194,39 +190,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Market Stats -->
-            <div>
-                <h4 style="color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase;">Market Details</h4>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; font-size: 0.9rem;">
-                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
-                        <span style="color: #888;">Net Change</span>
-                        <span style="color: {market.netChange >= 0 ? '#26a69a' : '#ef5350'}">
-                            {market.netChange} ({market.percentageChange}%)
-                        </span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
-                        <span style="color: #888;">Daily Range</span>
-                        <span>{fmt(market.high)} - {fmt(market.low)}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
-                        <span style="color: #888;">Status</span>
-                        <span>{market.marketStatus}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">
-                        <span style="color: #888;">Leverage Used</span>
-                        <span>1:{pos.leverage}</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Metadata -->
-            <div style="font-size: 0.8rem; color: #666; display: flex; flex-direction: column; gap: 0.25rem;">
-                <div>Deal ID: {pos.dealId}</div>
-                <div>Deal Ref: {pos.dealReference}</div>
-                <div>Opened: {new Date(pos.createdDate).toLocaleString()}</div>
-                <div>Contract Size: {pos.contractSize}</div>
             </div>
 
             <button

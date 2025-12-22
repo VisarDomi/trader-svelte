@@ -1,15 +1,17 @@
 import { DateTime } from 'luxon';
 import * as TRADING from '$lib/constants/trading.js';
+import * as CHART from '$lib/constants/chart.js';
 import { roundDownToFactor } from '$lib/utils/trading.js';
 import { formatTimestampToLocalTime } from '$lib/utils/time.js';
 import type { PositionBody } from '$lib/types/trading.js';
 
-export interface LineInfo {
-    level: number;
+export interface LinePresentation {
+    price: number;
     title: string;
+    color: string;
 }
 
-export interface CurrentLineInfo extends LineInfo {
+export interface CurrentLinePresentation extends LinePresentation {
     isProfit: boolean;
     profitOrLoss: number;
 }
@@ -18,7 +20,7 @@ function formatCurrency(val: number, symbol: string): string {
     return `${symbol}${val.toFixed(2)}`;
 }
 
-export function generateStartingLine(p: PositionBody, epic: string, isLandscape: boolean): LineInfo {
+export function generateStartingLine(p: PositionBody, epic: string, isLandscape: boolean): LinePresentation {
     let title;
 
     // Time formatting
@@ -37,10 +39,14 @@ export function generateStartingLine(p: PositionBody, epic: string, isLandscape:
         title = `${p.size}@${tradeTime}`;
     }
 
-    return { level: p.level, title };
+    return {
+        price: p.level,
+        title,
+        color: CHART.STARTING_LINE_COLOR
+    };
 }
 
-export function generateWendyLine(p: PositionBody, initialBalance: number, accountSymbol: string, isLandscape: boolean): LineInfo | null {
+export function generateWendyLine(p: PositionBody, initialBalance: number, accountSymbol: string, isLandscape: boolean): LinePresentation | null {
     if (!p.stopLevel) return null;
 
     const potentialLoss = Math.abs(p.level - p.stopLevel) * p.size;
@@ -61,17 +67,21 @@ export function generateWendyLine(p: PositionBody, initialBalance: number, accou
         if (isLandscape) {
             title = `Potential Loss -${formatCurrency(roundedPotentialLoss, accountSymbol)} (${formatCurrency(pessimisticBalance, accountSymbol)}) (-${potentialLossPercentage.toFixed(2)}%)${offsetPercentageText}`;
         } else {
-            // Portrait: Only Percentage + Offset (Matching Current Line style)
+            // Portrait: Only Percentage + Offset
             title = `-${potentialLossPercentage.toFixed(2)}%${offsetPercentageText}`;
         }
     } else {
         title = `Loss -${formatCurrency(roundedPotentialLoss, accountSymbol)}`;
     }
 
-    return { level: p.stopLevel, title };
+    return {
+        price: p.stopLevel,
+        title,
+        color: CHART.WENDY_LINE_COLOR
+    };
 }
 
-export function generateLamboLine(p: PositionBody, initialBalance: number, accountSymbol: string, isLandscape: boolean): LineInfo | null {
+export function generateLamboLine(p: PositionBody, initialBalance: number, accountSymbol: string, isLandscape: boolean): LinePresentation | null {
     if (!p.profitLevel) return null;
 
     const potentialProfit = Math.abs(p.level - p.profitLevel) * p.size;
@@ -94,10 +104,14 @@ export function generateLamboLine(p: PositionBody, initialBalance: number, accou
         title = `Profit +${formatCurrency(roundedPotentialProfit, accountSymbol)}`;
     }
 
-    return { level: p.profitLevel, title };
+    return {
+        price: p.profitLevel,
+        title,
+        color: CHART.LAMBO_LINE_COLOR
+    };
 }
 
-export function generateCurrentLine(p: PositionBody, currentPrice: number, initialBalance: number, accountSymbol: string, isLandscape: boolean): CurrentLineInfo {
+export function generateCurrentLine(p: PositionBody, currentPrice: number, initialBalance: number, accountSymbol: string, isLandscape: boolean): CurrentLinePresentation {
     let profitOrLoss: number;
     if (p.direction === TRADING.BUY_DIRECTION) {
         profitOrLoss = (currentPrice - p.level) * p.size;
@@ -141,10 +155,14 @@ export function generateCurrentLine(p: PositionBody, currentPrice: number, initi
         title = `${profitOrLossSign}${formatCurrency(profitOrLossRounded, accountSymbol)}`;
     }
 
+    const isProfit = profitOrLoss >= 0;
+
     return {
-        level: currentPrice,
+        price: currentPrice,
         title,
-        isProfit: profitOrLoss >= 0,
-        profitOrLoss
+        isProfit,
+        profitOrLoss,
+        // The only dynamic color logic remaining
+        color: isProfit ? "#22958a" : "#bf4240"
     };
 }
