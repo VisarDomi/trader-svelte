@@ -1,11 +1,10 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { Login } from './logic.svelte.js';
+    import { authStore } from '$lib/stores/auth.svelte.js';
     import ViewportDebug from '$lib/components/ViewportDebug.svelte';
 
-    const login = new Login();
     onMount(() => {
-        login.init();
+        authStore.init();
     });
 </script>
 
@@ -18,38 +17,37 @@
 
     <label>
         API Key
-        <input type="text" bind:value={login.apiKey} placeholder="X-CAP-API-KEY" style="width: 100%; padding: 8px;" />
+        <input type="text" bind:value={authStore.apiKey} placeholder="X-CAP-API-KEY" style="width: 100%; padding: 8px;" />
     </label>
     <label>
         Identifier
-        <input type="text" bind:value={login.identifier} placeholder="user@example.com" style="width: 100%; padding: 8px;" />
+        <input type="text" bind:value={authStore.identifier} placeholder="user@example.com" style="width: 100%; padding: 8px;" />
     </label>
     <label>
         Password
-        <input type="password" bind:value={login.password} placeholder="password" style="width: 100%; padding: 8px;" />
+        <input type="password" bind:value={authStore.password} placeholder="password" style="width: 100%; padding: 8px;" />
     </label>
 
-    <button onclick={() => login.loginBoth()} style="padding: 1rem; background-color: #26a69a; color: white; border: none; font-weight: bold; cursor: pointer;">
+    <button onclick={() => authStore.loginBoth()} style="padding: 1rem; background-color: #26a69a; color: white; border: none; font-weight: bold; cursor: pointer;">
         LOGIN TO BOTH
     </button>
 </div>
 
-<!-- Changed from Grid to Flex Column to prevent width overflow -->
 <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 2rem; max-width: 100%;">
     <!-- REAL STATUS -->
     <div style="border: 1px solid #26a69a; padding: 1rem; border-radius: 8px; overflow: hidden;">
         <h3>REAL (Charts)</h3>
-        <p>Status: <strong>{login.realStatus}</strong></p>
-        <button onclick={() => login.retryReal()}>Retry Real</button>
-        {#if login.realTokens}
+        <p>Status: <strong>{authStore.realStatus}</strong></p>
+        <button onclick={() => authStore.retryReal()}>Retry Real</button>
+        {#if authStore.realTokens}
             <div style="
                 font-size: 0.7rem;
                 margin-top: 5px;
                 color: green;
-                word-break: break-all; /* Forces wrap on long tokens */
+                word-break: break-all;
                 white-space: normal;
             ">
-                Token: {login.realTokens.cst.substring(0,100)}...
+                Token: {authStore.realTokens.cst.substring(0,100)}...
             </div>
         {/if}
     </div>
@@ -57,17 +55,17 @@
     <!-- DEMO STATUS -->
     <div style="border: 1px solid #ef5350; padding: 1rem; border-radius: 8px; overflow: hidden;">
         <h3>DEMO (Trading)</h3>
-        <p>Status: <strong>{login.demoStatus}</strong></p>
-        <button onclick={() => login.retryDemo()}>Retry Demo</button>
-        {#if login.demoTokens}
+        <p>Status: <strong>{authStore.demoStatus}</strong></p>
+        <button onclick={() => authStore.retryDemo()}>Retry Demo</button>
+        {#if authStore.demoTokens}
             <div style="
                 font-size: 0.7rem;
                 margin-top: 5px;
                 color: green;
-                word-break: break-all; /* Forces wrap on long tokens */
+                word-break: break-all;
                 white-space: normal;
             ">
-                Token: {login.demoTokens.cst.substring(0,100)}...
+                Token: {authStore.demoTokens.cst.substring(0,100)}...
             </div>
         {/if}
     </div>
@@ -75,5 +73,4 @@
 
 <p style="margin-top: 1rem;"><a href="/">← Back Home</a></p>
 
-<!-- Added debug component to monitor dimensions during login -->
 <ViewportDebug />
