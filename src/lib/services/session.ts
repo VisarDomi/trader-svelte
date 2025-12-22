@@ -6,7 +6,7 @@ import type { SessionTokens, UserCredentials } from '$lib/types/auth.js';
 import { ApiClient } from '$lib/api/client.js';
 import { DEFAULT_ERROR } from '$lib/constants/error.js';
 
-class SessionManager {
+export class SessionManager {
     /**
      * READS
      */

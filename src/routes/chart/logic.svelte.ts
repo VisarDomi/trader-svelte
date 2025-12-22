@@ -13,6 +13,7 @@ import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
 // Stores & Logic
 import { marketStore } from '$lib/stores/market.svelte.js';
+import { accountStore } from '$lib/stores/account.svelte.js';
 import { positionStore } from '$lib/stores/position.svelte.js';
 import { tradeManager } from '$lib/stores/trade.svelte.js';
 import { session } from '$lib/services/session.js';
@@ -22,7 +23,8 @@ import * as TRADING from '$lib/constants/trading.js';
 export class ChartLogic {
     // UI Helpers
     layout = new ChartUI();
-    overlay = new ChartOverlay();
+    // Injecting dependencies into the ViewModel
+    overlay = new ChartOverlay(accountStore, positionStore, session);
     lines = new ChartLines();
 
     // Core Logic
@@ -106,12 +108,9 @@ export class ChartLogic {
         this.layout.init(this.chart, container);
     }
 
-    // Handles the Visual Reaction to a confirmed trade
     async confirmTrade() {
         const result = await tradeManager.execute();
 
-        // Note: tradeManager updates PositionStore/AccountStore internally.
-        // We only care about updating the Chart Source (Bid/Ask) here.
         if (result) {
             const source = result.position.direction === TRADING.SELL_DIRECTION
                 ? TRADING.CHART_DATA_SOURCE_OFR
@@ -122,9 +121,6 @@ export class ChartLogic {
 
     cancelPlanning() {
         tradeManager.cancel();
-        // Reset chart to Bid on cancel, or keep previous?
-        // Defaulting to BID is safe, or checking current position logic.
-        // Assuming BID as default safe state if no position exists.
         marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
     }
 

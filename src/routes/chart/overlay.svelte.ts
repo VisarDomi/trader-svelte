@@ -1,14 +1,83 @@
-import { positionStore } from '$lib/stores/position.svelte.js';
+import { goto } from '$app/navigation';
 import { getMarketDetails } from '$lib/services/market.js';
 import { api } from '$lib/services/api.svelte.js';
+import * as AUTH from '$lib/constants/auth.js';
+import * as TRADING from '$lib/constants/trading.js';
+
+import type { AccountStore } from '$lib/stores/account.svelte.js';
+import type { PositionStore } from '$lib/stores/position.svelte.js';
+import type { SessionManager } from '$lib/services/session.js';
 
 export class ChartOverlay {
     isOpen = $state(false);
     marketName = $state('');
 
-    // Kept for compatibility with ChartLogic, but mostly just gets the name now
-    async init(epic: string, _unusedCallback?: any) {
-        // We fetch the name purely for the UI label
+    constructor(
+        private readonly accountStore: AccountStore,
+        private readonly positionStore: PositionStore,
+        private readonly session: SessionManager
+    ) {}
+
+    // --- Derived View State ---
+
+    // 1. Theme / Border Color based on Mode
+    get modeColor() {
+        return this.session.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350';
+    }
+
+    // 2. Account Information
+    get hasActiveAccount() {
+        return !!this.accountStore.activeAccount;
+    }
+
+    get accountName() {
+        return this.accountStore.activeAccount?.accountName ?? '—';
+    }
+
+    get accountBalanceDisplay() {
+        const a = this.accountStore.activeAccount;
+        if (!a) return '—';
+        return `${a.symbol}${a.balance.deposit.toFixed(2)}`;
+    }
+
+    get currentMode() {
+        return this.session.mode;
+    }
+
+    // 3. Position Information
+    get hasPosition() {
+        return !!this.positionStore.activePosition;
+    }
+
+    get positionDirection() {
+        return this.positionStore.activePosition?.position.direction ?? '';
+    }
+
+    get positionSize() {
+        return this.positionStore.activePosition?.position.size ?? 0;
+    }
+
+    get positionColor() {
+        const dir = this.positionStore.activePosition?.position.direction;
+        return dir === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350';
+    }
+
+    get isClosing() {
+        return this.positionStore.isClosing;
+    }
+
+    get closeButtonText() {
+        return this.positionStore.isClosing ? '...' : 'Close';
+    }
+
+    get closeButtonColor() {
+        return this.positionStore.isClosing ? '#444' : '#ef5350';
+    }
+
+    // --- Actions ---
+
+    async init(epic: string) {
+        // Fetch the friendly name for the UI
         const client = api.client;
         if (client) {
             try {
@@ -24,12 +93,25 @@ export class ChartOverlay {
         this.isOpen = !this.isOpen;
     }
 
-    destroy() {
-        // No cleanup needed anymore
+    async closePosition() {
+        if (this.isClosing) return;
+        await this.positionStore.close();
     }
 
-    // Proxy methods for the UI to call
-    async closePosition() {
-        await positionStore.close();
+    // Navigation Actions
+    navToInstrument() {
+        goto('/instrument');
+    }
+
+    navToAccounts() {
+        goto('/accounts');
+    }
+
+    navToPosition() {
+        goto('/position');
+    }
+
+    destroy() {
+        // No explicit cleanup needed for runes usually, unless listeners attached
     }
 }

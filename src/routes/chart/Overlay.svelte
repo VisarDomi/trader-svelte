@@ -1,25 +1,15 @@
 <script lang="ts">
-    import { goto } from '$app/navigation';
     import { onDestroy } from 'svelte';
     import { ChartOverlay } from './overlay.svelte.js';
-    import * as AUTH from '$lib/constants/auth.js';
-    import * as TRADING from '$lib/constants/trading.js';
-
-    // Stores
-    import { accountStore } from '$lib/stores/account.svelte.js';
-    import { positionStore } from '$lib/stores/position.svelte.js';
-    import { session } from '$lib/services/session.js';
 
     let { overlay }: { overlay: ChartOverlay } = $props();
-
-    const mode = session.mode; // Read once on mount is fine for UI coloring
 
     onDestroy(() => {
         overlay.destroy();
     });
 </script>
 
-{#if accountStore.activeAccount}
+{#if overlay.hasActiveAccount}
     <div style="
         position: fixed;
         left: 0;
@@ -46,7 +36,7 @@
                 align-items: center;
                 justify-content: center;
                 min-height: 4rem;
-                border-left: 4px solid {mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
+                border-left: 4px solid {overlay.modeColor};
             "
         >
             {#if overlay.isOpen}
@@ -78,8 +68,8 @@
                 <div
                         role="button"
                         tabindex="0"
-                        onclick={() => goto('/instrument')}
-                        onkeydown={(e) => e.key === 'Enter' && goto('/instrument')}
+                        onclick={() => overlay.navToInstrument()}
+                        onkeydown={(e) => e.key === 'Enter' && overlay.navToInstrument()}
                         style="
                         padding: 0.25rem 0.5rem;
                         cursor: pointer;
@@ -98,8 +88,8 @@
                 <div
                         role="button"
                         tabindex="0"
-                        onclick={() => goto('/accounts')}
-                        onkeydown={(e) => e.key === 'Enter' && goto('/accounts')}
+                        onclick={() => overlay.navToAccounts()}
+                        onkeydown={(e) => e.key === 'Enter' && overlay.navToAccounts()}
                         style="
                         padding: 0.25rem 0.5rem;
                         cursor: pointer;
@@ -115,10 +105,10 @@
                         font-size: 0.6rem;
                         font-weight: 900;
                         letter-spacing: 1px;
-                        color: {mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'};
+                        color: {overlay.modeColor};
                         margin-bottom: 2px;
                     ">
-                        {mode}
+                        {overlay.currentMode}
                     </div>
                     <div style="
                         font-weight: bold;
@@ -128,20 +118,20 @@
                         line-height: 1;
                         word-wrap: break-word;
                     ">
-                        {accountStore.activeAccount.accountName}
+                        {overlay.accountName}
                     </div>
                     <div style="font-weight: bold; font-size: 0.9rem; color: #fff;">
-                        {accountStore.activeAccount.symbol}{accountStore.activeAccount.balance.deposit.toFixed(2)}
+                        {overlay.accountBalanceDisplay}
                     </div>
                 </div>
 
                 <!-- 3. Position Info / Close Button -->
-                {#if positionStore.activePosition}
+                {#if overlay.hasPosition}
                     <div
                             role="button"
                             tabindex="0"
-                            onclick={() => goto('/position')}
-                            onkeydown={(e) => e.key === 'Enter' && goto('/position')}
+                            onclick={() => overlay.navToPosition()}
+                            onkeydown={(e) => e.key === 'Enter' && overlay.navToPosition()}
                             style="
                             padding: 0.25rem 0.5rem;
                             cursor: pointer;
@@ -159,18 +149,18 @@
                             font-weight: bold;
                             font-size: 0.85rem;
                             line-height: 1.1;
-                            color: {positionStore.activePosition.position.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}
+                            color: {overlay.positionColor}
                         ">
-                            {positionStore.activePosition.position.direction}<br>
-                            {positionStore.activePosition.position.size}
+                            {overlay.positionDirection}<br>
+                            {overlay.positionSize}
                         </div>
                     </div>
 
                     <button
                             onclick={() => overlay.closePosition()}
-                            disabled={positionStore.isClosing}
+                            disabled={overlay.isClosing}
                             style="
-                            background: {positionStore.isClosing ? '#444' : '#ef5350'};
+                            background: {overlay.closeButtonColor};
                             border: none;
                             color: white;
                             padding: 0 0.5rem;
@@ -184,7 +174,7 @@
                             white-space: normal;
                         "
                     >
-                        {positionStore.isClosing ? '...' : 'Close'}
+                        {overlay.closeButtonText}
                     </button>
                 {/if}
             </div>
