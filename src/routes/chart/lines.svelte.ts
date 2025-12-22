@@ -10,9 +10,9 @@ import {
     type LinePresentation
 } from '$lib/utils/lines.js';
 
-// Dependencies
-import { marketStore } from '$lib/stores/market.svelte.js';
-import { accountStore } from '$lib/stores/account.svelte.js';
+// Types for Injection
+import type { MarketStore } from '$lib/stores/market.svelte.js';
+import type { AccountStore } from '$lib/stores/account.svelte.js';
 
 export class ChartLines {
     private series: ISeriesApi<"Candlestick"> | null = null;
@@ -22,6 +22,11 @@ export class ChartLines {
     private tpLine: IPriceLine | null = null;
     private slLine: IPriceLine | null = null;
 
+    constructor(
+        private readonly marketStore: MarketStore,
+        private readonly accountStore: AccountStore
+    ) {}
+
     init(series: ISeriesApi<"Candlestick">) {
         this.series = series;
     }
@@ -29,10 +34,9 @@ export class ChartLines {
     update(position: PositionResponse | null) {
         if (!this.series) return;
 
-        // Clean slate
         this.clear();
 
-        // Reset base line style for the main series (Current Price Line default)
+        // Reset base line style
         this.series.applyOptions({
             priceLineColor: "",
             title: ""
@@ -42,7 +46,7 @@ export class ChartLines {
 
         const p = position.position;
         const initialBalance = p.initialBalance || 0;
-        const accountSymbol = accountStore.activeSymbol;
+        const accountSymbol = this.accountStore.activeSymbol;
         const isLandscape = viewport.width > viewport.height;
         const epic = position.market.epic;
 
@@ -57,10 +61,10 @@ export class ChartLines {
         if (slData) this.slLine = this.createLine(slData);
 
         // 2. Dynamic Line (Current Price PnL)
-        if (marketStore.lastCandle) {
+        if (this.marketStore.lastCandle) {
             const currentPrice = p.direction === TRADING.BUY_DIRECTION
-                ? marketStore.bid
-                : marketStore.offer;
+                ? this.marketStore.bid
+                : this.marketStore.offer;
 
             const lineInfo = generateCurrentLine(
                 p,
@@ -70,7 +74,6 @@ export class ChartLines {
                 isLandscape
             );
 
-            // Hijack the series "Price Line"
             this.series.applyOptions({
                 priceLineColor: lineInfo.color,
                 title: lineInfo.title,

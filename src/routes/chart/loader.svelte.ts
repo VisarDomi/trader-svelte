@@ -3,12 +3,11 @@ import { api } from '$lib/services/api.svelte.js';
 import { authenticateAndStoreSession } from "$lib/services/auth.js";
 import { getMarketDetails } from "$lib/services/market.js";
 import { getPreferences } from "$lib/services/account.js";
-import { session } from '$lib/services/session.js';
 
-// Stores
-import { accountStore } from '$lib/stores/account.svelte.js';
-import { positionStore } from '$lib/stores/position.svelte.js';
-import { marketStore } from '$lib/stores/market.svelte.js';
+// Stores types
+import type { AccountStore } from '$lib/stores/account.svelte.js';
+import type { PositionStore } from '$lib/stores/position.svelte.js';
+import type { MarketStore } from '$lib/stores/market.svelte.js';
 
 // Types
 import type { MarketDetailsResponse } from '$lib/types/market.js';
@@ -25,6 +24,12 @@ export interface ChartContext {
 
 export class ChartDataLoader {
 
+    constructor(
+        private readonly accountStore: AccountStore,
+        private readonly positionStore: PositionStore,
+        private readonly marketStore: MarketStore
+    ) {}
+
     async ensureSession(): Promise<boolean> {
         try {
             await authenticateAndStoreSession();
@@ -38,8 +43,8 @@ export class ChartDataLoader {
     async loadContext(epic: string): Promise<ChartContext | null> {
         // 1. Init Base Stores
         await Promise.all([
-            accountStore.init(),
-            positionStore.init(epic)
+            this.accountStore.init(),
+            this.positionStore.init(epic)
         ]);
 
         const client = api.client;
@@ -77,12 +82,30 @@ export class ChartDataLoader {
     }
 
     async initStream(epic: string, activeDirection: string | undefined) {
-        // Determine source based on position direction
-        let source: ChartData = TRADING.CHART_DATA_SOURCE_BID;
-        if (activeDirection === TRADING.SELL_DIRECTION) {
-            source = TRADING.CHART_DATA_SOURCE_OFR;
-        }
+        const source = this.getDataSourceForDirection(activeDirection);
+        await this.marketStore.init(epic, source);
+    }
 
-        await marketStore.init(epic, source);
+    disconnectStream() {
+        this.marketStore.disconnect();
+    }
+
+    /**
+     * Handles reconnection logic (used by Watchdog or recovery)
+     */
+    async reconnectStream(epic: string) {
+        this.disconnectStream();
+        const authorized = await this.ensureSession();
+        if (authorized) {
+            // Preserve existing data source selection (Bid vs Ask)
+            await this.marketStore.init(epic, this.marketStore.dataSource);
+        }
+    }
+
+    private getDataSourceForDirection(direction: string | undefined): ChartData {
+        if (direction === TRADING.SELL_DIRECTION) {
+            return TRADING.CHART_DATA_SOURCE_OFR;
+        }
+        return TRADING.CHART_DATA_SOURCE_BID;
     }
 }

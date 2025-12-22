@@ -11,7 +11,7 @@ import { ChartInteraction } from './interaction.svelte.js';
 import { ChartDataLoader } from './loader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
-// Stores & Logic
+// Stores & Logic (Singletons imported here as Composition Root)
 import { marketStore } from '$lib/stores/market.svelte.js';
 import { accountStore } from '$lib/stores/account.svelte.js';
 import { positionStore } from '$lib/stores/position.svelte.js';
@@ -23,14 +23,14 @@ import * as TRADING from '$lib/constants/trading.js';
 export class ChartLogic {
     // UI Helpers
     layout = new ChartUI();
-    // Injecting dependencies into the ViewModel
-    overlay = new ChartOverlay(accountStore, positionStore, session);
-    lines = new ChartLines();
 
-    // Core Logic
+    // Components with Injected Dependencies
+    overlay = new ChartOverlay(accountStore, positionStore, session);
+    lines = new ChartLines(marketStore, accountStore);
     painter = new ChartPainter(marketStore);
     interaction = new ChartInteraction(tradeManager, marketStore, positionStore);
-    loader = new ChartDataLoader();
+    loader = new ChartDataLoader(accountStore, positionStore, marketStore);
+
     watchdog: Watchdog;
 
     // Local Config
@@ -39,6 +39,7 @@ export class ChartLogic {
     private currentEpic = "";
 
     constructor() {
+        // Watchdog now delegates recovery to the Loader
         this.watchdog = new Watchdog(() => this.handleFreeze());
 
         // Master Effect: Update Lines whenever relevant state changes
@@ -90,7 +91,7 @@ export class ChartLogic {
         this.watchdog.stop();
         this.layout.destroy();
         this.painter.destroy();
-        marketStore.disconnect();
+        this.loader.disconnectStream(); // Use loader to manage disconnect
         this.overlay.destroy();
 
         if (this.chart) {
@@ -125,11 +126,8 @@ export class ChartLogic {
     }
 
     private async handleFreeze() {
-        console.warn("Freeze detected, reloading...");
-        marketStore.disconnect();
-        const authorized = await this.loader.ensureSession();
-        if (authorized) {
-            await marketStore.init(this.currentEpic, marketStore.dataSource);
-        }
+        console.warn("Freeze detected, reloading stream...");
+        // Delegate low-level store management to Loader
+        await this.loader.reconnectStream(this.currentEpic);
     }
 }
