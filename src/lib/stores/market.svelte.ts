@@ -15,7 +15,7 @@ export class MarketStore {
     // The active candle to be drawn by the chart
     lastCandle = $state.raw<ChartCandle | null>(null);
 
-    // The active history to be loaded by the chart
+    // The active history to be loaded by the chart (Proxy-free for performance)
     history = $state.raw<ChartCandle[]>([]);
 
     isLoaded = $state(false);
@@ -30,7 +30,7 @@ export class MarketStore {
     private bidHistory: ChartCandle[] = [];
     private askHistory: ChartCandle[] = [];
 
-    // Background Accumulators (Memory only)
+    // Background Accumulators
     private liveBidCandle: ChartCandle | null = null;
     private liveAskCandle: ChartCandle | null = null;
 
@@ -58,15 +58,12 @@ export class MarketStore {
         await this.loadHistory();
     }
 
-    /**
-     * Instantly swaps both the history and the live candle.
-     * Since live candles are updated in background, the switch is seamless.
-     */
     setDataSource(source: ChartData) {
         if (this.dataSource === source) return;
         this.dataSource = source;
 
         // 1. Swap History
+        // bidHistory/askHistory now contain only CLOSED candles, so no overlap with lastCandle
         this.history = source === TRADING.CHART_DATA_SOURCE_OFR ? this.askHistory : this.bidHistory;
 
         // 2. Swap Live Candle
@@ -105,13 +102,15 @@ export class MarketStore {
             this.bidHistory = mapToCandles(this.rawHistory, TRADING.CHART_DATA_SOURCE_BID);
             this.askHistory = mapToCandles(this.rawHistory, TRADING.CHART_DATA_SOURCE_OFR);
 
-            // Initialize Live Candles from end of history
+            // Pop the last candle from history to serve as the initial "Live" candle.
+            // This prevents duplicate timestamp errors because 'history' passed to setData
+            // must not overlap with the 'update' calls for the current bar.
             if (this.bidHistory.length > 0) {
-                this.liveBidCandle = { ...this.bidHistory[this.bidHistory.length - 1] };
+                this.liveBidCandle = this.bidHistory.pop()!;
                 if (this.bid === 0) this.bid = this.liveBidCandle.close;
             }
             if (this.askHistory.length > 0) {
-                this.liveAskCandle = { ...this.askHistory[this.askHistory.length - 1] };
+                this.liveAskCandle = this.askHistory.pop()!;
                 if (this.offer === 0) this.offer = this.liveAskCandle.close;
             }
 
@@ -135,28 +134,34 @@ export class MarketStore {
         this.offer = msg.payload.ofr;
 
         if (this.isLoaded) {
-            const timestampMs = msg.payload.timestamp;
+            const time = (Math.floor(msg.payload.timestamp / 1000 / 60) * 60) as UTCTimestamp;
 
-            // Update BOTH background candles
-            this.liveBidCandle = this.updateSingleCandle(this.liveBidCandle, this.bid, timestampMs);
-            this.liveAskCandle = this.updateSingleCandle(this.liveAskCandle, this.offer, timestampMs);
+            this.liveBidCandle = this.processTick(this.bidHistory, this.liveBidCandle, this.bid, time);
+            this.liveAskCandle = this.processTick(this.askHistory, this.liveAskCandle, this.offer, time);
 
-            // Update the public state to trigger the Chart Painter
             this.lastCandle = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR
                 ? this.liveAskCandle
                 : this.liveBidCandle;
         }
     }
 
-    private updateSingleCandle(candle: ChartCandle | null, price: number, timestampMs: number): ChartCandle {
-        const time = (Math.floor(timestampMs / 1000 / 60) * 60) as UTCTimestamp;
-
-        if (!candle) {
+    private processTick(
+        historyArr: ChartCandle[],
+        currentCandle: ChartCandle | null,
+        price: number,
+        time: UTCTimestamp
+    ): ChartCandle {
+        if (!currentCandle) {
             return { time, open: price, high: price, low: price, close: price };
         }
 
-        // Check if we entered a new minute
-        if (time > candle.time) {
+        if (time > currentCandle.time) {
+            // Commit closed candle to history
+            // Since we popped it in init, it's not there yet.
+            // If it's a new minute rolling over, we push the PREVIOUS one.
+            historyArr.push(currentCandle);
+
+            // Start new candle
             return {
                 time,
                 open: price,
@@ -166,8 +171,7 @@ export class MarketStore {
             };
         }
 
-        // Update existing candle (Clone to ensure immutability for lightweight-charts)
-        const c = { ...candle };
+        const c = { ...currentCandle };
         c.high = Math.max(c.high, price);
         c.low = Math.min(c.low, price);
         c.close = price;
