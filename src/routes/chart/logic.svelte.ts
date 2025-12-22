@@ -7,7 +7,7 @@ import { viewport } from '$lib/services/viewport.svelte.js';
 import { ChartUI } from './ui.svelte.js';
 import { ChartPainter } from './painter.svelte.js';
 import { ChartLines } from './lines.svelte.js';
-import { ChartOverlay } from './overlay.svelte.js'; // We'll keep old overlay for now
+import { ChartOverlay } from './overlay.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
 // Stores & Logic
@@ -15,7 +15,7 @@ import { marketStore } from '$lib/stores/market.svelte.js';
 import { accountStore } from '$lib/stores/account.svelte.js';
 import { positionStore } from '$lib/stores/position.svelte.js';
 import { tradeManager } from '$lib/stores/trade.svelte.js';
-import { authenticateAndStoreSession, startRestHeartbeat } from "$lib/services/auth.js";
+import { authenticateAndStoreSession } from "$lib/services/auth.js";
 import { getMarketDetails } from "$lib/services/market.js";
 import { getPreferences } from "$lib/services/account.js";
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
@@ -43,14 +43,13 @@ export class ChartLogic {
     private currentEpic = "";
     private marketDetails: MarketDetailsResponse | null = null;
     private userLeverage = 1;
-    private stopAuthHeartbeat: (() => void) | null = null;
 
     constructor() {
         this.watchdog = new Watchdog(() => this.handleFreeze());
 
         // Master Effect: Update Lines whenever relevant state changes
         $effect(() => {
-            // Trigger on: Viewport resize, Market price tick, Planning state, Active Position
+            // Register dependencies
             const _tick = marketStore.lastCandle;
             const _vp = viewport.width;
 
@@ -65,9 +64,9 @@ export class ChartLogic {
     }
 
     async init(container: HTMLDivElement) {
+        // Ensure valid session before starting heavy data
         try {
             await authenticateAndStoreSession();
-            this.stopAuthHeartbeat = startRestHeartbeat();
         } catch {
             await goto('/login');
             return;
@@ -86,7 +85,7 @@ export class ChartLogic {
             this.loadMarketConfig()
         ]);
 
-        // 3. Initialize Feed (Starts Stream & History)
+        // 3. Initialize Feed
         // We set data source based on current position direction
         let source: ChartData = TRADING.CHART_DATA_SOURCE_BID;
         if (positionStore.activePosition?.position.direction === TRADING.SELL_DIRECTION) {
@@ -96,17 +95,12 @@ export class ChartLogic {
         await marketStore.init(this.currentEpic, source);
         this.layout.setDataLoaded(true);
 
-        // 4. Initialize Legacy Overlay (Optional, can be refactored later)
-        this.overlay.init(this.currentEpic, () => {
-            // If overlay closes position, refresh our store
-            positionStore.refresh();
-            accountStore.refresh();
-        });
+        // 4. Initialize Overlay
+        this.overlay.init(this.currentEpic);
     }
 
     destroy() {
         this.watchdog.stop();
-        if (this.stopAuthHeartbeat) this.stopAuthHeartbeat();
 
         this.layout.destroy();
         this.painter.destroy();
@@ -184,7 +178,7 @@ export class ChartLogic {
             return; // Clicked inside spread
         }
 
-        // Switch Chart Data Source to match direction (Bid vs Ask chart)
+        // Switch Chart Data Source to match direction
         marketStore.setDataSource(targetSource);
 
         // Delegate to TradeManager
@@ -213,7 +207,6 @@ export class ChartLogic {
 
     cancelPlanning() {
         tradeManager.cancel();
-        // Revert to Bid chart by default if cancelled
         marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
     }
 
@@ -222,7 +215,6 @@ export class ChartLogic {
         marketStore.disconnect();
         try {
             await authenticateAndStoreSession();
-            // Reload history to fill gap
             await marketStore.init(this.currentEpic, marketStore.dataSource);
         } catch {
             await goto('/login');
