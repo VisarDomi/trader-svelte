@@ -1,5 +1,5 @@
 import { createChart, CandlestickSeries } from 'lightweight-charts';
-import type { IChartApi, ISeriesApi, MouseEventParams } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { goto } from '$app/navigation';
 import { viewport } from '$lib/services/viewport.svelte.js';
 
@@ -8,6 +8,7 @@ import { ChartUI } from './ui.svelte.js';
 import { ChartPainter } from './painter.svelte.js';
 import { ChartLines } from './lines.svelte.js';
 import { ChartOverlay } from './overlay.svelte.js';
+import { ChartInteraction } from './interaction.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
 // Stores & Logic
@@ -24,8 +25,7 @@ import { api } from '$lib/services/api.svelte.js';
 
 import * as TRADING from '$lib/constants/trading.js';
 import type { LeverageCategory } from '$lib/types/account.js';
-import type { MarketDetailsResponse } from '$lib/types/market.js';
-import type {ChartData, Direction} from "$lib/types/trading";
+import type { ChartData } from "$lib/types/trading";
 
 export class ChartLogic {
     // UI Helpers
@@ -35,14 +35,13 @@ export class ChartLogic {
 
     // Core Logic
     painter = new ChartPainter(marketStore);
+    interaction = new ChartInteraction(tradeManager, marketStore, positionStore);
     watchdog: Watchdog;
 
     // Local Config
     private chart: IChartApi | null = null;
     private series: ISeriesApi<"Candlestick"> | null = null;
     private currentEpic = "";
-    private marketDetails: MarketDetailsResponse | null = null;
-    private userLeverage = 1;
 
     constructor() {
         this.watchdog = new Watchdog(() => this.handleFreeze());
@@ -108,7 +107,8 @@ export class ChartLogic {
         this.overlay.destroy();
 
         if (this.chart) {
-            this.chart.unsubscribeClick(this.handleChartClick);
+            // Unsubscribe using the interaction handler
+            this.chart.unsubscribeClick(this.interaction.handleChartClick);
             this.chart.remove();
             this.chart = null;
         }
@@ -118,7 +118,10 @@ export class ChartLogic {
         const w = window.innerWidth;
         const h = window.innerHeight;
         this.chart = createChart(container, getChartOptions(w, h));
-        this.chart.subscribeClick(this.handleChartClick);
+
+        // Delegate clicks to Interaction Handler
+        this.chart.subscribeClick(this.interaction.handleChartClick);
+
         this.layout.init(this.chart, container);
     }
 
@@ -131,14 +134,14 @@ export class ChartLogic {
                 getMarketDetails(client, this.currentEpic),
                 getPreferences(client)
             ]);
-            this.marketDetails = md;
 
             // Determine Leverage
+            let userLeverage = 1;
             const category = md.instrument.type as LeverageCategory;
             if (prefs.leverages[category]) {
-                this.userLeverage = prefs.leverages[category].current;
+                userLeverage = prefs.leverages[category].current;
             } else if (md.instrument.marginFactorUnit === 'PERCENTAGE') {
-                this.userLeverage = 100 / md.instrument.marginFactor;
+                userLeverage = 100 / md.instrument.marginFactor;
             }
 
             // Create Series with correct precision
@@ -147,49 +150,16 @@ export class ChartLogic {
                 this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(precision));
                 this.painter.init(this.series);
                 this.lines.init(this.series);
+
+                // Configure Interaction Handler
+                this.interaction.configure(this.series, md, userLeverage);
             }
         } catch (e) {
             console.error("Config Load Failed", e);
         }
     }
 
-    private handleChartClick = (param: MouseEventParams) => {
-        if (positionStore.activePosition || tradeManager.isExecuting) return;
-        if (!this.series || !this.marketDetails) return;
-        if (!param.point) return;
-
-        const price = this.series.coordinateToPrice(param.point.y);
-        if (!price) return;
-
-        const bid = marketStore.bid;
-        const ask = marketStore.offer;
-
-        // Determine Direction based on click relative to spread
-        let direction: Direction;
-        let targetSource: ChartData = TRADING.CHART_DATA_SOURCE_BID;
-
-        if (price > ask) {
-            direction = TRADING.BUY_DIRECTION;
-            targetSource = TRADING.CHART_DATA_SOURCE_BID;
-        } else if (price < bid) {
-            direction = TRADING.SELL_DIRECTION;
-            targetSource = TRADING.CHART_DATA_SOURCE_OFR;
-        } else {
-            return; // Clicked inside spread
-        }
-
-        // Switch Chart Data Source to match direction
-        marketStore.setDataSource(targetSource);
-
-        // Delegate to TradeManager
-        tradeManager.plan(
-            targetSource === TRADING.CHART_DATA_SOURCE_OFR ? bid : ask, // Execution Price
-            direction,
-            this.marketDetails,
-            this.userLeverage
-        );
-    };
-
+    // Proxy methods for UI access (kept for backward compatibility with View)
     async confirmTrade() {
         const result = await tradeManager.execute();
         if (result) {
