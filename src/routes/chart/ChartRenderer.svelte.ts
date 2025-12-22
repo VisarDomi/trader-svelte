@@ -18,8 +18,6 @@ import type { PositionResponse } from "$lib/types/trading.js";
 
 export class ChartRenderer {
     private series: ISeriesApi<"Candlestick"> | null = null;
-
-    // Tracked references to remove lines later
     private activeLines: IPriceLine[] = [];
 
     constructor(
@@ -28,31 +26,30 @@ export class ChartRenderer {
         private readonly tradeStore: TradeStore,
         private readonly accountStore: AccountStore
     ) {
-        // 1. Reactive Candle Painting
+        // 1. Reactive History Painting (Heavy Operation)
+        // Only runs when the history array reference changes (Load or Source Switch)
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
-            // Access properties to register dependencies
             const history = this.marketStore.history;
-            const lastCandle = this.marketStore.lastCandle;
 
-            if (this.series && loaded) {
-                // If we have history and it hasn't been set, or if we need a refresh
-                // Note: SetData is expensive, ideally we only call it on load or timeframe change.
-                // However, accessing history.length ensures we track it.
-                if (history.length > 0 && this.series.data().length === 0) {
-                    this.series.setData(history);
-                }
-
-                // Update live candle
-                if (lastCandle) {
-                    this.series.update(lastCandle);
-                }
+            if (this.series && loaded && history.length > 0) {
+                this.series.setData(history);
             }
         });
 
-        // 2. Reactive Line Painting
+        // 2. Reactive Live Update (Light Operation)
+        // Runs on every tick
         $effect(() => {
-            // Determine which position to show (Mock/Planned or Real)
+            const loaded = this.marketStore.isLoaded;
+            const lastCandle = this.marketStore.lastCandle;
+
+            if (this.series && loaded && lastCandle) {
+                this.series.update(lastCandle);
+            }
+        });
+
+        // 3. Reactive Line Painting
+        $effect(() => {
             let targetPosition: PositionResponse | null = null;
 
             if (this.tradeStore.isPlanning) {
@@ -63,7 +60,7 @@ export class ChartRenderer {
 
             // Trigger re-render when these change
             const _tick = this.marketStore.currentPrice;
-            const _width = viewport.width; // Trigger on resize (landscape/portrait title change)
+            const _width = viewport.width;
 
             this.drawLines(targetPosition);
         });
@@ -72,7 +69,7 @@ export class ChartRenderer {
     init(series: ISeriesApi<"Candlestick">) {
         this.series = series;
 
-        // Initial Data Hydration
+        // Initial Data Hydration (handles race condition if data loaded before init)
         if (this.marketStore.isLoaded && this.marketStore.history.length > 0) {
             this.series.setData(this.marketStore.history);
         }
@@ -81,10 +78,7 @@ export class ChartRenderer {
     private drawLines(response: PositionResponse | null) {
         if (!this.series) return;
 
-        // Clear existing
         this.clearLines();
-
-        // Clear PriceLine (Current Candle Marker)
         this.series.applyOptions({ priceLineColor: "", title: "" } as any);
 
         if (!response) return;
@@ -95,7 +89,7 @@ export class ChartRenderer {
         const symbol = this.accountStore.activeSymbol;
         const isLandscape = viewport.width > viewport.height;
 
-        // 1. Static Lines (Entry, TP, SL)
+        // 1. Static Lines
         const linesToDraw = [
             new EntryLine(position, market.epic),
             new TakeProfitLine(position, initialBalance, symbol),
@@ -107,8 +101,7 @@ export class ChartRenderer {
             this.renderPriceLine(data);
         });
 
-        // 2. Dynamic Line (Current Price PnL)
-        // We only draw this if we have a valid current price
+        // 2. Dynamic Line (Current Price)
         const currentPrice = position.direction === TRADING.BUY_DIRECTION
             ? this.marketStore.bid
             : this.marketStore.offer;
@@ -117,7 +110,6 @@ export class ChartRenderer {
             const currentObj = new CurrentPriceLine(position, currentPrice, initialBalance, symbol);
             const data = currentObj.getData(isLandscape);
 
-            // We use the Series 'PriceLine' for the current price to ensure it aligns with the candle
             this.series.applyOptions({
                 priceLineColor: data.color,
                 title: data.title,
@@ -142,7 +134,6 @@ export class ChartRenderer {
 
     private clearLines() {
         if (!this.series) return;
-
         this.activeLines.forEach(l => this.series!.removePriceLine(l));
         this.activeLines = [];
     }
