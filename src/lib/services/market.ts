@@ -5,7 +5,7 @@ import * as TIME from '$lib/constants/time.js';
 import * as TRADING from "$lib/constants/trading.js";
 import type { MarketPriceResponse, ChartCandle, MarketDetailsResponse, PriceSnapshot } from "$lib/types/market.js";
 import type { ApiClient } from '$lib/api/client.js';
-import type { ChartData } from "$lib/types/trading";
+import type { ChartData } from "$lib/types/trading.js";
 
 /**
  * Fetches the raw price snapshots (containing both Bid and Ask) from the API.
@@ -29,7 +29,7 @@ export async function fetchPriceHistory(
     const endpoint = `${API.PRICES_ENDPOINT}/${epic}`;
     const data = await client.get<MarketPriceResponse>(endpoint, params);
 
-    // Sort logic is typically stable, but ensure time ascending
+    // Ensure time ascending order
     return data.prices.sort((a, b) =>
         new Date(a.snapshotTimeUTC).getTime() - new Date(b.snapshotTimeUTC).getTime()
     );

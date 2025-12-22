@@ -4,17 +4,19 @@ import { api } from '$lib/services/api.svelte.js';
 import { session } from '$lib/services/session.js';
 import * as TRADING from '$lib/constants/trading.js';
 import type { ChartData } from '$lib/types/trading.js';
-import type { ChartCandle, QuoteMessage } from '$lib/types/market.js';
+import type { ChartCandle, QuoteMessage, PriceSnapshot } from '$lib/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
 
 export class MarketStore {
     // State Runes
     bid = $state(0);
     offer = $state(0);
-    lastCandle = $state<ChartCandle | null>(null);
 
-    // The active history being displayed
-    history = $state<ChartCandle[]>([]);
+    // The active candle to be drawn by the chart
+    lastCandle = $state.raw<ChartCandle | null>(null);
+
+    // The active history to be loaded by the chart
+    history = $state.raw<ChartCandle[]>([]);
 
     isLoaded = $state(false);
 
@@ -22,10 +24,15 @@ export class MarketStore {
     epic = $state("");
     dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
 
-    // Internal Cache (Pre-computed)
+    // Internal Cache
     private stream: StreamClient | null = null;
+    private rawHistory: PriceSnapshot[] = [];
     private bidHistory: ChartCandle[] = [];
     private askHistory: ChartCandle[] = [];
+
+    // Background Accumulators (Memory only)
+    private liveBidCandle: ChartCandle | null = null;
+    private liveAskCandle: ChartCandle | null = null;
 
     get currentPrice() {
         return this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.offer : this.bid;
@@ -41,28 +48,29 @@ export class MarketStore {
         this.offer = 0;
         this.lastCandle = null;
         this.history = [];
+        this.rawHistory = [];
         this.bidHistory = [];
         this.askHistory = [];
+        this.liveBidCandle = null;
+        this.liveAskCandle = null;
 
         this.connectStream();
         await this.loadHistory();
     }
 
     /**
-     * Instantly swaps the displayed history array.
-     * Since both arrays are pre-computed, this is O(1) and causes zero lag.
+     * Instantly swaps both the history and the live candle.
+     * Since live candles are updated in background, the switch is seamless.
      */
     setDataSource(source: ChartData) {
         if (this.dataSource === source) return;
         this.dataSource = source;
 
-        // Instant swap
+        // 1. Swap History
         this.history = source === TRADING.CHART_DATA_SOURCE_OFR ? this.askHistory : this.bidHistory;
 
-        // Reset the live candle to match the end of the new history
-        if (this.history.length > 0) {
-            this.lastCandle = { ...this.history[this.history.length - 1] };
-        }
+        // 2. Swap Live Candle
+        this.lastCandle = source === TRADING.CHART_DATA_SOURCE_OFR ? this.liveAskCandle : this.liveBidCandle;
     }
 
     disconnect() {
@@ -92,20 +100,28 @@ export class MarketStore {
 
         this.isLoaded = false;
         try {
-            // 1. Fetch Raw Data once
-            const raw = await fetchPriceHistory(client, this.epic);
+            this.rawHistory = await fetchPriceHistory(client, this.epic);
 
-            // 2. Pre-calculate BOTH datasets immediately
-            this.bidHistory = mapToCandles(raw, TRADING.CHART_DATA_SOURCE_BID);
-            this.askHistory = mapToCandles(raw, TRADING.CHART_DATA_SOURCE_OFR);
+            this.bidHistory = mapToCandles(this.rawHistory, TRADING.CHART_DATA_SOURCE_BID);
+            this.askHistory = mapToCandles(this.rawHistory, TRADING.CHART_DATA_SOURCE_OFR);
 
-            // 3. Set initial view
-            this.history = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.askHistory : this.bidHistory;
+            // Initialize Live Candles from end of history
+            if (this.bidHistory.length > 0) {
+                this.liveBidCandle = { ...this.bidHistory[this.bidHistory.length - 1] };
+                if (this.bid === 0) this.bid = this.liveBidCandle.close;
+            }
+            if (this.askHistory.length > 0) {
+                this.liveAskCandle = { ...this.askHistory[this.askHistory.length - 1] };
+                if (this.offer === 0) this.offer = this.liveAskCandle.close;
+            }
 
-            if (this.history.length > 0) {
-                this.lastCandle = { ...this.history[this.history.length - 1] };
-                if (this.bid === 0) this.bid = this.lastCandle.close;
-                if (this.offer === 0) this.offer = this.lastCandle.close;
+            // Set Initial View
+            if (this.dataSource === TRADING.CHART_DATA_SOURCE_OFR) {
+                this.history = this.askHistory;
+                this.lastCandle = this.liveAskCandle;
+            } else {
+                this.history = this.bidHistory;
+                this.lastCandle = this.liveBidCandle;
             }
 
             this.isLoaded = true;
@@ -118,43 +134,44 @@ export class MarketStore {
         this.bid = msg.payload.bid;
         this.offer = msg.payload.ofr;
 
-        if (this.isLoaded && this.lastCandle) {
-            const price = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.offer : this.bid;
+        if (this.isLoaded) {
             const timestampMs = msg.payload.timestamp;
-            this.updateCandle(price, timestampMs);
+
+            // Update BOTH background candles
+            this.liveBidCandle = this.updateSingleCandle(this.liveBidCandle, this.bid, timestampMs);
+            this.liveAskCandle = this.updateSingleCandle(this.liveAskCandle, this.offer, timestampMs);
+
+            // Update the public state to trigger the Chart Painter
+            this.lastCandle = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR
+                ? this.liveAskCandle
+                : this.liveBidCandle;
         }
     }
 
-    private updateCandle(price: number, timestampMs: number) {
+    private updateSingleCandle(candle: ChartCandle | null, price: number, timestampMs: number): ChartCandle {
         const time = (Math.floor(timestampMs / 1000 / 60) * 60) as UTCTimestamp;
 
-        if (!this.lastCandle) {
-            this.lastCandle = { time, open: price, high: price, low: price, close: price };
-            return;
+        if (!candle) {
+            return { time, open: price, high: price, low: price, close: price };
         }
 
-        // Clone to ensure reactivity
-        const c = { ...this.lastCandle };
-
-        if (time === c.time) {
-            c.high = Math.max(c.high, price);
-            c.low = Math.min(c.low, price);
-            c.close = price;
-        } else if (time > c.time) {
-            // New Minute: Commit the old candle to BOTH histories (approximated) and start new
-            // Note: Ideally we'd append to bidHistory/askHistory too, but for session duration
-            // simply updating the 'history' proxy is sufficient for the chart.
-            this.lastCandle = {
+        // Check if we entered a new minute
+        if (time > candle.time) {
+            return {
                 time,
                 open: price,
                 high: price,
                 low: price,
                 close: price
             };
-            return;
         }
 
-        this.lastCandle = c;
+        // Update existing candle (Clone to ensure immutability for lightweight-charts)
+        const c = { ...candle };
+        c.high = Math.max(c.high, price);
+        c.low = Math.min(c.low, price);
+        c.close = price;
+        return c;
     }
 }
 
