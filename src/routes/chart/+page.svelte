@@ -7,11 +7,23 @@
     import PwaDebug from '$lib/components/PwaDebug.svelte';
     import * as CHART_CONST from '$lib/constants/chart.js';
 
-    // Import stores just for binding to View
+    // Global Stores (Dependency Injection Source)
     import { tradeManager } from '$lib/stores/trade.svelte.js';
+    import { marketStore } from '$lib/stores/market.svelte.js';
+    import { accountStore } from '$lib/stores/account.svelte.js';
+    import { positionStore } from '$lib/stores/position.svelte.js';
+    import { session } from '$lib/services/session.js';
 
     let chartContainer: HTMLDivElement;
-    const logic = new ChartLogic();
+
+    // Inject dependencies into the Controller
+    const logic = new ChartLogic(
+        marketStore,
+        accountStore,
+        positionStore,
+        tradeManager,
+        session
+    );
 
     onMount(() => {
         logic.init(chartContainer);
@@ -26,10 +38,6 @@
 <Overlay overlay={logic.overlay} />
 <PwaDebug />
 
-<!--
-    The Page now acts as the "Controller", explicitly passing state
-    from the global store to the pure component
--->
 <TradePopup
         isOpen={tradeManager.isPlanning}
         plannedTrade={tradeManager.plannedTrade}
