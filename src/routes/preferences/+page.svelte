@@ -57,7 +57,7 @@
 
             <div style="display: grid; gap: 1.5rem;">
                 {#each Object.entries(preferencesStore.data.leverages) as [key, info]}
-                    {@const category = key as LeverageCategory}
+                    {@const category = key}
                     <div>
                         <div style="margin-bottom: 0.5rem; font-weight: bold;">{category}</div>
                         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
