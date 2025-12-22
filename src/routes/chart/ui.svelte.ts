@@ -18,11 +18,10 @@ export class ChartUI {
         }
 
         $effect(() => {
-            // Reactive dependency on viewport changes via injected service
-            const width = this.viewportService.width;
-            const height = this.viewportService.height;
-            const maxW = this.viewportService.maxWidth;
-            const maxH = this.viewportService.maxHeight;
+            // Trigger updates when viewport dimensions change
+            // (Accessing properties registers the dependency)
+            const _w = this.viewportService.width;
+            const _h = this.viewportService.height;
 
             if (this.container && this.chart) {
                 this.updateDimensions();
@@ -34,19 +33,17 @@ export class ChartUI {
         this.chart = chart;
         this.container = container;
 
-        if (typeof window !== 'undefined') {
-            if (this.isIosDevice && this.isPwa) {
-                window.addEventListener('scroll', this.handleScroll);
+        if (typeof window !== 'undefined' && this.isIosDevice && this.isPwa) {
+            window.addEventListener('scroll', this.handleScroll);
 
-                // 1. Prevention
-                document.addEventListener('gesturestart', this.preventZoom);
-                document.addEventListener('gesturechange', this.preventZoom);
-                document.addEventListener('gestureend', this.preventZoom);
+            // Prevention
+            document.addEventListener('gesturestart', this.preventZoom);
+            document.addEventListener('gesturechange', this.preventZoom);
+            document.addEventListener('gestureend', this.preventZoom);
 
-                // 2. Cure
-                window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
-                window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
-            }
+            // Cure
+            window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
+            window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
         }
 
         this.updateDimensions();
@@ -63,11 +60,9 @@ export class ChartUI {
     destroy() {
         if (typeof window === 'undefined') return;
         window.removeEventListener('scroll', this.handleScroll);
-
         document.removeEventListener('gesturestart', this.preventZoom);
         document.removeEventListener('gesturechange', this.preventZoom);
         document.removeEventListener('gestureend', this.preventZoom);
-
         window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
         window.visualViewport?.removeEventListener('scroll', this.handleZoomCheck);
     }
@@ -78,10 +73,8 @@ export class ChartUI {
 
     private handleZoomCheck = () => {
         if (!window.visualViewport) return;
-        const currentScale = window.visualViewport.scale;
-
-        if (Math.abs(currentScale - 1.0) > 0.05) {
-            console.warn(`[Zoom Watchdog] Drift ${currentScale} detected. Thrashing layout.`);
+        if (Math.abs(window.visualViewport.scale - 1.0) > 0.05) {
+            console.warn("Zoom drift detected. Resetting layout.");
             document.body.style.display = 'none';
             void document.body.offsetHeight;
             document.body.style.display = '';
@@ -95,69 +88,57 @@ export class ChartUI {
 
     private handleScroll = () => {
         if (!this.isIosDevice || !this.isPwa || !this.isDataLoaded || !this.container) return;
-        const chartH = this.container.clientHeight;
-        const winH = window.innerHeight;
-        const target = this.getScrollTarget(chartH, winH);
+        const target = this.getScrollTarget(this.container.clientHeight, window.innerHeight);
 
         if (window.scrollY < target) {
-            window.scrollTo({
-                top: target,
-                behavior: 'instant'
-            });
+            window.scrollTo({ top: target, behavior: 'instant' });
         }
     };
 
     private updateDimensions() {
         if (!this.container || !this.chart) return;
 
-        let width: number;
-        let height: number;
+        let width = this.viewportService.width;
+        let height = this.viewportService.height;
 
+        // Apply iOS PWA specific caching logic
         if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
             const dims = this.viewportService.getChartDimensions();
             width = dims.width;
             height = dims.height;
-        } else {
-            width = this.viewportService.width;
-            height = this.viewportService.height;
         }
 
+        // Apply to DOM
         this.container.style.width = `${width}px`;
         this.container.style.height = `${height}px`;
+
+        // Apply to Chart Library
         this.chart.resize(width, height);
 
+        // Update Options based on new dimensions
         const isMobile = width <= 768;
+        const isLandscape = width > height;
+
         this.chart.applyOptions({
             timeScale: {
-                minimumHeight: getTimeScaleHeight(),
+                minimumHeight: getTimeScaleHeight(this.isPwa, isLandscape),
                 barSpacing: isMobile ? CHART_CONST.MOBILE_BAR_SPACING : CHART_CONST.BAR_SPACING
             }
         });
 
+        // iOS PWA Scroll fix
         if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
             const scrollTarget = this.getScrollTarget(height, window.innerHeight);
-            window.scrollTo({
-                top: scrollTarget,
-                behavior: 'instant'
-            });
+            window.scrollTo({ top: scrollTarget, behavior: 'instant' });
         }
     }
 
     private removeTradingViewLogo() {
-        const delay = 100;
-        const maxAttempts = 20;
-        let attempts = 0;
         const tryToRemove = () => {
-            attempts++;
             const logo = document.querySelector('a[href*="tradingview"]');
-            if (logo && logo.parentNode) {
-                logo.parentNode.removeChild(logo);
-                return;
-            }
-            if (attempts < maxAttempts) {
-                setTimeout(tryToRemove, delay);
-            }
+            if (logo?.parentNode) logo.parentNode.removeChild(logo);
+            else setTimeout(tryToRemove, 100);
         };
-        setTimeout(tryToRemove, delay);
+        setTimeout(tryToRemove, 100);
     }
 }

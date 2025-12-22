@@ -19,11 +19,16 @@ import { formatTimestampToLocalTime } from "$lib/utils/time.js";
 import * as CHART from "$lib/constants/chart.js";
 import * as TIME from "$lib/constants/time";
 
-export function getTimeScaleHeight(): number {
-    if (typeof window === 'undefined') return 50;
-    const isPWA = window.matchMedia("(display-mode: standalone)").matches;
-    const isLandscape = window.innerHeight < window.innerWidth;
-    let timeScaleHeight = isPWA ? 60 : 90;
+export interface ChartLayoutConfig {
+    width: number;
+    height: number;
+    isPwa: boolean;
+    isMobile: boolean;
+    isLandscape: boolean;
+}
+
+export function getTimeScaleHeight(isPwa: boolean, isLandscape: boolean): number {
+    let timeScaleHeight = isPwa ? 60 : 90;
     if (isLandscape) {
         timeScaleHeight /= 2;
     }
@@ -47,8 +52,9 @@ export function getBaseSeriesOptions(pricePrecision: number): CandlestickSeriesP
     };
 }
 
-export function getChartOptions(width: number, height: number): DeepPartial<ChartOptions> {
-    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+export function getChartOptions(config: ChartLayoutConfig): DeepPartial<ChartOptions> {
+    const { width, height, isPwa, isMobile, isLandscape } = config;
+
     const timeScale: DeepPartial<TimeScaleOptions> = {
         tickMarkFormatter: (time: Time) => {
             return formatTimestampToLocalTime(time as UTCTimestamp);
@@ -57,20 +63,23 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
         barSpacing: isMobile ? CHART.MOBILE_BAR_SPACING : CHART.BAR_SPACING,
         minBarSpacing: CHART.MIN_BAR_SPACING,
         borderColor: CHART.BORDER_COLOR,
-        minimumHeight: getTimeScaleHeight(),
+        minimumHeight: getTimeScaleHeight(isPwa, isLandscape),
         timeVisible: true,
         secondsVisible: false,
     };
+
     const localization: DeepPartial<LocalizationOptions<Time>> = {
         timeFormatter: (time: Time) => {
             const wsTime = DateTime.fromSeconds(time as number, { zone: "system" });
             return wsTime.toFormat(TIME.DATETIME_FORMAT);
         },
     };
+
     const rightPriceScale: DeepPartial<VisiblePriceScaleOptions> = {
         borderColor: CHART.BORDER_COLOR,
         visible: true,
     };
+
     const crosshair: DeepPartial<CrosshairOptions> = {
         mode: CrosshairMode.Normal,
         vertLine: {
@@ -84,6 +93,7 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
             labelBackgroundColor: CHART.CROSSHAIR_LABEL_BG,
         },
     };
+
     const grid: DeepPartial<GridOptions> = {
         vertLines: {
             color: CHART.GRID_COLOR,
@@ -92,6 +102,7 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
             color: CHART.GRID_COLOR,
         },
     };
+
     const layout: DeepPartial<LayoutOptions> = {
         background: {
             type: ColorType.Solid,
@@ -99,6 +110,7 @@ export function getChartOptions(width: number, height: number): DeepPartial<Char
         },
         textColor: CHART.TEXT_COLOR,
     };
+
     return {
         width,
         height,

@@ -18,22 +18,19 @@ import { positionStore } from '$lib/stores/position.svelte.js';
 import { tradeManager } from '$lib/stores/trade.svelte.js';
 import { session } from '$lib/services/session.js';
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
+import { isIOS, isPWA } from "$lib/utils/platform.js";
 import * as TRADING from '$lib/constants/trading.js';
 
 export class ChartLogic {
-    // UI Helpers (Injected with dependencies)
     layout = new ChartUI(viewport);
     overlay = new ChartOverlay(accountStore, positionStore, session);
     lines = new ChartLines(marketStore, accountStore);
-
-    // Core Logic
     painter = new ChartPainter(marketStore);
     interaction = new ChartInteraction(tradeManager, marketStore, positionStore);
     loader = new ChartDataLoader(accountStore, positionStore, marketStore);
 
     watchdog: Watchdog;
 
-    // Local Config
     private chart: IChartApi | null = null;
     private series: ISeriesApi<"Candlestick"> | null = null;
     private currentEpic = "";
@@ -41,7 +38,6 @@ export class ChartLogic {
     constructor() {
         this.watchdog = new Watchdog(() => this.handleFreeze());
 
-        // Master Effect: Update Lines whenever relevant state changes
         $effect(() => {
             if (tradeManager.isPlanning) {
                 this.lines.update(tradeManager.getMockPosition());
@@ -52,21 +48,17 @@ export class ChartLogic {
     }
 
     async init(container: HTMLDivElement) {
-        // 1. Session Check
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
         this.currentEpic = session.lastEpic;
         this.watchdog.start();
 
-        // 2. Initialize Chart UI
         this.initChart(container);
 
-        // 3. Load Data Context
         const context = await this.loader.loadContext(this.currentEpic);
         if (!context) return;
 
-        // 4. Configure Chart Components
         if (this.chart) {
             this.series = this.chart.addSeries(CandlestickSeries, getBaseSeriesOptions(context.precision));
 
@@ -75,13 +67,11 @@ export class ChartLogic {
             this.interaction.configure(this.series, context.marketDetails, context.userLeverage);
         }
 
-        // 5. Start Data Stream
         await this.loader.initStream(
             this.currentEpic,
             positionStore.activePosition?.position.direction
         );
 
-        // 6. Final UI Polish
         this.layout.setDataLoaded(true);
         this.overlay.init(this.currentEpic);
     }
@@ -101,16 +91,25 @@ export class ChartLogic {
     }
 
     private initChart(container: HTMLDivElement) {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        this.chart = createChart(container, getChartOptions(w, h));
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // Pass derived flags to the pure util function
+        const config = {
+            width,
+            height,
+            isPwa: isPWA(),
+            isMobile: width <= 768,
+            isLandscape: width > height
+        };
+
+        this.chart = createChart(container, getChartOptions(config));
         this.chart.subscribeClick(this.interaction.handleChartClick);
         this.layout.init(this.chart, container);
     }
 
     async confirmTrade() {
         const result = await tradeManager.execute();
-
         if (result) {
             const source = result.position.direction === TRADING.SELL_DIRECTION
                 ? TRADING.CHART_DATA_SOURCE_OFR
