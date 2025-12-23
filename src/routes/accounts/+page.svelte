@@ -15,6 +15,11 @@
     function isTradingAccount(account: Account, type: string) {
         return account.preferred && session.mode === type;
     }
+
+    // Helper: Check if we have data to show
+    function hasData() {
+        return accountStore.realAccounts.length > 0 || accountStore.demoAccounts.length > 0;
+    }
 </script>
 
 <div class="page-container">
@@ -23,15 +28,22 @@
         <a href="/" class="back-link">← Back</a>
     </div>
 
-    {#if accountStore.isLoading}
+    <!--
+        Fix: Only show full-page loading if we have absolutely no data (initial load).
+        Otherwise, keep the list in the DOM to preserve scroll position.
+    -->
+    {#if accountStore.isLoading && !hasData()}
         <p>Loading...</p>
-    {:else if accountStore.error}
-        <div class="error-box">
-            {accountStore.error}
-        </div>
     {:else}
-        <div class="lists-container">
 
+        {#if accountStore.error}
+            <div class="error-box">
+                {accountStore.error}
+            </div>
+        {/if}
+
+        <!-- Apply opacity if loading in the background (switching accounts) -->
+        <div class="lists-container" style="opacity: {accountStore.isLoading ? 0.5 : 1}; transition: opacity 0.2s;">
             <section>
                 <h2 class="section-title real">Real Accounts</h2>
                 {#if accountStore.realAccounts.length === 0}
@@ -73,7 +85,6 @@
                     </div>
                 {/if}
             </section>
-
         </div>
     {/if}
 </div>
@@ -83,7 +94,7 @@
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
     .back-link { color: #d1d4dc; }
 
-    .error-box { color: #ef5350; border: 1px solid #ef5350; padding: 1rem; border-radius: 4px; }
+    .error-box { color: #ef5350; border: 1px solid #ef5350; padding: 1rem; border-radius: 4px; margin-bottom: 2rem; }
 
     .lists-container { display: flex; flex-direction: column; gap: 3rem; }
 

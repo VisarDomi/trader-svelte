@@ -34,42 +34,50 @@
         />
     {/if}
 
-    {#if preferencesStore.isLoading}
+    <!--
+        Fix: Only replace content with "Loading..." if we have no data.
+        Otherwise, keep the content in the DOM and just dim it.
+    -->
+    {#if preferencesStore.isLoading && !preferencesStore.data}
         <p>Loading preferences...</p>
-    {:else if preferencesStore.error}
-        <div class="error-box">
-            {preferencesStore.error}
-        </div>
-    {:else if preferencesStore.data}
-        <div class="content-box">
-
-            <div class="hedging-section">
-                <label class="hedging-label">
-                    <input type="checkbox" checked={false} disabled />
-                    <span>Hedging Mode (Disabled)</span>
-                </label>
-                <p class="hedging-desc">
-                    Hedging is strictly disabled to ensure single-position flow.
-                </p>
+    {:else}
+        {#if preferencesStore.error}
+            <div class="error-box">
+                {preferencesStore.error}
             </div>
+        {/if}
 
-            <LeverageGrid
-                    preferences={preferencesStore.data}
-                    stagedLeverages={preferencesStore.leverages}
-                    onSelect={(cat, val) => preferencesStore.setLeverage(cat, val)}
-            />
+        {#if preferencesStore.data}
+            <div class="content-box" style="opacity: {preferencesStore.isLoading ? 0.5 : 1}; transition: opacity 0.2s;">
 
-            <div class="actions">
-                <button
-                        onclick={() => preferencesStore.save()}
-                        disabled={preferencesStore.isSaving}
-                        class="save-btn"
-                        style="background-color: {preferencesStore.activeType === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'}"
-                >
-                    {preferencesStore.isSaving ? 'Saving...' : 'Save Preferences'}
-                </button>
+                <div class="hedging-section">
+                    <label class="hedging-label">
+                        <input type="checkbox" checked={false} disabled />
+                        <span>Hedging Mode (Disabled)</span>
+                    </label>
+                    <p class="hedging-desc">
+                        Hedging is strictly disabled to ensure single-position flow.
+                    </p>
+                </div>
+
+                <LeverageGrid
+                        preferences={preferencesStore.data}
+                        stagedLeverages={preferencesStore.leverages}
+                        onSelect={(cat, val) => preferencesStore.setLeverage(cat, val)}
+                />
+
+                <div class="actions">
+                    <button
+                            onclick={() => preferencesStore.save()}
+                            disabled={preferencesStore.isSaving}
+                            class="save-btn"
+                            style="background-color: {preferencesStore.activeType === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350'}"
+                    >
+                        {preferencesStore.isSaving ? 'Saving...' : 'Save Preferences'}
+                    </button>
+                </div>
             </div>
-        </div>
+        {/if}
     {/if}
 </div>
 

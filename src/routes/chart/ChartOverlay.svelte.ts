@@ -105,7 +105,9 @@ export class ChartOverlay {
     }
 
     navToAccounts() {
-        void goto('/accounts');
+        const activeId = this.accountStore.activeAccount?.accountId;
+        const url = activeId ? `/accounts#${activeId}` : '/accounts';
+        void goto(url);
     }
 
     navToPosition() {
