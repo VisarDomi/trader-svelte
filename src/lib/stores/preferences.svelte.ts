@@ -7,15 +7,12 @@ import type { Account, AccountPreferences, LeverageCategory, LeverageUpdate } fr
 import type { URL_TYPE } from '$lib/types/url.js';
 
 export class PreferencesStore {
-    // Data
     account = $state<Account | null>(null);
     data = $state<AccountPreferences | null>(null);
 
-    // UI State (Staging)
     leverages = $state<Partial<Record<LeverageCategory, number>>>({});
     activeType = $state<URL_TYPE>(AUTH.REAL_TYPE);
 
-    // Status
     isLoading = $state(false);
     isSaving = $state(false);
     error = $state("");
@@ -43,14 +40,12 @@ export class PreferencesStore {
 
             this.data = prefs;
 
-            // Determine which account we are editing
             const storedId = session.getLastAccountId(type);
             this.account = accounts.find(a => a.accountId === storedId)
                 || accounts.find(a => a.preferred)
                 || accounts[0]
                 || null;
 
-            // Hydrate staging state
             this.leverages = {};
             for (const [key, val] of Object.entries(prefs.leverages)) {
                 this.leverages[key as LeverageCategory] = val.current;
@@ -82,7 +77,6 @@ export class PreferencesStore {
         try {
             const leverageUpdate = { ...this.leverages } as LeverageUpdate;
 
-            // We force hedging to false per business requirement
             const response = await updatePreferences(
                 this.activeType,
                 tokens,
@@ -90,13 +84,15 @@ export class PreferencesStore {
                 false
             );
 
-            if (response.status === 'SUCCESS') {
-                notifications.success("Preferences updated successfully");
-                // Reload to confirm application
-                await this.init(this.activeType);
-            } else {
-                throw new Error("Update failed: Unknown status"); // TODO: fix, don't throw locally
+            if (response.status !== 'SUCCESS') {
+                const failureMessage = "Update failed: Unknown status";
+                this.error = failureMessage;
+                notifications.error(failureMessage);
+                return;
             }
+
+            notifications.success("Preferences updated successfully");
+            await this.init(this.activeType);
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

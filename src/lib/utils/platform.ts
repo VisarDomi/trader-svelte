@@ -6,6 +6,6 @@ export function isIOS(): boolean {
 export function isPWA(): boolean {
     if (typeof window === 'undefined') return false;
     if (window.matchMedia('(display-mode: standalone)').matches) return true;
-    if ('standalone' in navigator && (navigator as any).standalone === true) return true;
+    if ('standalone' in navigator && navigator.standalone === true) return true;
     return false;
 }

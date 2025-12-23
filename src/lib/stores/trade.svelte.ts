@@ -85,7 +85,9 @@ export class TradeStore {
             );
 
             if (!testPlan) {
-                throw new Error("Calculated size below minimum deal size."); // TODO: fix, don't throw locally
+                notifications.error("Calculated size below minimum deal size.");
+                this.cancel();
+                return;
             }
 
             this.isPlanning = true;
@@ -171,7 +173,6 @@ export class TradeStore {
             initialBalance: accountStore.balance
         };
 
-        // Use the Mapper to create a valid PositionMarket object
         const mockMarket = MarketMapper.toPositionMarket(draft.market);
 
         return {
