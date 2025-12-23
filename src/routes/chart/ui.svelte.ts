@@ -18,8 +18,6 @@ export class ChartUI {
         }
 
         $effect(() => {
-            // Trigger updates when viewport dimensions change
-            // (Accessing properties registers the dependency)
             const _w = this.viewportService.width;
             const _h = this.viewportService.height;
 
@@ -33,17 +31,18 @@ export class ChartUI {
         this.chart = chart;
         this.container = container;
 
-        if (typeof window !== 'undefined' && this.isIosDevice && this.isPwa) {
-            window.addEventListener('scroll', this.handleScroll);
+        if (typeof window !== 'undefined' && this.isIosDevice) {
+            // CURE: Check if we arrived zoomed in, and force a reset
+            this.forceZoomReset();
 
-            // Prevention
-            document.addEventListener('gesturestart', this.preventZoom);
-            document.addEventListener('gesturechange', this.preventZoom);
-            document.addEventListener('gestureend', this.preventZoom);
-
-            // Cure
-            window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
-            window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
+            if (this.isPwa) {
+                window.addEventListener('scroll', this.handleScroll);
+                document.addEventListener('gesturestart', this.preventZoom);
+                document.addEventListener('gesturechange', this.preventZoom);
+                document.addEventListener('gestureend', this.preventZoom);
+                window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
+                window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
+            }
         }
 
         this.updateDimensions();
@@ -67,18 +66,29 @@ export class ChartUI {
         window.visualViewport?.removeEventListener('scroll', this.handleZoomCheck);
     }
 
+    private forceZoomReset() {
+        // If we are already at scale 1, do nothing
+        if (window.visualViewport && Math.abs(window.visualViewport.scale - 1) < 0.01) return;
+
+        const meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) return;
+
+        // The "Hammer": Force maximum-scale=1. This forces iOS to snap back to 1.0 immediately.
+        // We also disable user-scaling to prevent accidental pinches on the chart container.
+        meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+    }
+
     private preventZoom = (e: Event) => {
         e.preventDefault();
     };
 
     private handleZoomCheck = () => {
         if (!window.visualViewport) return;
+
+        // If the user somehow manages to zoom in despite our blocks, we force reset again.
         if (Math.abs(window.visualViewport.scale - 1.0) > 0.05) {
-            console.warn("Zoom drift detected. Resetting layout.");
-            document.body.style.display = 'none';
-            void document.body.offsetHeight;
-            document.body.style.display = '';
-            window.scrollTo(0, 0);
+            console.warn("Zoom drift detected. Resetting.");
+            this.forceZoomReset();
         }
     };
 
@@ -101,21 +111,17 @@ export class ChartUI {
         let width = this.viewportService.width;
         let height = this.viewportService.height;
 
-        // Apply iOS PWA specific caching logic
         if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
             const dims = this.viewportService.getChartDimensions();
             width = dims.width;
             height = dims.height;
         }
 
-        // Apply to DOM
         this.container.style.width = `${width}px`;
         this.container.style.height = `${height}px`;
 
-        // Apply to Chart Library
         this.chart.resize(width, height);
 
-        // Update Options based on new dimensions
         const isMobile = width <= 768;
         const isLandscape = width > height;
 
@@ -126,7 +132,6 @@ export class ChartUI {
             }
         });
 
-        // iOS PWA Scroll fix
         if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
             const scrollTarget = this.getScrollTarget(height, window.innerHeight);
             window.scrollTo({ top: scrollTarget, behavior: 'instant' });

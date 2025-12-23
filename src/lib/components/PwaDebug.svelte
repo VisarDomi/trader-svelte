@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import { viewport } from '$lib/services/viewport.svelte.js';
-    import * as STORAGE from '$lib/constants/storage.js';
 
     let metrics = $state<Record<string, string | number>>({});
     let interval: ReturnType<typeof setInterval>;
@@ -34,7 +33,6 @@
 
     onMount(() => {
         update();
-        // High frequency poll to catch rotation animation frames
         interval = setInterval(update, 100);
         window.addEventListener('resize', update);
         window.addEventListener('scroll', update);
@@ -52,17 +50,17 @@
 <div style="
     position: fixed;
     bottom: 0;
-    left: 0;
+    right: 0; /* MOVED TO RIGHT */
     width: 240px;
     background: rgba(0, 0, 0, 0.85);
     border: 1px solid #FF00FF;
-    border-top-right-radius: 8px;
+    border-top-left-radius: 8px; /* Changed radius corner */
     padding: 10px;
     z-index: 9999;
     font-family: monospace;
     font-size: 10px;
     color: #00FF00;
-    pointer-events: auto; /* Ensure buttons work */
+    pointer-events: auto;
 ">
     <div style="font-weight: bold; border-bottom: 1px solid #444; margin-bottom: 5px; color: #FF00FF;">
         PWA DEBUGGER
