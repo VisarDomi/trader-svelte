@@ -48,7 +48,7 @@
 
     <div class="section">
         <h4 class="section-title">Protection</h4>
-        <div class="grid-3">
+        <div class="grid-2">
             <div class="tile">
                 <span class="tile-label">Stop Loss</span>
                 <div class="tile-val" style="color: #ef5350;">{fmt(pos.stopLevel)}</div>
@@ -56,10 +56,6 @@
             <div class="tile">
                 <span class="tile-label">Take Profit</span>
                 <div class="tile-val" style="color: #26a69a;">{fmt(pos.profitLevel)}</div>
-            </div>
-            <div class="tile">
-                <span class="tile-label">Guaranteed</span>
-                <div class="tile-val" style="color: #ddd;">{pos.guaranteedStop ? 'YES' : 'NO'}</div>
             </div>
         </div>
     </div>
