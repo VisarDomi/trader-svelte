@@ -1,6 +1,6 @@
 <script lang="ts">
     import * as TRADING from '$lib/constants/trading.js';
-    import type { TradeCalculationResult, Direction } from '$lib/types/trading.js';
+    import type {Direction, TradeConfirmation} from '$lib/types/trading.js';
 
     // Pure component: Data passed in via props, no store imports
     let {
@@ -11,7 +11,7 @@
         onCancel
     } = $props<{
         isOpen: boolean;
-        plannedTrade: (TradeCalculationResult & { direction: Direction, entryPrice: number }) | null;
+        plannedTrade: (TradeConfirmation & { direction: Direction, entryPrice: number }) | null;
         isExecuting: boolean;
         onConfirm: () => void;
         onCancel: () => void;

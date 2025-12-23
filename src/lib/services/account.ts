@@ -1,13 +1,14 @@
 import * as API from '$lib/constants/api.js';
 import * as BACKEND from '$lib/constants/backend.js';
-import * as STORAGE from '$lib/constants/storage.js';
 import * as AUTH from '$lib/constants/auth.js';
+import * as STORAGE from '$lib/constants/storage.js';
 import { getBaseUrl } from "$lib/utils/helpers.js";
 import type { URL_TYPE } from "$lib/types/url.js";
 import type { Account, AccountPreferences, LeverageUpdate, PreferencesUpdateResponse } from "$lib/types/account.js";
 import { DEFAULT_ERROR } from "$lib/constants/error.js";
 import type { SessionTokens } from "$lib/types/auth.js";
 import type { ApiClient } from '$lib/api/client.js';
+import { session } from '$lib/services/session.js';
 
 // Refactored to use ApiClient
 export async function getAccounts(client: ApiClient): Promise<Account[]> {
@@ -42,8 +43,8 @@ export async function getSyncedAccounts(type: URL_TYPE, tokens: SessionTokens, c
 
     if (typeof window === 'undefined') return accounts;
 
-    const storageKey = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
-    const lastUsedId = localStorage.getItem(storageKey);
+    // Use SessionManager to get the persisted ID instead of raw localStorage keys
+    const lastUsedId = session.getLastAccountId(type);
     const activeAccount = accounts.find(a => a.preferred);
 
     if (lastUsedId && activeAccount && activeAccount.accountId !== lastUsedId) {
@@ -53,8 +54,8 @@ export async function getSyncedAccounts(type: URL_TYPE, tokens: SessionTokens, c
             try {
                 const newTokens = await switchAccount(type, tokens, lastUsedId);
 
-                const tokenStorageKey = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
-                localStorage.setItem(tokenStorageKey, JSON.stringify(newTokens));
+                // Use SessionManager to save tokens instead of raw localStorage keys
+                session.saveTokens(type, newTokens);
 
                 return accounts.map(a => ({
                     ...a,

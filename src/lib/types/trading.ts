@@ -60,7 +60,6 @@ export interface CreatePositionResponse {
     dealReference: string;
 }
 
-// Matches Old Code's TradeDetails
 export interface TradeConfirmation {
     date: string;
     status: string;
