@@ -138,7 +138,7 @@ export class ChartUI {
 
         // Only scroll if we are "above" the target (showing the spacer)
         if (window.scrollY < target) {
-            window.scrollTo({ top: target, behavior: 'auto' }); // 'auto' is cleaner than 'instant' for major jumps sometimes
+            window.scrollTo({ top: target, behavior: 'instant' }); // 'auto' is cleaner than 'instant' for major jumps sometimes
         }
     };
 
