@@ -40,17 +40,14 @@ export class SessionManager {
      * CLEANUP: Removes old bloat
      */
     private cleanupLegacy() {
-        // Iterate backwards to safely remove keys while looping
         for (let i = localStorage.length - 1; i >= 0; i--) {
             const key = localStorage.key(i);
             if (!key) continue;
 
-            // Remove the IB_ spam
             if (key.startsWith('IB_')) {
                 localStorage.removeItem(key);
             }
 
-            // Remove old loose keys
             if (['TOKENS_REAL', 'TOKENS_DEMO', 'TRADING_MODE', 'LAST_EPIC', 'MAX_LONG', 'MAX_SHORT'].includes(key)) {
                 localStorage.removeItem(key);
             }
@@ -94,6 +91,10 @@ export class SessionManager {
 
     getTokens(type: URL_TYPE): SessionTokens | null {
         return this.getSessionCache().tokens[type] || null;
+    }
+
+    getTimestamp(): number {
+        return this.getSessionCache().timestamp;
     }
 
     saveTokens(type: URL_TYPE, tokens: SessionTokens) {
@@ -161,8 +162,7 @@ export class SessionManager {
     }
 
     /**
-     * TRADE CONTEXT (Initial Balance Logic)
-     * Replaces the IB_ spam with a single object that only cares about the active deal.
+     * TRADE CONTEXT
      */
     getInitialBalance(dealId: string): number | null {
         const ctx = this.getJSON<TradeContext>(STORAGE.TRADE_CONTEXT_KEY);
@@ -178,7 +178,6 @@ export class SessionManager {
 
     removeInitialBalance(dealId: string) {
         const ctx = this.getJSON<TradeContext>(STORAGE.TRADE_CONTEXT_KEY);
-        // Only remove if it matches the ID being closed
         if (ctx && ctx.dealId === dealId) {
             localStorage.removeItem(STORAGE.TRADE_CONTEXT_KEY);
         }

@@ -1,6 +1,5 @@
 import * as API from '$lib/constants/api.js';
 import * as AUTH from '$lib/constants/auth.js';
-import * as STORAGE from '$lib/constants/storage.js';
 import { getBaseUrl } from "$lib/utils/helpers.js";
 import type { URL_TYPE } from "$lib/types/url.js";
 import type { SessionTokens, UserCredentials } from "$lib/types/auth.js";
@@ -40,16 +39,14 @@ export async function authenticateAndStoreSession(): Promise<void> {
     // Check if we even have credentials saved, will throw if not
     session.getCredentials();
 
-    const timestampStr = localStorage.getItem(STORAGE.LOGIN_TIMESTAMP_KEY);
+    const lastLogin = session.getTimestamp();
     const hasReal = session.isAuthenticated(AUTH.REAL_TYPE);
     const hasDemo = session.isAuthenticated(AUTH.DEMO_TYPE);
+    const now = Date.now();
 
-    if (timestampStr && hasReal && hasDemo) {
-        const timestamp = parseInt(timestampStr, 10);
-        const now = Date.now();
-        if (now - timestamp < AUTH.REST_PING_INTERVAL) {
-            return;
-        }
+    // Throttle: If we have tokens and were active recently, skip re-login
+    if (hasReal && hasDemo && (now - lastLogin < AUTH.REST_PING_INTERVAL)) {
+        return;
     }
 
     const [realTokens, demoTokens] = await Promise.all([

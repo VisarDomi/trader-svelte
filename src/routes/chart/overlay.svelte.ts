@@ -68,7 +68,7 @@ export class ChartOverlay {
     }
 
     get closeButtonText() {
-        return this.positionStore.isClosing ? '...' : 'Close';
+        return this.positionStore.isClosing ? '...' : 'Close Position';
     }
 
     get closeButtonColor() {
