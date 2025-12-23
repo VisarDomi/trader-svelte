@@ -6,7 +6,7 @@ import {
     type MouseEventParams
 } from 'lightweight-charts';
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
-import { isPWA } from "$lib/utils/platform.js";
+import { isIOS } from "$lib/utils/platform.js";
 import { viewport } from "$lib/services/viewport.svelte.js";
 
 export class ChartController {
@@ -26,11 +26,13 @@ export class ChartController {
     init(container: HTMLDivElement) {
         const width = viewport.width;
         const height = viewport.height;
+        const isIos = isIOS();
 
         const config = {
             width,
             height,
-            isPwa: isPWA(),
+            // We treat all iOS as "PWA/App" mode for density config
+            isPwa: isIos,
             isMobile: width <= 768,
             isLandscape: width > height
         };

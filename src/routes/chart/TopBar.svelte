@@ -5,7 +5,8 @@
     let { layout }: { layout: ChartUI } = $props();
 </script>
 
-{#if layout.isDataLoaded && layout.isIosDevice && layout.isPwa}
+<!-- Render Spacer for all iOS devices (PWA or Non-PWA) -->
+{#if layout.isDataLoaded && layout.isIosDevice}
     <div
             id={CHART_CONST.TOPBAR_ID}
             style="height: {CHART_CONST.TOPBAR_HEIGHT}px; background-color: {CHART_CONST.BACKGROUND_COLOR};"

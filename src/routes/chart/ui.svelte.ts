@@ -1,24 +1,20 @@
 import type { IChartApi } from "lightweight-charts";
-import { isIOS, isPWA } from "$lib/utils/platform.js";
+import { isIOS } from "$lib/utils/platform.js";
 import { getTimeScaleHeight } from "$lib/utils/chart.js";
 import * as CHART_CONST from '$lib/constants/chart.js';
 import type { ViewportService } from "$lib/services/viewport.svelte.js";
 
 export class ChartUI {
     isIosDevice = $state(false);
-    isPwa = $state(false);
     isDataLoaded = $state(false);
 
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
-
-    // Store original viewport settings to restore on exit
     private originalViewportContent: string | null = null;
 
     constructor(private readonly viewportService: ViewportService) {
         if (typeof window !== 'undefined') {
             this.isIosDevice = isIOS();
-            this.isPwa = isPWA();
         }
 
         $effect(() => {
@@ -38,18 +34,17 @@ export class ChartUI {
         if (typeof window !== 'undefined' && this.isIosDevice) {
             this.saveAndEnforceViewport();
 
-            // Force a scan immediately and slightly later to catch the zoom snap
+            // Force scans to catch layout shifts from meta tag enforcement
             this.viewportService.scan();
             setTimeout(() => this.viewportService.scan(), 300);
 
-            if (this.isPwa) {
-                window.addEventListener('scroll', this.handleScroll);
-                document.addEventListener('gesturestart', this.preventZoom);
-                document.addEventListener('gesturechange', this.preventZoom);
-                document.addEventListener('gestureend', this.preventZoom);
-                window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
-                window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
-            }
+            // ALL iOS devices get the Scroll/Zoom protection now
+            window.addEventListener('scroll', this.handleScroll);
+            document.addEventListener('gesturestart', this.preventZoom);
+            document.addEventListener('gesturechange', this.preventZoom);
+            document.addEventListener('gestureend', this.preventZoom);
+            window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
+            window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
         }
 
         this.updateDimensions();
@@ -66,7 +61,6 @@ export class ChartUI {
     destroy() {
         if (typeof window === 'undefined') return;
 
-        // Restore the original viewport settings (allowing zoom elsewhere)
         this.restoreViewport();
 
         window.removeEventListener('scroll', this.handleScroll);
@@ -81,11 +75,9 @@ export class ChartUI {
         const meta = document.querySelector('meta[name="viewport"]');
         if (!meta) return;
 
-        // 1. Save current state
         this.originalViewportContent = meta.getAttribute('content');
 
-        // 2. Enforce strict viewport to reset zoom
-        // We apply this unconditionally on iOS Chart init to handle the Login->Chart transition
+        // Reset Zoom on iOS unconditionally
         meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
     }
 
@@ -107,7 +99,6 @@ export class ChartUI {
 
         if (Math.abs(window.visualViewport.scale - 1.0) > 0.05) {
             console.warn("Zoom drift detected. Resetting.");
-            // Re-apply the strict viewport tag if drift occurs
             const meta = document.querySelector('meta[name="viewport"]');
             if (meta) {
                 meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
@@ -120,7 +111,7 @@ export class ChartUI {
     }
 
     private handleScroll = () => {
-        if (!this.isIosDevice || !this.isPwa || !this.isDataLoaded || !this.container) return;
+        if (!this.isIosDevice || !this.isDataLoaded || !this.container) return;
         const target = this.getScrollTarget(this.container.clientHeight, window.innerHeight);
 
         if (window.scrollY < target) {
@@ -142,14 +133,17 @@ export class ChartUI {
         const isMobile = width <= 768;
         const isLandscape = width > height;
 
+        // Treat all iOS devices as "PWA-like" for chart density
+        const isAppMode = this.isIosDevice;
+
         this.chart.applyOptions({
             timeScale: {
-                minimumHeight: getTimeScaleHeight(this.isPwa, isLandscape),
+                minimumHeight: getTimeScaleHeight(isAppMode, isLandscape),
                 barSpacing: isMobile ? CHART_CONST.MOBILE_BAR_SPACING : CHART_CONST.BAR_SPACING
             }
         });
 
-        if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
+        if (this.isIosDevice && this.isDataLoaded) {
             const scrollTarget = this.getScrollTarget(height, window.innerHeight);
             window.scrollTo({ top: scrollTarget, behavior: 'instant' });
         }

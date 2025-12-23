@@ -13,7 +13,6 @@
         const isScaleOk = Math.abs(scale - 1) < 0.02;
 
         metrics = {
-            'Is PWA': viewport.isPwa ? 'YES' : 'NO',
             'Is iOS': viewport.isIos ? 'YES' : 'NO',
             'Scale': scale.toFixed(3),
             'Measurable?': isScaleOk ? 'YES' : 'NO (Zoomed)',
@@ -61,7 +60,7 @@
     pointer-events: auto;
 ">
     <div style="font-weight: bold; border-bottom: 1px solid #444; margin-bottom: 5px; color: #FF00FF;">
-        IOS NON-PWA DEBUG
+        UNIFIED IOS DEBUG
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">

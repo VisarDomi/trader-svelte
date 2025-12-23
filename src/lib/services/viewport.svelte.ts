@@ -13,14 +13,12 @@ export class ViewportService {
     maxHeight = $state(0);
 
     // Platform Flags
-    isPwa = $state(false);
     isIos = $state(false);
 
     constructor() {
         if (typeof window !== 'undefined') {
             this.width = window.innerWidth;
             this.height = window.innerHeight;
-            this.isPwa = isPWA();
             this.isIos = isIOS();
             this.loadCache();
         }
@@ -34,10 +32,7 @@ export class ViewportService {
     init() {
         if (typeof window === 'undefined') return;
 
-        // Re-check flags
-        this.isPwa = isPWA();
         this.isIos = isIOS();
-
         this.scan();
 
         window.addEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
@@ -66,9 +61,10 @@ export class ViewportService {
     }
 
     scan = () => {
-        this.isPwa = isPWA();
+        // Internal check only - not exposed to state
+        const _isPwa = isPWA();
 
-        // 1. Non-iOS: Standard behavior
+        // 1. Non-iOS: Standard Window behavior
         if (!this.isIos) {
             this.width = window.innerWidth;
             this.height = window.innerHeight;
@@ -80,16 +76,15 @@ export class ViewportService {
         let rawH = 0;
         let isValidMeasurement = false;
 
-        if (this.isPwa) {
-            // PWA: Screen is truth
+        if (_isPwa) {
+            // iOS PWA: Screen is truth
             rawW = screen.width;
             rawH = screen.height;
             isValidMeasurement = true;
         } else {
-            // Non-PWA: Window is truth, but ONLY if Zoom is 1.0
+            // iOS Non-PWA: Window is truth, but ONLY if Zoom is ~1.0
             const scale = window.visualViewport?.scale || 1;
 
-            // Allow small epsilon for floating point weirdness
             if (Math.abs(scale - 1) < 0.02) {
                 rawW = window.innerWidth;
                 rawH = window.innerHeight;
@@ -117,16 +112,14 @@ export class ViewportService {
             }
         }
 
-        // 3. Determine Output
-        // On iOS, we prefer the cached "Max" values to ensure stability
-        // against browser bar toggling or temporary zoom states.
+        // 3. Determine Output for iOS
         const isLandscape = window.matchMedia('(orientation: landscape)').matches;
 
         if (this.maxWidth > 0 && this.maxHeight > 0) {
             this.width = isLandscape ? this.maxWidth : this.maxHeight;
             this.height = isLandscape ? this.maxHeight : this.maxWidth;
         } else {
-            // Fallback if cache empty (first load, zoomed state)
+            // Fallback (First load Non-PWA or zoomed)
             this.width = window.innerWidth;
             this.height = window.innerHeight;
         }
