@@ -7,7 +7,6 @@ import * as TRADING from '$lib/constants/trading.js';
 import type { Direction, PositionResponse, PositionBody } from '$lib/types/trading.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
 
-// Dependencies
 import { accountStore } from './account.svelte.js';
 import { positionStore } from './position.svelte.js';
 import { marketStore } from './market.svelte.js';
@@ -20,41 +19,26 @@ interface TradeDraft {
 }
 
 export class TradeStore {
-    // State
     isPlanning = $state(false);
     isExecuting = $state(false);
 
-    // Internal Draft State (Immutable parameters of the plan)
     private draft = $state<TradeDraft | null>(null);
 
-    // Internal Services
     private planner = new TradePlanner();
     private executor = new TradeExecutor();
 
-    /**
-     * Reactive Plan: Recalculates whenever market prices change or draft changes.
-     * This ensures the "Target Price" and "Stop Loss" float with the current market price
-     * while maintaining the user's initial relative distance.
-     */
     plannedTrade = $derived.by<PlannedTrade | null>(() => {
         if (!this.draft) return null;
 
         const { direction, leverage, market, profitDistance } = this.draft;
         const balance = accountStore.balance;
 
-        // 1. Get Live Entry Price
-        // If Buying, we enter at Ask (Offer)
-        // If Selling, we enter at Bid
         const liveEntry = direction === TRADING.BUY_DIRECTION
             ? marketStore.offer
             : marketStore.bid;
 
-        // If market data isn't ready yet (0), abort
         if (!liveEntry) return null;
 
-        // 2. Calculate Live Target Price based on fixed distance
-        // Buy: Target is above entry
-        // Sell: Target is below entry
         const liveTarget = direction === TRADING.BUY_DIRECTION
             ? liveEntry + profitDistance
             : liveEntry - profitDistance;
@@ -69,16 +53,10 @@ export class TradeStore {
                 liveTarget
             );
         } catch {
-            // Silently fail during live updates if math temporarily breaks
             return null;
         }
     });
 
-    /**
-     * Prepares a trade based on user input (Chart Click).
-     * @param initialEntryPrice - The snapshot price at the moment of click
-     * @param initialTargetPrice - The chart coordinate clicked (TP)
-     */
     plan(
         initialEntryPrice: number,
         initialTargetPrice: number,
@@ -86,7 +64,6 @@ export class TradeStore {
         market: MarketDetailsResponse,
         userLeverage: number
     ) {
-        // Calculate the relative distance once. This gets locked in.
         const profitDistance = Math.abs(initialTargetPrice - initialEntryPrice);
 
         this.draft = {
@@ -96,8 +73,6 @@ export class TradeStore {
             profitDistance
         };
 
-        // Run an immediate validation using snapshot values to reject invalid clicks (e.g. min size)
-        // before we switch to the reactive mode.
         try {
             const testPlan = this.planner.calculate(
                 market,
@@ -126,9 +101,6 @@ export class TradeStore {
         this.draft = null;
     }
 
-    /**
-     * Executes the currently planned trade using the LIVE calculated values.
-     */
     async execute(): Promise<PositionResponse | null> {
         const plan = this.plannedTrade;
         const draft = this.draft;
@@ -174,10 +146,6 @@ export class TradeStore {
         }
     }
 
-    /**
-     * Creates a temporary "Position" object from the current reactive plan.
-     * Used by the Chart Lines to visualize the trade dynamically.
-     */
     getMockPosition(): PositionResponse | null {
         const plan = this.plannedTrade;
         const draft = this.draft;
@@ -202,8 +170,16 @@ export class TradeStore {
             initialBalance: accountStore.balance
         };
 
+        // Inject the missing epic/symbol info into the snapshot
+        const mockMarket = {
+            ...draft.market.snapshot,
+            epic: draft.market.instrument.epic,
+            symbol: draft.market.instrument.symbol,
+            instrumentName: draft.market.instrument.name
+        };
+
         return {
-            market: draft.market.snapshot as any,
+            market: mockMarket as any,
             position: mockBody
         };
     }

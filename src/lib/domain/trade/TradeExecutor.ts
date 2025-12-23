@@ -22,18 +22,12 @@ export class TradeExecutor {
             profitLevel: trade.profitLevel
         };
 
-        // 1. Send Request
         const response = await createPosition(client, request);
 
-        // 2. Wait for Confirmation (Poll)
         const confirmation = await getConfirmation(client, response.dealReference);
 
-        // 3. Persist Initial Balance for PnL calculations
-        // We capture the balance *before* the trade logic might update it,
-        // effectively locking the "Basis" for this position.
         session.setInitialBalance(confirmation.dealId, currentBalance);
 
-        // 4. Construct the response object immediately (Optimistic UI update)
         const newPositionBody: PositionBody = {
             contractSize: 0,
             createdDate: confirmation.date,
@@ -41,7 +35,7 @@ export class TradeExecutor {
             dealId: confirmation.dealId,
             dealReference: confirmation.dealReference,
             size: confirmation.size,
-            leverage: 1, // leverage is handled by broker, effectively 1 for display unless calculated
+            leverage: 1,
             upl: 0,
             direction: confirmation.direction,
             level: confirmation.level,
@@ -52,8 +46,16 @@ export class TradeExecutor {
             initialBalance: currentBalance
         };
 
+        // Construct a proper market object with identity fields
+        const optimisticMarket = {
+            ...market.snapshot,
+            epic: market.instrument.epic,
+            symbol: market.instrument.symbol,
+            instrumentName: market.instrument.name
+        };
+
         return {
-            market: market.snapshot as any, // Cast to match existing types if strictness varies
+            market: optimisticMarket as any,
             position: newPositionBody
         };
     }
