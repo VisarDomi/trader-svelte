@@ -35,6 +35,6 @@ export class EntryLine implements IChartLine {
     }
 
     private getPortraitTitle(): string {
-        return `${this.position.size}@${this.formattedTime}`;
+        return `${this.position.size} ${this.epic} @ ${this.formattedTime}`;
     }
 }
