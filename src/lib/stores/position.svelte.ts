@@ -107,8 +107,8 @@ export class PositionStore {
     }
 
     private async pollBalanceUpdate() {
-        // Poll every 1s for 5 seconds to catch the balance update from broker
-        for (let i = 0; i < 5; i++) {
+        // Poll every 1s for 10 seconds to catch the balance update from broker
+        for (let i = 0; i < 10; i++) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             await accountStore.refreshActive();
         }

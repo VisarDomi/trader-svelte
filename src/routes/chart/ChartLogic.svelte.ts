@@ -156,12 +156,14 @@ export class ChartLogic {
         this.isBurstChecking = true;
 
         // Poll 1x per second for 5 seconds
-        // This gives the broker time to process the close and update the list
+        // CRITICAL FIX: Do NOT break the loop early.
+        // We need to keep polling to catch the Account Balance update
+        // which often happens 1-2 seconds AFTER the position closes.
         for (let i = 0; i < 5; i++) {
-            // If position is already gone, stop checking
-            if (!this.positionStore.activePosition) break;
-
-            await this.positionStore.refresh();
+            await Promise.all([
+                this.positionStore.refresh(),       // Check if lines should be removed
+                this.accountStore.refreshActive()   // Check if balance updated
+            ]);
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
@@ -174,6 +176,9 @@ export class ChartLogic {
         // Keeps the chart in sync if you close a position on your phone
         this.heartbeatInterval = setInterval(() => {
             if (!this.isBurstChecking) {
+                // We sync positions regularly.
+                // We don't spam account sync in heartbeat to save API calls,
+                // but you could add it here if strictly needed.
                 this.positionStore.refresh();
             }
         }, 15000);
