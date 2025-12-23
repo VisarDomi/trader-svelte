@@ -94,9 +94,8 @@
 <style>
     .card {
         display: block;
-        margin-bottom: 2rem;
-        padding: 1.5rem;
-        background: #262626; /* Default fallback */
+        margin-bottom: 0.5rem;
+        padding: 1rem;
         background: #1a1a1a;
         border-radius: 4px;
         border: 1px solid #333;
