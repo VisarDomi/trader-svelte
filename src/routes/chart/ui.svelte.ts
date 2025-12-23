@@ -32,19 +32,27 @@ export class ChartUI {
         this.container = container;
 
         if (typeof window !== 'undefined' && this.isIosDevice) {
-            this.saveAndEnforceViewport();
+            // 1. Blur to release focus-zoom
+            if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+            }
 
-            // Force scans to catch layout shifts from meta tag enforcement
-            this.viewportService.scan();
-            setTimeout(() => this.viewportService.scan(), 300);
+            // 2. Enforce Strict Viewport (The Clamp)
+            this.enforceStrictViewport();
 
-            // ALL iOS devices get the Scroll/Zoom protection now
-            window.addEventListener('scroll', this.handleScroll);
+            // 3. Listeners
+            // REMOVED: window.addEventListener('scroll', this.handleScroll); -> Causes fighting loop
             document.addEventListener('gesturestart', this.preventZoom);
             document.addEventListener('gesturechange', this.preventZoom);
             document.addEventListener('gestureend', this.preventZoom);
             window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
-            window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
+
+            // Only use visualViewport scroll to detect major shifts, not to enforce position
+            // window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
+
+            // 4. Force Scans
+            setTimeout(() => this.viewportService.scan(), 100);
+            setTimeout(() => this.viewportService.scan(), 500);
         }
 
         this.updateDimensions();
@@ -54,7 +62,13 @@ export class ChartUI {
     setDataLoaded(loaded: boolean) {
         this.isDataLoaded = loaded;
         if (loaded) {
-            setTimeout(() => this.updateDimensions(), 0);
+            setTimeout(() => {
+                this.updateDimensions();
+                // Enforce scroll ONLY once when data is ready
+                if (this.isIosDevice) {
+                    this.enforceScrollPosition();
+                }
+            }, 50);
         }
     }
 
@@ -63,27 +77,27 @@ export class ChartUI {
 
         this.restoreViewport();
 
-        window.removeEventListener('scroll', this.handleScroll);
+        // window.removeEventListener('scroll', this.handleScroll);
         document.removeEventListener('gesturestart', this.preventZoom);
         document.removeEventListener('gesturechange', this.preventZoom);
         document.removeEventListener('gestureend', this.preventZoom);
         window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
-        window.visualViewport?.removeEventListener('scroll', this.handleZoomCheck);
     }
 
-    private saveAndEnforceViewport() {
+    private enforceStrictViewport() {
         const meta = document.querySelector('meta[name="viewport"]');
         if (!meta) return;
 
-        this.originalViewportContent = meta.getAttribute('content');
+        if (!this.originalViewportContent) {
+            this.originalViewportContent = meta.getAttribute('content');
+        }
 
-        // Reset Zoom on iOS unconditionally
-        meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+        // We use the existing tag but update attributes to force the clamp
+        meta.setAttribute('content', 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
     }
 
     private restoreViewport() {
         if (!this.originalViewportContent) return;
-
         const meta = document.querySelector('meta[name="viewport"]');
         if (meta) {
             meta.setAttribute('content', this.originalViewportContent);
@@ -98,11 +112,12 @@ export class ChartUI {
         if (!window.visualViewport) return;
 
         if (Math.abs(window.visualViewport.scale - 1.0) > 0.05) {
-            console.warn("Zoom drift detected. Resetting.");
-            const meta = document.querySelector('meta[name="viewport"]');
-            if (meta) {
-                meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
-            }
+            // Re-apply clamp if drift detected
+            this.enforceStrictViewport();
+        } else {
+            // If we are back to 1.0, ensure we are scrolled correctly
+            // Debounce this to avoid loops
+            // setTimeout(() => this.enforceScrollPosition(), 100);
         }
     };
 
@@ -110,12 +125,20 @@ export class ChartUI {
         return CHART_CONST.TOPBAR_HEIGHT + (chartH - winH);
     }
 
-    private handleScroll = () => {
+    private enforceScrollPosition = () => {
         if (!this.isIosDevice || !this.isDataLoaded || !this.container) return;
+
+        // CRITICAL GUARD: Never programmatically scroll if zoomed in.
+        // This causes the "slow scroll up" fight.
+        if (window.visualViewport && window.visualViewport.scale > 1.01) {
+            return;
+        }
+
         const target = this.getScrollTarget(this.container.clientHeight, window.innerHeight);
 
+        // Only scroll if we are "above" the target (showing the spacer)
         if (window.scrollY < target) {
-            window.scrollTo({ top: target, behavior: 'instant' });
+            window.scrollTo({ top: target, behavior: 'auto' }); // 'auto' is cleaner than 'instant' for major jumps sometimes
         }
     };
 
@@ -132,8 +155,6 @@ export class ChartUI {
 
         const isMobile = width <= 768;
         const isLandscape = width > height;
-
-        // Treat all iOS devices as "PWA-like" for chart density
         const isAppMode = this.isIosDevice;
 
         this.chart.applyOptions({
@@ -143,9 +164,9 @@ export class ChartUI {
             }
         });
 
+        // Trigger scroll logic on dimension update
         if (this.isIosDevice && this.isDataLoaded) {
-            const scrollTarget = this.getScrollTarget(height, window.innerHeight);
-            window.scrollTo({ top: scrollTarget, behavior: 'instant' });
+            this.enforceScrollPosition();
         }
     }
 
