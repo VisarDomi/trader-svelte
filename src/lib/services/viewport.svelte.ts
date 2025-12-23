@@ -4,15 +4,12 @@ import { TOO_MANY_PIXELS } from "$lib/constants/viewport.js";
 import { isPWA, isIOS } from "$lib/utils/platform.js";
 
 export class ViewportService {
-    // Current window state (reactive)
     width = $state(0);
     height = $state(0);
 
-    // Persisted Physical Dimensions (The "Truth" for iOS)
     maxWidth = $state(0);
     maxHeight = $state(0);
 
-    // Platform Flags
     isPwa = $state(false);
     isIos = $state(false);
 
@@ -34,7 +31,6 @@ export class ViewportService {
     init() {
         if (typeof window === 'undefined') return;
 
-        // Re-check flags
         this.isPwa = isPWA();
         this.isIos = isIOS();
 
@@ -42,14 +38,12 @@ export class ViewportService {
 
         window.addEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
         window.addEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
-        window.visualViewport?.addEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
     }
 
     destroy() {
         if (typeof window === 'undefined') return;
         window.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
         window.removeEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
-        window.visualViewport?.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
     }
 
     resetCache() {
@@ -61,62 +55,48 @@ export class ViewportService {
         this.scan();
     }
 
-    private handleResize = () => {
-        this.scan();
-    }
-
-    private scan() {
-        this.width = window.innerWidth;
-        this.height = window.innerHeight;
+    scan = () => {
         this.isPwa = isPWA();
 
-        // Capture Physical Dimensions on iOS (PWA or not)
-        if (!this.isIos) return;
+        if (!this.isIos) {
+            this.width = window.innerWidth;
+            this.height = window.innerHeight;
+            return;
+        }
 
-        const sources = [
-            { w: screen.width, h: screen.height },
-            { w: window.innerWidth, h: window.innerHeight }
-        ];
+        const sW = screen.width;
+        const sH = screen.height;
 
+        if (!sW || !sH) return;
+
+        const currentLong = Math.max(sW, sH);
+        const currentShort = Math.min(sW, sH);
         let changed = false;
-        sources.forEach(s => {
-            if (!s.w || !s.h) return;
-            const long = Math.max(s.w, s.h);
-            const short = Math.min(s.w, s.h);
 
-            if (long > this.maxWidth && long < TOO_MANY_PIXELS) {
-                this.maxWidth = long;
-                changed = true;
-            }
-            if (short > this.maxHeight && short < TOO_MANY_PIXELS) {
-                this.maxHeight = short;
-                changed = true;
-            }
-        });
+        if (currentLong > this.maxWidth && currentLong < TOO_MANY_PIXELS) {
+            this.maxWidth = currentLong;
+            changed = true;
+        }
+        if (currentShort > this.maxHeight && currentShort < TOO_MANY_PIXELS) {
+            this.maxHeight = currentShort;
+            changed = true;
+        }
 
         if (changed) {
             localStorage.setItem(STORAGE.MAX_LONG_KEY, this.maxWidth.toString());
             localStorage.setItem(STORAGE.MAX_SHORT_KEY, this.maxHeight.toString());
         }
+
+        const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+        const long = this.maxWidth > 0 ? this.maxWidth : currentLong;
+        const short = this.maxHeight > 0 ? this.maxHeight : currentShort;
+
+        this.width = isLandscape ? long : short;
+        this.height = isLandscape ? short : long;
     }
 
-    getChartDimensions() {
-        // 1. Non-iOS: Standard Window
-        if (!this.isIos) {
-            return { width: this.width, height: this.height };
-        }
-
-        // 2. iOS (All Modes): Physical Screen
-        const isLandscape = this.width > this.height;
-
-        // Fallback to raw screen if cache is empty
-        const long = this.maxWidth > 0 ? this.maxWidth : Math.max(screen.width, screen.height);
-        const short = this.maxHeight > 0 ? this.maxHeight : Math.min(screen.width, screen.height);
-
-        return {
-            width: isLandscape ? long : short,
-            height: isLandscape ? short : long
-        };
+    private handleResize = () => {
+        this.scan();
     }
 }
 

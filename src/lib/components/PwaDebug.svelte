@@ -9,7 +9,6 @@
         if (typeof window === 'undefined') return;
 
         const vv = window.visualViewport;
-        const chartDims = viewport.getChartDimensions();
 
         metrics = {
             'Is PWA': viewport.isPwa ? 'YES' : 'NO',
@@ -21,7 +20,8 @@
             'Zoom (Scale)': vv ? vv.scale.toFixed(3) : 'N/A',
             'Cache Long': viewport.maxWidth,
             'Cache Short': viewport.maxHeight,
-            'Chart CALC': `${chartDims.width} x ${chartDims.height}`
+            // Source of truth is now directly on the service properties
+            'Chart CALC': `${viewport.width} x ${viewport.height}`
         };
     }
 

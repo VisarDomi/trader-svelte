@@ -7,6 +7,7 @@ import {
 } from 'lightweight-charts';
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
 import { isPWA } from "$lib/utils/platform.js";
+import { viewport } from "$lib/services/viewport.svelte.js";
 
 export class ChartController {
     private _chart: IChartApi | null = null;
@@ -23,10 +24,9 @@ export class ChartController {
     }
 
     init(container: HTMLDivElement) {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+        const width = viewport.width;
+        const height = viewport.height;
 
-        // Configuration for the View
         const config = {
             width,
             height,

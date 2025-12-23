@@ -11,8 +11,6 @@ export class ChartUI {
 
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
-
-    // Store original viewport settings to restore on exit
     private originalViewportContent: string | null = null;
 
     constructor(private readonly viewportService: ViewportService) {
@@ -38,6 +36,9 @@ export class ChartUI {
         if (typeof window !== 'undefined' && this.isIosDevice) {
             this.saveAndEnforceViewport();
 
+            // Force a scan now that viewport meta is enforced
+            this.viewportService.scan();
+
             if (this.isPwa) {
                 window.addEventListener('scroll', this.handleScroll);
                 document.addEventListener('gesturestart', this.preventZoom);
@@ -62,7 +63,6 @@ export class ChartUI {
     destroy() {
         if (typeof window === 'undefined') return;
 
-        // Restore the original viewport settings (allowing zoom elsewhere)
         this.restoreViewport();
 
         window.removeEventListener('scroll', this.handleScroll);
@@ -77,12 +77,9 @@ export class ChartUI {
         const meta = document.querySelector('meta[name="viewport"]');
         if (!meta) return;
 
-        // 1. Save current state
         this.originalViewportContent = meta.getAttribute('content');
 
-        // 2. Check if we need to reset zoom (if scale is not 1)
         if (window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.01) {
-            // Force snap back to 1.0 by disabling user scaling temporarily
             meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
         }
     }
@@ -105,7 +102,6 @@ export class ChartUI {
 
         if (Math.abs(window.visualViewport.scale - 1.0) > 0.05) {
             console.warn("Zoom drift detected. Resetting.");
-            // Re-apply the strict viewport tag if drift occurs
             const meta = document.querySelector('meta[name="viewport"]');
             if (meta) {
                 meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
@@ -129,14 +125,8 @@ export class ChartUI {
     private updateDimensions() {
         if (!this.container || !this.chart) return;
 
-        let width = this.viewportService.width;
-        let height = this.viewportService.height;
-
-        if (this.isIosDevice && this.isPwa && this.isDataLoaded) {
-            const dims = this.viewportService.getChartDimensions();
-            width = dims.width;
-            height = dims.height;
-        }
+        const width = this.viewportService.width;
+        const height = this.viewportService.height;
 
         this.container.style.width = `${width}px`;
         this.container.style.height = `${height}px`;
