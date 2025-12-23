@@ -4,14 +4,15 @@ import { TOO_MANY_PIXELS } from "$lib/constants/viewport.js";
 import { isPWA, isIOS } from "$lib/utils/platform.js";
 
 export class ViewportService {
+    // Current window state (reactive)
     width = $state(0);
     height = $state(0);
 
-    // Persisted Max Dimensions
+    // Persisted Physical Dimensions (The "Truth" for iOS)
     maxWidth = $state(0);
     maxHeight = $state(0);
 
-    // Platform Flags (exposed for debugging)
+    // Platform Flags
     isPwa = $state(false);
     isIos = $state(false);
 
@@ -33,7 +34,7 @@ export class ViewportService {
     init() {
         if (typeof window === 'undefined') return;
 
-        // Re-check platform flags on init to be sure
+        // Re-check flags
         this.isPwa = isPWA();
         this.isIos = isIOS();
 
@@ -46,7 +47,6 @@ export class ViewportService {
 
     destroy() {
         if (typeof window === 'undefined') return;
-
         window.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
         window.removeEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
         window.visualViewport?.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
@@ -54,13 +54,10 @@ export class ViewportService {
 
     resetCache() {
         if (typeof window === 'undefined') return;
-
         localStorage.removeItem(STORAGE.MAX_LONG_KEY);
         localStorage.removeItem(STORAGE.MAX_SHORT_KEY);
-
         this.maxWidth = 0;
         this.maxHeight = 0;
-
         this.scan();
     }
 
@@ -71,13 +68,9 @@ export class ViewportService {
     private scan() {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
-
-        // Update flags dynamically in case they change (e.g. adding to home screen while running?)
         this.isPwa = isPWA();
 
-        // 1. Capture Max Dimensions logic
-        // We removed the isPWA() check here. We want to capture screen geometry
-        // whenever we are on iOS, so the data is ready if we need it.
+        // Capture Physical Dimensions on iOS (PWA or not)
         if (!this.isIos) return;
 
         const sources = [
@@ -86,13 +79,11 @@ export class ViewportService {
         ];
 
         let changed = false;
-
         sources.forEach(s => {
             if (!s.w || !s.h) return;
             const long = Math.max(s.w, s.h);
             const short = Math.min(s.w, s.h);
 
-            // Capture the LARGEST dimension seen (hiding the address bar / full screen)
             if (long > this.maxWidth && long < TOO_MANY_PIXELS) {
                 this.maxWidth = long;
                 changed = true;
@@ -110,21 +101,21 @@ export class ViewportService {
     }
 
     getChartDimensions() {
-        // Strict Safety: Only use the Cached Max dimensions if we are actually
-        // in the iOS PWA environment. Everywhere else, use standard window size.
-        if (!this.isPwa || !this.isIos) {
+        // 1. Non-iOS: Standard Window
+        if (!this.isIos) {
             return { width: this.width, height: this.height };
         }
 
+        // 2. iOS (All Modes): Physical Screen
         const isLandscape = this.width > this.height;
 
-        if (this.maxWidth === 0 || this.maxHeight === 0) {
-            return { width: this.width, height: this.height };
-        }
+        // Fallback to raw screen if cache is empty
+        const long = this.maxWidth > 0 ? this.maxWidth : Math.max(screen.width, screen.height);
+        const short = this.maxHeight > 0 ? this.maxHeight : Math.min(screen.width, screen.height);
 
         return {
-            width: isLandscape ? this.maxWidth : this.maxHeight,
-            height: isLandscape ? this.maxHeight : this.maxWidth
+            width: isLandscape ? long : short,
+            height: isLandscape ? short : long
         };
     }
 }
