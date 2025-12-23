@@ -9,19 +9,18 @@
         if (typeof window === 'undefined') return;
 
         const vv = window.visualViewport;
+        const scale = vv?.scale || 1;
+        const isScaleOk = Math.abs(scale - 1) < 0.02;
 
         metrics = {
             'Is PWA': viewport.isPwa ? 'YES' : 'NO',
             'Is iOS': viewport.isIos ? 'YES' : 'NO',
+            'Scale': scale.toFixed(3),
+            'Measurable?': isScaleOk ? 'YES' : 'NO (Zoomed)',
             'Win Inner': `${window.innerWidth} x ${window.innerHeight}`,
-            'Win Outer': `${window.outerWidth} x ${window.outerHeight}`,
-            'Screen': `${screen.width} x ${screen.height}`,
-            'VisualVP': vv ? `${vv.width.toFixed(0)} x ${vv.height.toFixed(0)}` : 'N/A',
-            'Zoom (Scale)': vv ? vv.scale.toFixed(3) : 'N/A',
             'Cache Long': viewport.maxWidth,
             'Cache Short': viewport.maxHeight,
-            // Source of truth is now directly on the service properties
-            'Chart CALC': `${viewport.width} x ${viewport.height}`
+            'Output': `${viewport.width} x ${viewport.height}`
         };
     }
 
@@ -50,7 +49,7 @@
     position: fixed;
     bottom: 0;
     right: 0;
-    width: 240px;
+    width: 200px;
     background: rgba(0, 0, 0, 0.85);
     border: 1px solid #FF00FF;
     border-top-left-radius: 8px;
@@ -62,7 +61,7 @@
     pointer-events: auto;
 ">
     <div style="font-weight: bold; border-bottom: 1px solid #444; margin-bottom: 5px; color: #FF00FF;">
-        PWA DEBUGGER
+        IOS NON-PWA DEBUG
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">

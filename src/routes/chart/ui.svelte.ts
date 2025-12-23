@@ -11,6 +11,8 @@ export class ChartUI {
 
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
+
+    // Store original viewport settings to restore on exit
     private originalViewportContent: string | null = null;
 
     constructor(private readonly viewportService: ViewportService) {
@@ -36,8 +38,9 @@ export class ChartUI {
         if (typeof window !== 'undefined' && this.isIosDevice) {
             this.saveAndEnforceViewport();
 
-            // Force a scan now that viewport meta is enforced
+            // Force a scan immediately and slightly later to catch the zoom snap
             this.viewportService.scan();
+            setTimeout(() => this.viewportService.scan(), 300);
 
             if (this.isPwa) {
                 window.addEventListener('scroll', this.handleScroll);
@@ -63,6 +66,7 @@ export class ChartUI {
     destroy() {
         if (typeof window === 'undefined') return;
 
+        // Restore the original viewport settings (allowing zoom elsewhere)
         this.restoreViewport();
 
         window.removeEventListener('scroll', this.handleScroll);
@@ -77,11 +81,12 @@ export class ChartUI {
         const meta = document.querySelector('meta[name="viewport"]');
         if (!meta) return;
 
+        // 1. Save current state
         this.originalViewportContent = meta.getAttribute('content');
 
-        if (window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.01) {
-            meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
-        }
+        // 2. Enforce strict viewport to reset zoom
+        // We apply this unconditionally on iOS Chart init to handle the Login->Chart transition
+        meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
     }
 
     private restoreViewport() {
@@ -102,6 +107,7 @@ export class ChartUI {
 
         if (Math.abs(window.visualViewport.scale - 1.0) > 0.05) {
             console.warn("Zoom drift detected. Resetting.");
+            // Re-apply the strict viewport tag if drift occurs
             const meta = document.querySelector('meta[name="viewport"]');
             if (meta) {
                 meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');

@@ -4,12 +4,15 @@ import { TOO_MANY_PIXELS } from "$lib/constants/viewport.js";
 import { isPWA, isIOS } from "$lib/utils/platform.js";
 
 export class ViewportService {
+    // Current window state (reactive)
     width = $state(0);
     height = $state(0);
 
+    // Persisted Physical Dimensions
     maxWidth = $state(0);
     maxHeight = $state(0);
 
+    // Platform Flags
     isPwa = $state(false);
     isIos = $state(false);
 
@@ -31,6 +34,7 @@ export class ViewportService {
     init() {
         if (typeof window === 'undefined') return;
 
+        // Re-check flags
         this.isPwa = isPWA();
         this.isIos = isIOS();
 
@@ -38,12 +42,14 @@ export class ViewportService {
 
         window.addEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
         window.addEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
+        window.visualViewport?.addEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
     }
 
     destroy() {
         if (typeof window === 'undefined') return;
         window.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
         window.removeEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
+        window.visualViewport?.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
     }
 
     resetCache() {
@@ -55,48 +61,75 @@ export class ViewportService {
         this.scan();
     }
 
+    private handleResize = () => {
+        this.scan();
+    }
+
     scan = () => {
         this.isPwa = isPWA();
 
+        // 1. Non-iOS: Standard behavior
         if (!this.isIos) {
             this.width = window.innerWidth;
             this.height = window.innerHeight;
             return;
         }
 
-        const sW = screen.width;
-        const sH = screen.height;
+        // 2. iOS Logic
+        let rawW = 0;
+        let rawH = 0;
+        let isValidMeasurement = false;
 
-        if (!sW || !sH) return;
+        if (this.isPwa) {
+            // PWA: Screen is truth
+            rawW = screen.width;
+            rawH = screen.height;
+            isValidMeasurement = true;
+        } else {
+            // Non-PWA: Window is truth, but ONLY if Zoom is 1.0
+            const scale = window.visualViewport?.scale || 1;
 
-        const currentLong = Math.max(sW, sH);
-        const currentShort = Math.min(sW, sH);
-        let changed = false;
-
-        if (currentLong > this.maxWidth && currentLong < TOO_MANY_PIXELS) {
-            this.maxWidth = currentLong;
-            changed = true;
+            // Allow small epsilon for floating point weirdness
+            if (Math.abs(scale - 1) < 0.02) {
+                rawW = window.innerWidth;
+                rawH = window.innerHeight;
+                isValidMeasurement = true;
+            }
         }
-        if (currentShort > this.maxHeight && currentShort < TOO_MANY_PIXELS) {
-            this.maxHeight = currentShort;
-            changed = true;
+
+        if (isValidMeasurement && rawW && rawH) {
+            const currentLong = Math.max(rawW, rawH);
+            const currentShort = Math.min(rawW, rawH);
+            let changed = false;
+
+            if (currentLong > this.maxWidth && currentLong < TOO_MANY_PIXELS) {
+                this.maxWidth = currentLong;
+                changed = true;
+            }
+            if (currentShort > this.maxHeight && currentShort < TOO_MANY_PIXELS) {
+                this.maxHeight = currentShort;
+                changed = true;
+            }
+
+            if (changed) {
+                localStorage.setItem(STORAGE.MAX_LONG_KEY, this.maxWidth.toString());
+                localStorage.setItem(STORAGE.MAX_SHORT_KEY, this.maxHeight.toString());
+            }
         }
 
-        if (changed) {
-            localStorage.setItem(STORAGE.MAX_LONG_KEY, this.maxWidth.toString());
-            localStorage.setItem(STORAGE.MAX_SHORT_KEY, this.maxHeight.toString());
-        }
-
+        // 3. Determine Output
+        // On iOS, we prefer the cached "Max" values to ensure stability
+        // against browser bar toggling or temporary zoom states.
         const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-        const long = this.maxWidth > 0 ? this.maxWidth : currentLong;
-        const short = this.maxHeight > 0 ? this.maxHeight : currentShort;
 
-        this.width = isLandscape ? long : short;
-        this.height = isLandscape ? short : long;
-    }
-
-    private handleResize = () => {
-        this.scan();
+        if (this.maxWidth > 0 && this.maxHeight > 0) {
+            this.width = isLandscape ? this.maxWidth : this.maxHeight;
+            this.height = isLandscape ? this.maxHeight : this.maxWidth;
+        } else {
+            // Fallback if cache empty (first load, zoomed state)
+            this.width = window.innerWidth;
+            this.height = window.innerHeight;
+        }
     }
 }
 
