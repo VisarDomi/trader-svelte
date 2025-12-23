@@ -1,5 +1,6 @@
 import { viewport } from '$lib/services/viewport.svelte.js';
 import * as TRADING from '$lib/constants/trading.js';
+import { notifications } from '$lib/services/notifications.svelte.js';
 
 import { ChartController } from './ChartController.js';
 import { ChartUI } from './ui.svelte.js';
@@ -109,7 +110,26 @@ export class ChartLogic {
     }
 
     private isInteractionBlocked(): boolean {
-        return !!(this.positionStore.activePosition || this.tradeStore.isExecuting);
+        // Block if we are currently executing a trade
+        if (this.tradeStore.isExecuting) return true;
+
+        // Block if ANY position exists on the account (Global Lock)
+        if (this.positionStore.anyActivePosition) {
+            const p = this.positionStore.anyActivePosition;
+            // Optional: We could check if it's the current one to decide if we want to allow modification (future feature)
+            // For now, rule is strict: If a position exists, you cannot open another one.
+            // But we might want to alert the user why they can't click.
+
+            // Since this function is called inside the click handler context synchronously,
+            // we can trigger a toast to explain why the click failed.
+            const isLocal = p.market.epic === this.currentEpic;
+            if (!isLocal) {
+                notifications.info(`Trade active in ${p.market.instrumentName}`);
+            }
+            return true;
+        }
+
+        return false;
     }
 
     private handleTradeIntent(intent: TradeIntent) {

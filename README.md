@@ -3,8 +3,6 @@
 Click on the graph to open a position with all of your deposited cash. Stop loss at 50%.
 
 ## bugs
-* should not be able to open a second position on the same account, even if we change instruments - this happens because we use deposit instead of available. continue to use deposit, but add a check when loading /chart if we have a position opened at another instrument
-* position viewing breaks if leverage is changed - we need to save the leverage when opening a position instead of calling the api
 * localstorage is bloated - do a better job of handling data
 * performance: lower the number of cpu cycles, because phone battery
 

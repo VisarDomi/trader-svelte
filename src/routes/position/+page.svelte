@@ -37,17 +37,17 @@
         <AccountCard
                 account={accountStore.activeAccount}
                 mode={session.mode}
-                badgeText={session.lastEpic}
+                badgeText={positionStore.anyActivePosition ? positionStore.anyActivePosition.market.epic : session.lastEpic}
         />
     {/if}
 
-    {#if positionStore.isLoading && !positionStore.activePosition}
+    {#if positionStore.isLoading && !positionStore.anyActivePosition}
         <p>Loading position details...</p>
-    {:else if positionStore.activePosition}
-        <PositionCard data={positionStore.activePosition} />
+    {:else if positionStore.anyActivePosition}
+        <PositionCard data={positionStore.anyActivePosition} />
     {:else}
         <div class="empty-state">
-            <p class="empty-text">No active position found for {session.lastEpic}.</p>
+            <p class="empty-text">No active position found on this account.</p>
             <a href="/chart" class="chart-link">Open Chart</a>
         </div>
     {/if}

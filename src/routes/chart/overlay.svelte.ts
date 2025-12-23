@@ -45,20 +45,21 @@ export class ChartOverlay {
     }
 
     // 3. Position Information
+    // WE USE anyActivePosition HERE TO SHOW GLOBAL STATUS
     get hasPosition() {
-        return !!this.positionStore.activePosition;
+        return !!this.positionStore.anyActivePosition;
     }
 
     get positionDirection() {
-        return this.positionStore.activePosition?.position.direction ?? '';
+        return this.positionStore.anyActivePosition?.position.direction ?? '';
     }
 
     get positionSize() {
-        return this.positionStore.activePosition?.position.size ?? 0;
+        return this.positionStore.anyActivePosition?.position.size ?? 0;
     }
 
     get positionColor() {
-        const dir = this.positionStore.activePosition?.position.direction;
+        const dir = this.positionStore.anyActivePosition?.position.direction;
         return dir === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350';
     }
 
