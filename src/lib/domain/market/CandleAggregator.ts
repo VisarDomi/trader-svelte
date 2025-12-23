@@ -1,47 +1,70 @@
 import type { ChartCandle } from '$lib/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
 
-export interface AggregationResult {
-    completedCandle: ChartCandle | null; // If a minute finished, this is the closed candle
-    liveCandle: ChartCandle;             // The current active candle state
-}
-
 export class CandleAggregator {
+    // The "Working" candle. We mutate this in place.
+    private liveCandle: ChartCandle | null = null;
+
     /**
-     * Updates the current candle with a new price tick or creates a new one if time advanced.
+     * Seeds the aggregator with an initial state (e.g. from history load).
+     * We create a copy to ensure we don't mutate the history array passed in.
      */
-    processTick(
-        currentCandle: ChartCandle | null,
-        price: number,
-        time: UTCTimestamp
-    ): AggregationResult {
-        // Case 1: First tick of the session
-        if (!currentCandle) {
-            return {
-                completedCandle: null,
-                liveCandle: this.createCandle(time, price)
-            };
+    seed(candle: ChartCandle | null) {
+        if (candle) {
+            this.liveCandle = { ...candle };
+        } else {
+            this.liveCandle = null;
+        }
+    }
+
+    /**
+     * Updates the current candle state in-place to save allocations.
+     * Returns a new ChartCandle object ONLY if a minute bar just completed (closed).
+     * Otherwise returns null.
+     */
+    processTick(price: number, time: UTCTimestamp): ChartCandle | null {
+        // 1. No state? Start new.
+        if (!this.liveCandle) {
+            this.liveCandle = this.createCandle(time, price);
+            return null;
         }
 
-        // Case 2: Time moved forward (New Minute)
-        if (time > currentCandle.time) {
-            return {
-                completedCandle: { ...currentCandle }, // Close previous
-                liveCandle: this.createCandle(time, price) // Start new
-            };
+        // 2. New Minute? Close previous, start new.
+        if (time > this.liveCandle.time) {
+            // Create a COPY of the finished candle to return (for history persistence)
+            const completed = { ...this.liveCandle };
+
+            // Reuse the existing liveCandle object for the new minute
+            this.liveCandle.time = time;
+            this.liveCandle.open = price;
+            this.liveCandle.high = price;
+            this.liveCandle.low = price;
+            this.liveCandle.close = price;
+
+            return completed;
         }
 
-        // Case 3: Update existing candle (High/Low logic)
-        return {
-            completedCandle: null,
-            liveCandle: {
-                time: currentCandle.time,
-                open: currentCandle.open,
-                high: Math.max(currentCandle.high, price),
-                low: Math.min(currentCandle.low, price),
-                close: price
-            }
-        };
+        // 3. Same Minute? Mutate in place.
+        // Update High
+        if (price > this.liveCandle.high) {
+            this.liveCandle.high = price;
+        }
+        // Update Low
+        else if (price < this.liveCandle.low) {
+            this.liveCandle.low = price;
+        }
+        // Update Close (Always)
+        this.liveCandle.close = price;
+
+        return null;
+    }
+
+    /**
+     * Returns the current live candle reference for drawing.
+     * WARNING: This object is mutable. Do not store it in history arrays.
+     */
+    getLiveCandle(): ChartCandle | null {
+        return this.liveCandle;
     }
 
     private createCandle(time: UTCTimestamp, price: number): ChartCandle {

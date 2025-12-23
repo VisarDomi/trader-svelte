@@ -53,31 +53,32 @@ export class ChartRenderer {
             const loaded = this.marketStore.isLoaded;
             const lastCandle = this.marketStore.lastCandle;
 
+            // DEPENDENCY INJECTION: We MUST read a changing signal here.
+            // Since `lastCandle` is now a stable mutable object reference,
+            // Svelte won't re-run this effect unless we track `currentPrice`.
+            const _tick = this.marketStore.currentPrice;
+
             if (this.series && loaded && lastCandle) {
                 this.series.update(lastCandle);
             }
         });
 
-        // Effect 3: Static Position Lines (Entry, SL, TP)
+        // Effect 3: Static Position Lines
         $effect(() => {
-            // We read dependencies here to register the effect
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
             const _width = viewport.width;
 
-            // Then delegate to the shared render function
             this.renderStatic();
         });
 
-        // Effect 4: Dynamic Price Line (Current PnL)
+        // Effect 4: Dynamic Price Line
         $effect(() => {
-            // Register dependencies
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
             const tick = this.marketStore.currentPrice;
             const _width = viewport.width;
 
-            // Delegate
             this.renderDynamic(tick);
         });
     }
@@ -87,17 +88,16 @@ export class ChartRenderer {
         this.formatter = new LineTitleFormatter(this.accountStore.activeSymbol);
         this.lines.clear();
 
-        // 1. Restore History if available
+        // 1. Restore History
         if (this.marketStore.isLoaded && this.marketStore.history.length > 0) {
             this.series.setData(this.marketStore.history);
         }
 
-        // 2. Force a render of lines now that series is available
+        // 2. Force Render
         this.renderStatic();
         this.renderDynamic(this.marketStore.currentPrice);
     }
 
-    // Helper to resolve which position we are drawing (Active or Planned)
     private getTargetPosition(): PositionResponse | null {
         if (this.tradeStore.isPlanning) {
             return this.tradeStore.getMockPosition();
@@ -134,15 +134,12 @@ export class ChartRenderer {
         const initialBalance = position.initialBalance || 0;
         const isLandscape = viewport.width > viewport.height;
 
-        // 1. Entry Line
         const entryGen = new EntryLine(position, market.epic);
         this.updateLine(KEY_ENTRY, entryGen.getData(isLandscape));
 
-        // 2. Stop Loss
         const slGen = new StopLossLine(position, initialBalance, this.calculator, this.formatter);
         this.updateLine(KEY_SL, slGen.getData(isLandscape));
 
-        // 3. Take Profit
         const tpGen = new TakeProfitLine(position, initialBalance, this.calculator, this.formatter);
         this.updateLine(KEY_TP, tpGen.getData(isLandscape));
     }
@@ -150,7 +147,6 @@ export class ChartRenderer {
     private updateCurrentPriceLine(response: PositionResponse | null, currentPrice: number) {
         if (!this.series || !this.formatter) return;
 
-        // Reset the default lightweight-charts price line if no position
         if (!response || currentPrice === 0) {
             this.series.applyOptions({ priceLineVisible: false });
             this.removeLine(KEY_CURRENT);
@@ -161,14 +157,12 @@ export class ChartRenderer {
         const initialBalance = position.initialBalance || 0;
         const isLandscape = viewport.width > viewport.height;
 
-        // Determine effective price based on direction
         const relevantPrice = position.direction === TRADING.BUY_DIRECTION
             ? this.marketStore.bid
             : this.marketStore.offer;
 
         if (relevantPrice === 0) return;
 
-        // Optimization: Function call instead of Class instantiation
         const data = calculateCurrentPriceLine(
             position,
             relevantPrice,
@@ -188,10 +182,8 @@ export class ChartRenderer {
     private updateLine(key: string, data: LineData | null) {
         if (!this.series) return;
 
-        // Case A: Data exists, create or update
         if (data) {
             if (this.lines.has(key)) {
-                // Update existing
                 const line = this.lines.get(key)!;
                 line.applyOptions({
                     price: data.price,
@@ -199,7 +191,6 @@ export class ChartRenderer {
                     title: data.title
                 });
             } else {
-                // Create new
                 const line = this.series.createPriceLine({
                     price: data.price,
                     color: data.color,
@@ -211,7 +202,6 @@ export class ChartRenderer {
                 this.lines.set(key, line);
             }
         }
-        // Case B: Data is null, remove if exists
         else {
             this.removeLine(key);
         }

@@ -1,41 +1,32 @@
 import { StreamClient } from '$lib/api/stream.js';
-import { CandleAggregator, type AggregationResult } from '$lib/domain/market/CandleAggregator.js';
+import { CandleAggregator } from '$lib/domain/market/CandleAggregator.js';
 import type { SessionTokens } from '$lib/types/auth.js';
-import type { QuoteMessage } from '$lib/types/market.js';
+import type { QuoteMessage, ChartCandle } from '$lib/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
-import type { ChartCandle } from '$lib/types/market.js';
 
-export interface FeedTick {
+// Interface carries the mutable live references and the immutable completed copies
+export interface FeedUpdate {
     bid: number;
     offer: number;
-    time: UTCTimestamp;
-}
-
-export interface FeedUpdate {
-    tick: FeedTick;
-    bidResult: AggregationResult;
-    askResult: AggregationResult;
+    completedBid: ChartCandle | null;
+    completedAsk: ChartCandle | null;
+    liveBid: ChartCandle | null;
+    liveAsk: ChartCandle | null;
 }
 
 export class MarketFeed {
     private stream: StreamClient | null = null;
-    private aggregator = new CandleAggregator();
 
-    // Track live candles internally to perform aggregation
-    private liveBid: ChartCandle | null = null;
-    private liveAsk: ChartCandle | null = null;
+    private bidAgg = new CandleAggregator();
+    private askAgg = new CandleAggregator();
 
     constructor(
         private readonly onUpdate: (update: FeedUpdate) => void
     ) {}
 
-    /**
-     * Seeds the aggregator with the initial state from history
-     * so the next tick calculates correctly.
-     */
     initialize(lastBidCandle: ChartCandle | null, lastAskCandle: ChartCandle | null) {
-        this.liveBid = lastBidCandle;
-        this.liveAsk = lastAskCandle;
+        this.bidAgg.seed(lastBidCandle);
+        this.askAgg.seed(lastAskCandle);
     }
 
     connect(tokens: SessionTokens, epic: string) {
@@ -50,31 +41,26 @@ export class MarketFeed {
             this.stream.disconnect();
             this.stream = null;
         }
-        this.liveBid = null;
-        this.liveAsk = null;
     }
 
     private processMessage(msg: QuoteMessage) {
-        const tick: FeedTick = {
-            bid: msg.payload.bid,
-            offer: msg.payload.ofr,
-            // Round to nearest minute for candle aggregation
-            time: (Math.floor(msg.payload.timestamp / 1000 / 60) * 60) as UTCTimestamp
-        };
+        const p = msg.payload;
 
-        // 1. Aggregate Bid
-        const bidResult = this.aggregator.processTick(this.liveBid, tick.bid, tick.time);
-        this.liveBid = bidResult.liveCandle;
+        // Round timestamp to minute floor
+        const time = (Math.floor(p.timestamp / 1000 / 60) * 60) as UTCTimestamp;
 
-        // 2. Aggregate Ask
-        const askResult = this.aggregator.processTick(this.liveAsk, tick.offer, tick.time);
-        this.liveAsk = askResult.liveCandle;
+        // 1. Process Aggregation (Mutates internal state, returns copy only if closed)
+        const completedBid = this.bidAgg.processTick(p.bid, time);
+        const completedAsk = this.askAgg.processTick(p.ofr, time);
 
-        // 3. Emit
+        // 2. Emit result
         this.onUpdate({
-            tick,
-            bidResult,
-            askResult
+            bid: p.bid,
+            offer: p.ofr,
+            completedBid,
+            completedAsk,
+            liveBid: this.bidAgg.getLiveCandle(),
+            liveAsk: this.askAgg.getLiveCandle()
         });
     }
 }

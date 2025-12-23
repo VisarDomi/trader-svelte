@@ -4,6 +4,7 @@ Click on the graph to open a position with all of your deposited cash. Stop loss
 
 ## bugs
 * performance: lower the number of cpu cycles, because phone battery
+* refresh page should not change chart inner zoom (on refresh it changes to default zoom, removing previous zoom)
 
 ## dev notes: pwa
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

@@ -12,6 +12,7 @@ export class MarketStore {
     offer = $state(0);
 
     // The active candle to be drawn by the chart
+    // Note: This reference might not change between ticks due to mutable aggregation optimization
     lastCandle = $state.raw<ChartCandle | null>(null);
 
     // The active history to be loaded by the chart
@@ -33,7 +34,6 @@ export class MarketStore {
     private liveAskCandle: ChartCandle | null = null;
 
     constructor() {
-        // Initialize Feed with a callback bound to this store
         this.feed = new MarketFeed((update) => this.handleFeedUpdate(update));
     }
 
@@ -52,18 +52,21 @@ export class MarketStore {
         if (!client || !tokens) return;
 
         try {
-            // 1. Load History via Repository
             const repo = new MarketRepository(client);
             const { bid, ask } = await repo.getHistory(epic);
 
             this.bidHistory = bid;
             this.askHistory = ask;
 
-            // 2. Initialize Feed State
-            this.initializeLiveCandles();
-            this.feed.initialize(this.liveBidCandle, this.liveAskCandle);
+            // Seed internal state from history end
+            this.liveBidCandle = this.bidHistory.length > 0 ? this.bidHistory[this.bidHistory.length - 1] : null;
+            this.liveAskCandle = this.askHistory.length > 0 ? this.askHistory[this.askHistory.length - 1] : null;
 
-            // 3. Start Streaming
+            if (this.liveBidCandle) this.bid = this.liveBidCandle.close;
+            if (this.liveAskCandle) this.offer = this.liveAskCandle.close;
+
+            // Init Feed
+            this.feed.initialize(this.liveBidCandle, this.liveAskCandle);
             this.feed.connect(tokens, epic);
 
             this.syncViewToSource();
@@ -85,8 +88,6 @@ export class MarketStore {
         this.isLoaded = false;
     }
 
-    // --- Internal Logic ---
-
     private resetState() {
         this.isLoaded = false;
         this.bid = 0;
@@ -97,17 +98,6 @@ export class MarketStore {
         this.askHistory = [];
         this.liveBidCandle = null;
         this.liveAskCandle = null;
-    }
-
-    private initializeLiveCandles() {
-        if (this.bidHistory.length > 0) {
-            this.liveBidCandle = this.bidHistory.pop()!;
-            if (this.bid === 0) this.bid = this.liveBidCandle.close;
-        }
-        if (this.askHistory.length > 0) {
-            this.liveAskCandle = this.askHistory.pop()!;
-            if (this.offer === 0) this.offer = this.liveAskCandle.close;
-        }
     }
 
     private syncViewToSource() {
@@ -121,21 +111,18 @@ export class MarketStore {
     }
 
     private handleFeedUpdate(u: FeedUpdate) {
-        this.bid = u.tick.bid;
-        this.offer = u.tick.offer;
+        this.bid = u.bid;
+        this.offer = u.offer;
 
-        // Update Internal Containers
-        this.liveBidCandle = u.bidResult.liveCandle;
-        if (u.bidResult.completedCandle) {
-            this.bidHistory.push(u.bidResult.completedCandle);
-        }
+        // Handle Completed Candles (Push to history)
+        if (u.completedBid) this.bidHistory.push(u.completedBid);
+        if (u.completedAsk) this.askHistory.push(u.completedAsk);
 
-        this.liveAskCandle = u.askResult.liveCandle;
-        if (u.askResult.completedCandle) {
-            this.askHistory.push(u.askResult.completedCandle);
-        }
+        // Update Live Refs (Likely same object as before)
+        this.liveBidCandle = u.liveBid;
+        this.liveAskCandle = u.liveAsk;
 
-        // Update View (Reactivity)
+        // Update View
         if (this.isLoaded) {
             this.lastCandle = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR
                 ? this.liveAskCandle
