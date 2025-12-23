@@ -85,7 +85,7 @@ export class TradeStore {
             );
 
             if (!testPlan) {
-                throw new Error("Calculated size below minimum deal size.");
+                throw new Error("Calculated size below minimum deal size."); // TODO: fix, don't throw locally
             }
 
             this.isPlanning = true;

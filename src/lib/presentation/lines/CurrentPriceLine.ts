@@ -1,4 +1,3 @@
-import * as TRADING from '$lib/constants/trading.js';
 import { TradeCalculator } from '$lib/domain/trade/TradeCalculator.js';
 import { LineTitleFormatter } from '$lib/presentation/formatters/LineTitleFormatter.js';
 import type { PositionBody } from '$lib/types/trading.js';

@@ -1,7 +1,5 @@
 import * as API from '$lib/constants/api.js';
 import * as BACKEND from '$lib/constants/backend.js';
-import * as AUTH from '$lib/constants/auth.js';
-import * as STORAGE from '$lib/constants/storage.js';
 import { getBaseUrl } from "$lib/utils/helpers.js";
 import type { URL_TYPE } from "$lib/types/url.js";
 import type { Account, AccountPreferences, LeverageUpdate, PreferencesUpdateResponse } from "$lib/types/account.js";

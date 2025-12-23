@@ -101,15 +101,15 @@ export class ChartOverlay {
 
     // Navigation Actions
     navToInstrument() {
-        goto('/instrument');
+        void goto('/instrument');
     }
 
     navToAccounts() {
-        goto('/accounts');
+        void goto('/accounts');
     }
 
     navToPosition() {
-        goto('/position');
+        void goto('/position');
     }
 
     destroy() {

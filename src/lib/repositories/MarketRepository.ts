@@ -7,17 +7,12 @@ import type { UTCTimestamp } from 'lightweight-charts';
 import type {
     MarketPriceResponse,
     PriceSnapshot,
-    ChartCandle,
-    MarketDetailsResponse
+    ChartCandle
 } from '$lib/types/market.js';
 import type { ChartData } from '$lib/types/trading.js';
 
 export class MarketRepository {
     constructor(private client: ApiClient) {}
-
-    async getDetails(epic: string): Promise<MarketDetailsResponse> {
-        return this.client.get<MarketDetailsResponse>(`${API.MARKETS_ENDPOINT}/${epic}`);
-    }
 
     async getHistory(epic: string): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
         const rawHistory = await this.fetchRawHistory(epic);

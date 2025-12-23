@@ -11,7 +11,7 @@ export const PREFERENCES_ENDPOINT = "/api/v1/accounts/preferences";
 export const PRICES_ENDPOINT = "/api/v1/prices";
 export const MARKETS_ENDPOINT = "/api/v1/markets";
 export const POSITIONS_ENDPOINT = "/api/v1/positions";
-export const WORKING_ORDERS_ENDPOINT = "/api/v1/workingorders";
+
 export const getDealReferenceEndpoint = (dealReference: string) => `/api/v1/confirms/${dealReference}`;
 
 export const WEBSOCKET_BASE_URL = "wss://api-streaming-capital.backend-capital.com";
@@ -33,7 +33,7 @@ export const EPIC_KEY = "epic";
 export const EPICS_KEY = "epics";
 export const DATA_DESTINATION_QUOTE = "quote";
 
-export const DEAL_REFERENCE_PREFIX = "p_";
+
 export const MARKET_DATA_CORRELATION_ID = "1";
 export const PING_CORRELATION_ID = "5";
 

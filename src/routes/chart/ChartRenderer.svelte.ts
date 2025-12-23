@@ -43,7 +43,7 @@ export class ChartRenderer {
         });
 
         $effect(() => {
-            let targetPosition: PositionResponse | null = null;
+            let targetPosition: PositionResponse | null;
 
             if (this.tradeStore.isPlanning) {
                 targetPosition = this.tradeStore.getMockPosition();

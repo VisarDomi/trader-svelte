@@ -97,7 +97,6 @@
     .section-title { color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase; }
 
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
 
     .tile { background: #222; padding: 1rem; border-radius: 4px; }
     .tile-label { color: #888; font-size: 0.85rem; }

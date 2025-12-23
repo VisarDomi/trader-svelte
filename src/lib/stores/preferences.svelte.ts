@@ -95,7 +95,7 @@ export class PreferencesStore {
                 // Reload to confirm application
                 await this.init(this.activeType);
             } else {
-                throw new Error("Update failed: Unknown status");
+                throw new Error("Update failed: Unknown status"); // TODO: fix, don't throw locally
             }
 
         } catch (e) {

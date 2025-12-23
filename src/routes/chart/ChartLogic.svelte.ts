@@ -78,7 +78,7 @@ export class ChartLogic {
         );
 
         this.layout.setDataLoaded(true);
-        this.overlay.init(this.currentEpic);
+        void this.overlay.init(this.currentEpic);
     }
 
     destroy() {

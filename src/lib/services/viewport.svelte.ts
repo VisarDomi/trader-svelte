@@ -60,14 +60,6 @@ export class ViewportService {
         window.visualViewport?.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
     }
 
-    resetCache() {
-        if (typeof window === 'undefined') return;
-        localStorage.removeItem(STORAGE.VIEWPORT_KEY);
-        this.maxWidth = 0;
-        this.maxHeight = 0;
-        this.scan();
-    }
-
     private handleResize = () => {
         this.scan();
     }

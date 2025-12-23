@@ -11,7 +11,7 @@ export class Watchdog {
     private readonly TICK_MS = 1000;
 
     // Callback to execute when a gap is detected
-    private onFreeze: (() => void) | null = null;
+    private readonly onFreeze: (() => void) | null = null;
 
     constructor(onFreezeCallback: () => void) {
         this.onFreeze = onFreezeCallback;
@@ -42,24 +42,4 @@ export class Watchdog {
         }
     }
 
-    /**
-     * Can be called manually (e.g. on visibilitychange) to force an immediate check
-     * instead of waiting for the next tick.
-     */
-    checkNow() {
-        if (!this.intervalId) return; // Don't check if not running
-
-        const now = Date.now();
-        const delta = now - this.lastTick;
-
-        if (delta > (this.TICK_MS + this.TOLERANCE_MS)) {
-            console.warn(`[Watchdog] Manual check freeze detected. Gap: ${delta}ms`);
-            // Reset lastTick immediately to prevent double-firing when the interval naturally ticks
-            this.lastTick = now;
-            if (this.onFreeze) this.onFreeze();
-        } else {
-            // No freeze, but update tick to keep precision high
-            this.lastTick = now;
-        }
-    }
 }

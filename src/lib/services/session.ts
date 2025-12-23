@@ -3,7 +3,6 @@ import * as AUTH from '$lib/constants/auth.js';
 import * as TRADING from '$lib/constants/trading.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 import type { SessionTokens, UserCredentials } from '$lib/types/auth.js';
-import { ApiClient } from '$lib/api/client.js';
 import { DEFAULT_ERROR } from '$lib/constants/error.js';
 
 // --- Types for Storage Objects ---
@@ -111,13 +110,6 @@ export class SessionManager {
 
     isAuthenticated(type?: URL_TYPE): boolean {
         return this.getTokens(type || this.mode) !== null;
-    }
-
-    getClient(type?: URL_TYPE): ApiClient | null {
-        const targetType = type || this.mode;
-        const tokens = this.getTokens(targetType);
-        if (!tokens) return null;
-        return new ApiClient(targetType, tokens);
     }
 
     /**

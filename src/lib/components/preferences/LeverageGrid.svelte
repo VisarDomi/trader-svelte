@@ -18,7 +18,7 @@
 
     <div class="grid">
         {#each Object.entries(preferences.leverages) as [key, info]}
-            {@const category = key as LeverageCategory}
+            {@const category = key}
             {@const currentSelected = stagedLeverages[category]}
 
             <div class="category-block">

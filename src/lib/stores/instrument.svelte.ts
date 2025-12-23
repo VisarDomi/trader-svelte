@@ -5,7 +5,7 @@ import { session } from '$lib/services/session.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
 import * as TRADING from '$lib/constants/trading.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
-import type { AccountPreferences, LeverageCategory } from '$lib/types/account.js';
+import type { AccountPreferences } from '$lib/types/account.js';
 
 export class InstrumentStore {
     targetEpics = [TRADING.NDX_EPIC, TRADING.BTCUSD_EPIC];
@@ -49,20 +49,6 @@ export class InstrumentStore {
     }
 
     // Helper to format leverage for UI (e.g., "1:20")
-    getLeverageDisplay(market: MarketDetailsResponse): string {
-        const category = market.instrument.type as LeverageCategory;
-
-        if (this.userPreferences?.leverages[category]) {
-            return `1:${this.userPreferences.leverages[category].current}`;
-        }
-
-        if (market.instrument.marginFactorUnit === 'PERCENTAGE' && market.instrument.marginFactor > 0) {
-            const lev = Math.round(100 / market.instrument.marginFactor);
-            return `1:${lev} (Default)`;
-        }
-
-        return `${market.instrument.marginFactor}%`;
-    }
 }
 
 export const instrumentStore = new InstrumentStore();
