@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onDestroy } from 'svelte';
-    import { ChartOverlay } from './overlay.svelte.js';
+    import { ChartOverlay } from './ChartOverlay.svelte.js';
 
     let { overlay }: { overlay: ChartOverlay } = $props();
 

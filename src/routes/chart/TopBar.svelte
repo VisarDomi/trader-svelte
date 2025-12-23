@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ChartUI } from './ui.svelte.js';
+    import { ChartUI } from './ChartUI.svelte.js';
     import * as CHART_CONST from '$lib/constants/chart.js';
 
     let { layout }: { layout: ChartUI } = $props();

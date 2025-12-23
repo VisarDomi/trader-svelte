@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { ChartLogic } from './logic.svelte.js';
+    import { ChartLogic } from './ChartLogic.svelte.js';
     import TopBar from './TopBar.svelte';
     import Overlay from './Overlay.svelte';
     import TradePopup from './TradePopup.svelte';

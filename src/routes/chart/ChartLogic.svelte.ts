@@ -3,11 +3,11 @@ import * as TRADING from '$lib/constants/trading.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
 
 import { ChartController } from './ChartController.js';
-import { ChartUI } from './ui.svelte.js';
+import { ChartUI } from './ChartUI.svelte.js';
 import { ChartRenderer } from './ChartRenderer.svelte.js';
-import { ChartOverlay } from './overlay.svelte.js';
+import { ChartOverlay } from './ChartOverlay.svelte.js';
 import { ChartInputHandler, type TradeIntent } from './ChartInputHandler.svelte.js';
-import { ChartDataLoader } from './loader.svelte.js';
+import { ChartDataLoader } from './ChartLoader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
 import type { MarketStore } from '$lib/stores/market.svelte.js';
