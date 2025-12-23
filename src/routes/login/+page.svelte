@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { authStore } from '$lib/stores/auth.svelte.js';
-    import ViewportDebug from '$lib/components/ViewportDebug.svelte';
 
     onMount(() => {
         authStore.init();
@@ -72,5 +71,3 @@
 </div>
 
 <p style="margin-top: 1rem;"><a href="/">← Back Home</a></p>
-
-<ViewportDebug />

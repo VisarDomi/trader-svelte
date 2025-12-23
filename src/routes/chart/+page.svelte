@@ -4,10 +4,8 @@
     import TopBar from './TopBar.svelte';
     import Overlay from './Overlay.svelte';
     import TradePopup from './TradePopup.svelte';
-    import PwaDebug from '$lib/components/PwaDebug.svelte';
     import * as CHART_CONST from '$lib/constants/chart.js';
 
-    // Global Stores (Dependency Injection Source)
     import { tradeManager } from '$lib/stores/trade.svelte.js';
     import { marketStore } from '$lib/stores/market.svelte.js';
     import { accountStore } from '$lib/stores/account.svelte.js';
@@ -16,7 +14,6 @@
 
     let chartContainer: HTMLDivElement;
 
-    // Inject dependencies into the Controller
     const logic = new ChartLogic(
         marketStore,
         accountStore,
@@ -36,7 +33,6 @@
 
 <TopBar layout={logic.layout} />
 <Overlay overlay={logic.overlay} />
-<PwaDebug />
 
 <TradePopup
         isOpen={tradeManager.isPlanning}

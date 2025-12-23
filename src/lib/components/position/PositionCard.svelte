@@ -5,7 +5,6 @@
 
     let { data } = $props<{ data: PositionResponse }>();
 
-    // Derived values for template clarity
     let pos = $derived(data.position);
     let market = $derived(data.market);
     let isBuy = $derived(pos.direction === TRADING.BUY_DIRECTION);
@@ -13,13 +12,11 @@
 
     function fmt(val: number | undefined | null) {
         if (val === undefined || val === null) return '—';
-        // Basic formatting, could inject a formatter if needed
         return val.toFixed(2);
     }
 </script>
 
 <div class="card">
-    <!-- Header: Direction & PnL -->
     <div class="header">
         <div>
             <div class="direction" style="color: {isBuy ? '#26a69a' : '#ef5350'}">
@@ -35,10 +32,6 @@
         </div>
     </div>
 
-    <!-- Debug Slot -->
-    <slot />
-
-    <!-- Price Info -->
     <div class="section">
         <h4 class="section-title">Price Information</h4>
         <div class="grid-2">
@@ -53,7 +46,6 @@
         </div>
     </div>
 
-    <!-- Protection Info -->
     <div class="section">
         <h4 class="section-title">Protection</h4>
         <div class="grid-3">
@@ -72,7 +64,6 @@
         </div>
     </div>
 
-    <!-- Actions -->
     <button
             onclick={() => positionStore.close()}
             disabled={positionStore.isClosing}
@@ -107,7 +98,6 @@
     .label { font-size: 0.9rem; color: #888; }
     .pnl-value { font-size: 2.5rem; font-weight: bold; line-height: 1; }
 
-    .section { }
     .section-title { color: #666; font-size: 0.8rem; margin-bottom: 1rem; text-transform: uppercase; }
 
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }

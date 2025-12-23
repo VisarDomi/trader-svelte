@@ -5,7 +5,6 @@
     import * as AUTH from '$lib/constants/auth.js';
     import type { URL_TYPE } from '$lib/types/url.js';
 
-    // Components
     import AccountCard from '$lib/components/AccountCard.svelte';
     import LeverageGrid from '$lib/components/preferences/LeverageGrid.svelte';
 
@@ -23,13 +22,11 @@
     <div class="header">
         <h1>Preferences</h1>
         <div class="controls">
-            <a href="/viewport" class="btn-outline">Viewport Debug</a>
             <a href="/accounts" class="back-link">← Back</a>
         </div>
     </div>
 
     {#if preferencesStore.account}
-        <!-- Static Display Mode -->
         <AccountCard
                 account={preferencesStore.account}
                 mode={preferencesStore.activeType}
@@ -46,7 +43,6 @@
     {:else if preferencesStore.data}
         <div class="content-box">
 
-            <!-- Hedging (Disabled) -->
             <div class="hedging-section">
                 <label class="hedging-label">
                     <input type="checkbox" checked={false} disabled />
@@ -57,14 +53,12 @@
                 </p>
             </div>
 
-            <!-- Leverages -->
             <LeverageGrid
                     preferences={preferencesStore.data}
                     stagedLeverages={preferencesStore.leverages}
                     onSelect={(cat, val) => preferencesStore.setLeverage(cat, val)}
             />
 
-            <!-- Actions -->
             <div class="actions">
                 <button
                         onclick={() => preferencesStore.save()}
@@ -85,11 +79,6 @@
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
     .controls { display: flex; gap: 1rem; align-items: center; }
     .back-link { color: #d1d4dc; }
-
-    .btn-outline {
-        color: #666; font-size: 0.8rem; text-decoration: none;
-        border: 1px solid #333; padding: 4px 8px; border-radius: 4px;
-    }
 
     .error-box { color: #ef5350; border: 1px solid #ef5350; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
     .content-box { background: #1a1a1a; padding: 1.5rem; border-radius: 8px; border: 1px solid #333; }

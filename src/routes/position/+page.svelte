@@ -6,7 +6,6 @@
 
     import AccountCard from '$lib/components/AccountCard.svelte';
     import PositionCard from '$lib/components/position/PositionCard.svelte';
-    import PositionDebug from '$lib/components/position/PositionDebug.svelte';
 
     let pollInterval: ReturnType<typeof setInterval>;
 
@@ -18,7 +17,6 @@
                 positionStore.init(epic)
             ]);
         }
-        // Keep checking for PnL updates while looking at this page
         pollInterval = setInterval(() => {
             positionStore.refresh();
         }, 1000);
@@ -46,10 +44,7 @@
     {#if positionStore.isLoading && !positionStore.activePosition}
         <p>Loading position details...</p>
     {:else if positionStore.activePosition}
-        <PositionCard data={positionStore.activePosition}>
-            <!-- Slot Injection for Debug Info -->
-            <PositionDebug positionResponse={positionStore.activePosition} />
-        </PositionCard>
+        <PositionCard data={positionStore.activePosition} />
     {:else}
         <div class="empty-state">
             <p class="empty-text">No active position found for {session.lastEpic}.</p>
