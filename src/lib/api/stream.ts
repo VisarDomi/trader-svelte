@@ -43,13 +43,13 @@ export class StreamClient {
 
     private handleMessage = (event: MessageEvent) => {
         try {
-            const data = JSON.parse(event.data);
+            const data: QuoteMessage = JSON.parse(event.data);
             if (
                 data.destination === API.DATA_DESTINATION_QUOTE &&
                 data.payload &&
                 data.payload[API.EPIC_KEY] === this.epic
             ) {
-                this.onPriceUpdate(data as QuoteMessage);
+                this.onPriceUpdate(data);
             }
         } catch (err) {
             console.error("WS Parse Error", err);

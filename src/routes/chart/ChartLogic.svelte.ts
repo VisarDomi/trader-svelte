@@ -31,6 +31,10 @@ export class ChartLogic {
     private userLeverage = 1;
     private marketDetails: MarketDetailsResponse | null = null;
 
+    // Polling & Sentinel State
+    private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    private isBurstChecking = false;
+
     constructor(
         private marketStore: MarketStore,
         private accountStore: AccountStore,
@@ -48,6 +52,14 @@ export class ChartLogic {
             (intent) => this.handleTradeIntent(intent),
             () => this.isInteractionBlocked()
         );
+
+        // Sentinel Effect: Watch price vs Position Limits
+        $effect(() => {
+            const price = this.marketStore.currentPrice;
+            if (price > 0 && this.positionStore.activePosition) {
+                this.checkLimits(price);
+            }
+        });
     }
 
     async init(container: HTMLDivElement) {
@@ -56,6 +68,7 @@ export class ChartLogic {
 
         this.currentEpic = this.session.lastEpic;
         this.watchdog.start();
+        this.startHeartbeat();
 
         this.controller.init(container);
         this.layout.init(this.controller.chart, container);
@@ -82,6 +95,7 @@ export class ChartLogic {
     }
 
     destroy() {
+        this.stopHeartbeat();
         this.watchdog.stop();
         this.layout.destroy();
         this.renderer.destroy();
@@ -109,26 +123,81 @@ export class ChartLogic {
         }
     }
 
-    private isInteractionBlocked(): boolean {
-        // Block if we are currently executing a trade
-        if (this.tradeStore.isExecuting) return true;
+    // --- Sentinel Logic ---
 
-        // Block if ANY position exists on the account (Global Lock)
+    private checkLimits(currentPrice: number) {
+        // If already aggressively checking, don't trigger again
+        if (this.isBurstChecking) return;
+
+        const pos = this.positionStore.activePosition?.position;
+        if (!pos) return;
+
+        const isBuy = pos.direction === TRADING.BUY_DIRECTION;
+
+        // Check Stop Loss Breach
+        let hitSL = false;
+        if (pos.stopLevel) {
+            hitSL = isBuy ? currentPrice <= pos.stopLevel : currentPrice >= pos.stopLevel;
+        }
+
+        // Check Take Profit Breach
+        let hitTP = false;
+        if (pos.profitLevel) {
+            hitTP = isBuy ? currentPrice >= pos.profitLevel : currentPrice <= pos.profitLevel;
+        }
+
+        if (hitSL || hitTP) {
+            console.log("Limit hit locally - triggering burst check");
+            this.runBurstCheck();
+        }
+    }
+
+    private async runBurstCheck() {
+        this.isBurstChecking = true;
+
+        // Poll 1x per second for 5 seconds
+        // This gives the broker time to process the close and update the list
+        for (let i = 0; i < 5; i++) {
+            // If position is already gone, stop checking
+            if (!this.positionStore.activePosition) break;
+
+            await this.positionStore.refresh();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        this.isBurstChecking = false;
+    }
+
+    private startHeartbeat() {
+        this.stopHeartbeat();
+        // General background sync every 15 seconds
+        // Keeps the chart in sync if you close a position on your phone
+        this.heartbeatInterval = setInterval(() => {
+            if (!this.isBurstChecking) {
+                this.positionStore.refresh();
+            }
+        }, 15000);
+    }
+
+    private stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    }
+
+    // --- Existing Logic ---
+
+    private isInteractionBlocked(): boolean {
+        if (this.tradeStore.isExecuting) return true;
         if (this.positionStore.anyActivePosition) {
             const p = this.positionStore.anyActivePosition;
-            // Optional: We could check if it's the current one to decide if we want to allow modification (future feature)
-            // For now, rule is strict: If a position exists, you cannot open another one.
-            // But we might want to alert the user why they can't click.
-
-            // Since this function is called inside the click handler context synchronously,
-            // we can trigger a toast to explain why the click failed.
             const isLocal = p.market.epic === this.currentEpic;
             if (!isLocal) {
                 notifications.info(`Trade active in ${p.market.instrumentName}`);
             }
             return true;
         }
-
         return false;
     }
 

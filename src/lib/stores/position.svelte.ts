@@ -95,13 +95,22 @@ export class PositionStore {
             this.activePosition = null;
             this.anyActivePosition = null;
 
-            await accountStore.refreshActive();
+            // Trigger poll burst to catch balance update
+            this.pollBalanceUpdate();
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             notifications.error(msg);
         } finally {
             this.isClosing = false;
+        }
+    }
+
+    private async pollBalanceUpdate() {
+        // Poll every 1s for 5 seconds to catch the balance update from broker
+        for (let i = 0; i < 5; i++) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await accountStore.refreshActive();
         }
     }
 }
