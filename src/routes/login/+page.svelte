@@ -46,7 +46,7 @@
                 word-break: break-all;
                 white-space: normal;
             ">
-                Token: {authStore.realTokens.cst.substring(0,100)}...
+                Connected
             </div>
         {/if}
     </div>
@@ -64,7 +64,7 @@
                 word-break: break-all;
                 white-space: normal;
             ">
-                Token: {authStore.demoTokens.cst.substring(0,100)}...
+                Connected
             </div>
         {/if}
     </div>

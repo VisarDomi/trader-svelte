@@ -3,6 +3,11 @@ import * as EVENTS from "$lib/constants/events.js";
 import { TOO_MANY_PIXELS } from "$lib/constants/viewport.js";
 import { isPWA, isIOS } from "$lib/utils/platform.js";
 
+interface ViewportCache {
+    long: number;
+    short: number;
+}
+
 export class ViewportService {
     // Current window state (reactive)
     width = $state(0);
@@ -25,8 +30,16 @@ export class ViewportService {
     }
 
     private loadCache() {
-        this.maxWidth = parseFloat(localStorage.getItem(STORAGE.MAX_LONG_KEY) || '0');
-        this.maxHeight = parseFloat(localStorage.getItem(STORAGE.MAX_SHORT_KEY) || '0');
+        const raw = localStorage.getItem(STORAGE.VIEWPORT_KEY);
+        if (raw) {
+            try {
+                const cache: ViewportCache = JSON.parse(raw);
+                this.maxWidth = cache.long;
+                this.maxHeight = cache.short;
+            } catch {
+                // Ignore corrupt cache
+            }
+        }
     }
 
     init() {
@@ -49,8 +62,7 @@ export class ViewportService {
 
     resetCache() {
         if (typeof window === 'undefined') return;
-        localStorage.removeItem(STORAGE.MAX_LONG_KEY);
-        localStorage.removeItem(STORAGE.MAX_SHORT_KEY);
+        localStorage.removeItem(STORAGE.VIEWPORT_KEY);
         this.maxWidth = 0;
         this.maxHeight = 0;
         this.scan();
@@ -107,8 +119,8 @@ export class ViewportService {
             }
 
             if (changed) {
-                localStorage.setItem(STORAGE.MAX_LONG_KEY, this.maxWidth.toString());
-                localStorage.setItem(STORAGE.MAX_SHORT_KEY, this.maxHeight.toString());
+                const cache: ViewportCache = { long: this.maxWidth, short: this.maxHeight };
+                localStorage.setItem(STORAGE.VIEWPORT_KEY, JSON.stringify(cache));
             }
         }
 

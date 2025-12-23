@@ -6,43 +6,110 @@ import type { SessionTokens, UserCredentials } from '$lib/types/auth.js';
 import { ApiClient } from '$lib/api/client.js';
 import { DEFAULT_ERROR } from '$lib/constants/error.js';
 
-export class SessionManager {
-    /**
-     * READS
-     */
+// --- Types for Storage Objects ---
 
-    get mode(): URL_TYPE {
-        if (typeof window === 'undefined') return AUTH.DEMO_TYPE;
-        return (localStorage.getItem(STORAGE.TRADING_MODE_KEY) as URL_TYPE) || AUTH.DEMO_TYPE;
+interface SessionCache {
+    timestamp: number;
+    tokens: {
+        [key in URL_TYPE]?: SessionTokens;
+    };
+}
+
+interface AppState {
+    mode: URL_TYPE;
+    lastEpic: string;
+    accountIds: {
+        [key in URL_TYPE]?: string;
+    };
+}
+
+interface TradeContext {
+    dealId: string;
+    initialBalance: number;
+}
+
+export class SessionManager {
+
+    constructor() {
+        if (typeof window !== 'undefined') {
+            this.cleanupLegacy();
+        }
     }
 
-    get lastEpic(): string {
-        if (typeof window === 'undefined') return TRADING.NDX_EPIC;
-        return localStorage.getItem(STORAGE.LAST_EPIC_KEY) || TRADING.NDX_EPIC;
+    /**
+     * CLEANUP: Removes old bloat
+     */
+    private cleanupLegacy() {
+        // Iterate backwards to safely remove keys while looping
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (!key) continue;
+
+            // Remove the IB_ spam
+            if (key.startsWith('IB_')) {
+                localStorage.removeItem(key);
+            }
+
+            // Remove old loose keys
+            if (['TOKENS_REAL', 'TOKENS_DEMO', 'TRADING_MODE', 'LAST_EPIC', 'MAX_LONG', 'MAX_SHORT'].includes(key)) {
+                localStorage.removeItem(key);
+            }
+        }
+    }
+
+    // --- Helpers ---
+    private getJSON<T>(key: string): T | null {
+        if (typeof window === 'undefined') return null;
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch { return null; }
+    }
+
+    private setJSON(key: string, data: any) {
+        if (typeof window === 'undefined') return;
+        localStorage.setItem(key, JSON.stringify(data));
+    }
+
+    /**
+     * CREDENTIALS
+     */
+    getCredentials(): UserCredentials {
+        const c = this.getJSON<UserCredentials>(STORAGE.CREDENTIALS_KEY);
+        if (c?.apiKey && c?.password && c?.identifier) {
+            return c;
+        }
+        throw new Error(DEFAULT_ERROR);
+    }
+
+    saveCredentials(c: UserCredentials) {
+        this.setJSON(STORAGE.CREDENTIALS_KEY, c);
+    }
+
+    /**
+     * SESSION (Tokens & Timestamp)
+     */
+    private getSessionCache(): SessionCache {
+        return this.getJSON<SessionCache>(STORAGE.SESSION_KEY) || { timestamp: 0, tokens: {} };
     }
 
     getTokens(type: URL_TYPE): SessionTokens | null {
-        if (typeof window === 'undefined') return null;
-        const key = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
-        const raw = localStorage.getItem(key);
-        if (!raw) return null;
-        try {
-            return JSON.parse(raw);
-        } catch {
-            return null;
-        }
+        return this.getSessionCache().tokens[type] || null;
     }
 
-    getCredentials(): UserCredentials {
-        if (typeof window === 'undefined') throw new Error("Window undefined");
-        const raw = localStorage.getItem(STORAGE.USER_CREDENTIALS_KEY);
-        if (raw) {
-            const c: UserCredentials = JSON.parse(raw);
-            if (c?.apiKey && c?.password && c?.identifier) {
-                return c;
-            }
-        }
-        throw new Error(DEFAULT_ERROR);
+    saveTokens(type: URL_TYPE, tokens: SessionTokens) {
+        const cache = this.getSessionCache();
+        cache.tokens[type] = tokens;
+        this.setJSON(STORAGE.SESSION_KEY, cache);
+    }
+
+    saveLoginTimestamp() {
+        const cache = this.getSessionCache();
+        cache.timestamp = Date.now();
+        this.setJSON(STORAGE.SESSION_KEY, cache);
+    }
+
+    isAuthenticated(type?: URL_TYPE): boolean {
+        return this.getTokens(type || this.mode) !== null;
     }
 
     getClient(type?: URL_TYPE): ApiClient | null {
@@ -52,66 +119,69 @@ export class SessionManager {
         return new ApiClient(targetType, tokens);
     }
 
-    isAuthenticated(type?: URL_TYPE): boolean {
-        return this.getTokens(type || this.mode) !== null;
+    /**
+     * APP STATE (Mode, Epic, Account Selection)
+     */
+    private getState(): AppState {
+        return this.getJSON<AppState>(STORAGE.STATE_KEY) || {
+            mode: AUTH.DEMO_TYPE,
+            lastEpic: TRADING.NDX_EPIC,
+            accountIds: {}
+        };
     }
 
-    /**
-     * WRITES
-     */
+    get mode(): URL_TYPE {
+        return this.getState().mode;
+    }
 
     set mode(value: URL_TYPE) {
-        if (typeof window === 'undefined') return;
-        localStorage.setItem(STORAGE.TRADING_MODE_KEY, value);
+        const s = this.getState();
+        s.mode = value;
+        this.setJSON(STORAGE.STATE_KEY, s);
+    }
+
+    get lastEpic(): string {
+        return this.getState().lastEpic;
     }
 
     set lastEpic(value: string) {
-        if (typeof window === 'undefined') return;
-        localStorage.setItem(STORAGE.LAST_EPIC_KEY, value);
-    }
-
-    saveTokens(type: URL_TYPE, tokens: SessionTokens) {
-        if (typeof window === 'undefined') return;
-        const key = type === AUTH.REAL_TYPE ? STORAGE.TOKENS_REAL_KEY : STORAGE.TOKENS_DEMO_KEY;
-        localStorage.setItem(key, JSON.stringify(tokens));
-    }
-
-    saveCredentials(c: UserCredentials) {
-        if (typeof window === 'undefined') return;
-        localStorage.setItem(STORAGE.USER_CREDENTIALS_KEY, JSON.stringify(c));
-    }
-
-    saveLoginTimestamp() {
-        if (typeof window === 'undefined') return;
-        localStorage.setItem(STORAGE.LOGIN_TIMESTAMP_KEY, Date.now().toString());
-    }
-
-    setLastAccountId(type: URL_TYPE, accountId: string) {
-        if (typeof window === 'undefined') return;
-        const key = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
-        localStorage.setItem(key, accountId);
+        const s = this.getState();
+        s.lastEpic = value;
+        this.setJSON(STORAGE.STATE_KEY, s);
     }
 
     getLastAccountId(type: URL_TYPE): string | null {
-        if (typeof window === 'undefined') return null;
-        const key = type === AUTH.REAL_TYPE ? STORAGE.LAST_REAL_ACCOUNT_ID_KEY : STORAGE.LAST_DEMO_ACCOUNT_ID_KEY;
-        return localStorage.getItem(key);
+        return this.getState().accountIds[type] || null;
     }
 
+    setLastAccountId(type: URL_TYPE, accountId: string) {
+        const s = this.getState();
+        s.accountIds[type] = accountId;
+        this.setJSON(STORAGE.STATE_KEY, s);
+    }
+
+    /**
+     * TRADE CONTEXT (Initial Balance Logic)
+     * Replaces the IB_ spam with a single object that only cares about the active deal.
+     */
     getInitialBalance(dealId: string): number | null {
-        if (typeof window === 'undefined') return null;
-        const val = localStorage.getItem(`IB_${dealId}`);
-        return val ? parseFloat(val) : null;
+        const ctx = this.getJSON<TradeContext>(STORAGE.TRADE_CONTEXT_KEY);
+        if (ctx && ctx.dealId === dealId) {
+            return ctx.initialBalance;
+        }
+        return null;
     }
 
     setInitialBalance(dealId: string, amount: number) {
-        if (typeof window === 'undefined') return;
-        localStorage.setItem(`IB_${dealId}`, amount.toString());
+        this.setJSON(STORAGE.TRADE_CONTEXT_KEY, { dealId, initialBalance: amount });
     }
 
     removeInitialBalance(dealId: string) {
-        if (typeof window === 'undefined') return;
-        localStorage.removeItem(`IB_${dealId}`);
+        const ctx = this.getJSON<TradeContext>(STORAGE.TRADE_CONTEXT_KEY);
+        // Only remove if it matches the ID being closed
+        if (ctx && ctx.dealId === dealId) {
+            localStorage.removeItem(STORAGE.TRADE_CONTEXT_KEY);
+        }
     }
 }
 

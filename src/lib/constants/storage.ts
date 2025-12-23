@@ -1,21 +1,17 @@
-// The inputs (User, Pass, ApiKey)
-export const USER_CREDENTIALS_KEY = 'USER_CREDENTIALS';
+// Versioning keys helps if we need to migrate in the future
+export const STORAGE_PREFIX = 'mt_v1_';
 
-// The outputs (CST, X-Security-Token)
-export const TOKENS_DEMO_KEY = 'TOKENS_DEMO';
-export const TOKENS_REAL_KEY = 'TOKENS_REAL';
+// 1. Credentials (User Input) - Kept separate
+export const CREDENTIALS_KEY = `${STORAGE_PREFIX}credentials`;
 
-// Chart config
-export const MAX_LONG_KEY = 'MAX_LONG';
-export const MAX_SHORT_KEY = 'MAX_SHORT';
+// 2. Session (Server Response) - Tokens & Timestamps
+export const SESSION_KEY = `${STORAGE_PREFIX}session`;
 
-// Auth Throttling
-export const LOGIN_TIMESTAMP_KEY = 'LOGIN_TIMESTAMP';
+// 3. App State (User Preferences) - UI State, Mode, Account Selections
+export const STATE_KEY = `${STORAGE_PREFIX}state`;
 
-// App Logic
-export const TRADING_MODE_KEY = 'TRADING_MODE';
-export const LAST_EPIC_KEY = 'LAST_EPIC';
+// 4. Viewport (Device Specifics) - iOS Hack dimensions
+export const VIEWPORT_KEY = `${STORAGE_PREFIX}viewport`;
 
-// Account Persistence
-export const LAST_REAL_ACCOUNT_ID_KEY = 'LAST_REAL_ACCOUNT_ID';
-export const LAST_DEMO_ACCOUNT_ID_KEY = 'LAST_DEMO_ACCOUNT_ID';
+// 5. Trade Context (Logic) - Persisting data not available in API (Initial Balance)
+export const TRADE_CONTEXT_KEY = `${STORAGE_PREFIX}trade_context`;
