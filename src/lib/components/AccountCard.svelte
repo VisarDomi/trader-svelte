@@ -4,15 +4,18 @@
     import type { URL_TYPE } from '$lib/types/url.js';
 
     let {
+        // New Prop
+        id = undefined,
+
         account,
         mode,
         badgeText = undefined,
-        // New Props for Interactivity
         href = undefined,
         isActive = false,
         actionLabel = undefined,
         onAction = undefined
     } = $props<{
+        id?: string,
         account: Account,
         mode: URL_TYPE,
         badgeText?: string,
@@ -32,6 +35,7 @@
 
 <svelte:element
         this={tag}
+        id={id}
         href={href}
         class="card"
         class:interactive={!!href}

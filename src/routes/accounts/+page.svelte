@@ -1,5 +1,6 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, tick } from 'svelte';
+    import { page } from '$app/state';
     import { accountStore } from '$lib/stores/account.svelte.js';
     import { session } from '$lib/services/session.js';
     import * as AUTH from '$lib/constants/auth.js';
@@ -7,8 +8,20 @@
     import AccountCard from '$lib/components/AccountCard.svelte';
     import type { Account } from '$lib/types/account.js';
 
-    onMount(() => {
-        accountStore.loadAll();
+    onMount(async () => {
+        await accountStore.loadAll();
+
+        // Handle scroll after data is loaded
+        const hash = page.url.hash;
+        if (hash) {
+            // Wait for DOM update
+            await tick();
+            const id = hash.substring(1); // remove #
+            const el = document.getElementById(id);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
     });
 
     // Helper: Is this the account currently being used for this mode?
@@ -28,10 +41,6 @@
         <a href="/" class="back-link">← Back</a>
     </div>
 
-    <!--
-        Fix: Only show full-page loading if we have absolutely no data (initial load).
-        Otherwise, keep the list in the DOM to preserve scroll position.
-    -->
     {#if accountStore.isLoading && !hasData()}
         <p>Loading...</p>
     {:else}
@@ -42,7 +51,6 @@
             </div>
         {/if}
 
-        <!-- Apply opacity if loading in the background (switching accounts) -->
         <div class="lists-container" style="opacity: {accountStore.isLoading ? 0.5 : 1}; transition: opacity 0.2s;">
             <section>
                 <h2 class="section-title real">Real Accounts</h2>
@@ -52,14 +60,17 @@
                     <div class="grid">
                         {#each accountStore.realAccounts as account (account.accountId)}
                             {@const isActive = isTradingAccount(account, AUTH.REAL_TYPE)}
-                            <AccountCard
-                                    {account}
-                                    mode={AUTH.REAL_TYPE}
-                                    isActive={isActive}
-                                    href={isActive ? `/preferences?type=${AUTH.REAL_TYPE}` : undefined}
-                                    actionLabel={!isActive ? 'Switch' : undefined}
-                                    onAction={() => accountStore.switchTo(account, AUTH.REAL_TYPE)}
-                            />
+                            <!-- Wrapper div to provide ID for anchor scrolling without breaking Grid -->
+                            <div id={account.accountId} style="display: contents;">
+                                <AccountCard
+                                        {account}
+                                        mode={AUTH.REAL_TYPE}
+                                        isActive={isActive}
+                                        href={isActive ? `/preferences?type=${AUTH.REAL_TYPE}` : undefined}
+                                        actionLabel={!isActive ? 'Switch' : undefined}
+                                        onAction={() => accountStore.switchTo(account, AUTH.REAL_TYPE)}
+                                />
+                            </div>
                         {/each}
                     </div>
                 {/if}
@@ -73,14 +84,17 @@
                     <div class="grid">
                         {#each accountStore.demoAccounts as account (account.accountId)}
                             {@const isActive = isTradingAccount(account, AUTH.DEMO_TYPE)}
-                            <AccountCard
-                                    {account}
-                                    mode={AUTH.DEMO_TYPE}
-                                    isActive={isActive}
-                                    href={isActive ? `/preferences?type=${AUTH.DEMO_TYPE}` : undefined}
-                                    actionLabel={!isActive ? 'Switch' : undefined}
-                                    onAction={() => accountStore.switchTo(account, AUTH.DEMO_TYPE)}
-                            />
+                            <!-- Wrapper div to provide ID for anchor scrolling without breaking Grid -->
+                            <div id={account.accountId} style="display: contents;">
+                                <AccountCard
+                                        {account}
+                                        mode={AUTH.DEMO_TYPE}
+                                        isActive={isActive}
+                                        href={isActive ? `/preferences?type=${AUTH.DEMO_TYPE}` : undefined}
+                                        actionLabel={!isActive ? 'Switch' : undefined}
+                                        onAction={() => accountStore.switchTo(account, AUTH.DEMO_TYPE)}
+                                />
+                            </div>
                         {/each}
                     </div>
                 {/if}
@@ -102,6 +116,6 @@
     .section-title.real { color: #26a69a; border-color: #26a69a; }
     .section-title.demo { color: #ef5350; border-color: #ef5350; }
 
-    .grid { display: grid; gap: 0; /* Gap handled by card margin-bottom */ }
+    .grid { display: grid; gap: 0; }
     .empty { color: #888; }
 </style>
