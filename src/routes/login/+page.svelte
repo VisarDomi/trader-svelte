@@ -10,7 +10,7 @@
     async function handleLogin() {
         await authStore.loginBoth();
 
-        if (authStore.realTokens || authStore.demoTokens) {
+        if (authStore.realTokens && authStore.demoTokens) {
            void goto('/chart');
         }
     }
@@ -44,7 +44,7 @@
 
 <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 2rem; max-width: 100%;">
     <!-- REAL STATUS -->
-    <div style="border: 1px solid #26a69a; padding: 1rem; border-radius: 8px; overflow: hidden;">
+    <div style="border: 1px solid #26a69a; padding: 1rem; border-radius: 8px;">
         <h3>REAL (Charts)</h3>
         <p>Status: <strong>{authStore.realStatus}</strong></p>
         <button onclick={() => authStore.retryReal()}>Retry Real</button>
@@ -62,7 +62,7 @@
     </div>
 
     <!-- DEMO STATUS -->
-    <div style="border: 1px solid #ef5350; padding: 1rem; border-radius: 8px; overflow: hidden;">
+    <div style="border: 1px solid #ef5350; padding: 1rem; border-radius: 8px;">
         <h3>DEMO (Trading)</h3>
         <p>Status: <strong>{authStore.demoStatus}</strong></p>
         <button onclick={() => authStore.retryDemo()}>Retry Demo</button>
@@ -79,5 +79,3 @@
         {/if}
     </div>
 </div>
-
-<p style="margin-top: 1rem;"><a href="/">← Back Home</a></p>

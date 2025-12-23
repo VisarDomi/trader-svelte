@@ -21,7 +21,7 @@
 {#if isOpen && plannedTrade}
     <div style="
         position: fixed;
-        top: 8rem;
+        top: 5rem;
         left: 50%;
         transform: translateX(-50%);
         background: rgba(20, 20, 20, 0.95);
@@ -34,18 +34,6 @@
         backdrop-filter: blur(4px);
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     ">
-        <h3 style="margin-bottom: 1rem; color: #d1d4dc;">Open Position?</h3>
-
-        <div style="margin-bottom: 1.5rem; font-size: 1.1rem;">
-            <div style="font-weight: bold; color: {plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'}">
-                {plannedTrade.direction}
-            </div>
-            <div style="color: #fff; margin-top: 0.25rem;">Size: {plannedTrade.size}</div>
-            <div style="color: #888; font-size: 0.8rem; margin-top: 0.5rem;">
-                TP: {plannedTrade.profitLevel} | SL: {plannedTrade.stopLevel}
-            </div>
-        </div>
-
         <div style="display: flex; gap: 1rem; justify-content: center;">
             <button
                     onclick={onCancel}
