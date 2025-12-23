@@ -53,10 +53,9 @@ export class ChartRenderer {
             const loaded = this.marketStore.isLoaded;
             const lastCandle = this.marketStore.lastCandle;
 
-            // DEPENDENCY INJECTION: We MUST read a changing signal here.
-            // Since `lastCandle` is now a stable mutable object reference,
-            // Svelte won't re-run this effect unless we track `currentPrice`.
-            const _tick = this.marketStore.currentPrice;
+            // BUGFIX: Svelte 5 won't trigger if lastCandle ref stays same.
+            // We listen to the updateTrigger to force the update call.
+            const _trigger = this.marketStore.updateTrigger;
 
             if (this.series && loaded && lastCandle) {
                 this.series.update(lastCandle);

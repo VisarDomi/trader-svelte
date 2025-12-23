@@ -15,6 +15,10 @@ export class MarketStore {
     // Note: This reference might not change between ticks due to mutable aggregation optimization
     lastCandle = $state.raw<ChartCandle | null>(null);
 
+    // A signal that increments on every feed update to force UI refreshes
+    // even when object references (like lastCandle) remain static.
+    updateTrigger = $state(0);
+
     // The active history to be loaded by the chart
     history = $state.raw<ChartCandle[]>([]);
 
@@ -93,6 +97,7 @@ export class MarketStore {
         this.bid = 0;
         this.offer = 0;
         this.lastCandle = null;
+        this.updateTrigger = 0;
         this.history = [];
         this.bidHistory = [];
         this.askHistory = [];
@@ -127,6 +132,9 @@ export class MarketStore {
             this.lastCandle = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR
                 ? this.liveAskCandle
                 : this.liveBidCandle;
+
+            // Force reactivity for consumers who depend on object mutation
+            this.updateTrigger++;
         }
     }
 }

@@ -63,7 +63,6 @@ export function getChartOptions(config: ChartLayoutConfig): DeepPartial<ChartOpt
         borderColor: CHART.BORDER_COLOR,
         minimumHeight: getTimeScaleHeight(isPwa, isLandscape),
         timeVisible: true,
-        secondsVisible: false,
     };
 
     const localization: DeepPartial<LocalizationOptions<Time>> = {
