@@ -11,12 +11,7 @@
         await authStore.loginBoth();
 
         if (authStore.realTokens || authStore.demoTokens) {
-            // Note: If manual zooming ever becomes an issue, using window.location.href
-            // instead of goto() forces a full page reload which resets the viewport.
-
-            // setTimeout(() => {
-            //    // goto('/chart');
-            // }, 100);
+           void goto('/chart');
         }
     }
 </script>
