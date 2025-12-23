@@ -8,8 +8,12 @@ export class ChartUI {
     isIosDevice = $state(false);
     isPwa = $state(false);
     isDataLoaded = $state(false);
+
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
+
+    // Store original viewport settings to restore on exit
+    private originalViewportContent: string | null = null;
 
     constructor(private readonly viewportService: ViewportService) {
         if (typeof window !== 'undefined') {
@@ -32,8 +36,7 @@ export class ChartUI {
         this.container = container;
 
         if (typeof window !== 'undefined' && this.isIosDevice) {
-            // CURE: Check if we arrived zoomed in, and force a reset
-            this.forceZoomReset();
+            this.saveAndEnforceViewport();
 
             if (this.isPwa) {
                 window.addEventListener('scroll', this.handleScroll);
@@ -58,6 +61,10 @@ export class ChartUI {
 
     destroy() {
         if (typeof window === 'undefined') return;
+
+        // Restore the original viewport settings (allowing zoom elsewhere)
+        this.restoreViewport();
+
         window.removeEventListener('scroll', this.handleScroll);
         document.removeEventListener('gesturestart', this.preventZoom);
         document.removeEventListener('gesturechange', this.preventZoom);
@@ -66,16 +73,27 @@ export class ChartUI {
         window.visualViewport?.removeEventListener('scroll', this.handleZoomCheck);
     }
 
-    private forceZoomReset() {
-        // If we are already at scale 1, do nothing
-        if (window.visualViewport && Math.abs(window.visualViewport.scale - 1) < 0.01) return;
-
+    private saveAndEnforceViewport() {
         const meta = document.querySelector('meta[name="viewport"]');
         if (!meta) return;
 
-        // The "Hammer": Force maximum-scale=1. This forces iOS to snap back to 1.0 immediately.
-        // We also disable user-scaling to prevent accidental pinches on the chart container.
-        meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+        // 1. Save current state
+        this.originalViewportContent = meta.getAttribute('content');
+
+        // 2. Check if we need to reset zoom (if scale is not 1)
+        if (window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.01) {
+            // Force snap back to 1.0 by disabling user scaling temporarily
+            meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+        }
+    }
+
+    private restoreViewport() {
+        if (!this.originalViewportContent) return;
+
+        const meta = document.querySelector('meta[name="viewport"]');
+        if (meta) {
+            meta.setAttribute('content', this.originalViewportContent);
+        }
     }
 
     private preventZoom = (e: Event) => {
@@ -85,10 +103,13 @@ export class ChartUI {
     private handleZoomCheck = () => {
         if (!window.visualViewport) return;
 
-        // If the user somehow manages to zoom in despite our blocks, we force reset again.
         if (Math.abs(window.visualViewport.scale - 1.0) > 0.05) {
             console.warn("Zoom drift detected. Resetting.");
-            this.forceZoomReset();
+            // Re-apply the strict viewport tag if drift occurs
+            const meta = document.querySelector('meta[name="viewport"]');
+            if (meta) {
+                meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+            }
         }
     };
 
