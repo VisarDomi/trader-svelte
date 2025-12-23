@@ -8,7 +8,7 @@ import { LineTitleFormatter } from '$lib/presentation/formatters/LineTitleFormat
 import { EntryLine } from '$lib/presentation/lines/EntryLine.js';
 import { StopLossLine } from '$lib/presentation/lines/StopLossLine.js';
 import { TakeProfitLine } from '$lib/presentation/lines/TakeProfitLine.js';
-import { CurrentPriceLine } from '$lib/presentation/lines/CurrentPriceLine.js';
+import { calculateCurrentPriceLine } from '$lib/presentation/lines/CurrentPriceLine.js';
 import type { LineData } from '$lib/presentation/lines/types.js';
 
 import type { MarketStore } from '$lib/stores/market.svelte.js';
@@ -93,7 +93,6 @@ export class ChartRenderer {
         }
 
         // 2. Force a render of lines now that series is available
-        // This fixes the bug where data loaded *before* init was ignored
         this.renderStatic();
         this.renderDynamic(this.marketStore.currentPrice);
     }
@@ -169,17 +168,16 @@ export class ChartRenderer {
 
         if (relevantPrice === 0) return;
 
-        const currentGen = new CurrentPriceLine(
+        // Optimization: Function call instead of Class instantiation
+        const data = calculateCurrentPriceLine(
             position,
             relevantPrice,
             initialBalance,
             this.calculator,
-            this.formatter
+            this.formatter,
+            isLandscape
         );
 
-        const data = currentGen.getData(isLandscape);
-
-        // We use the built-in PriceLine for the current price to ensure it aligns with the candle edge
         this.series.applyOptions({
             priceLineVisible: true,
             priceLineColor: data.color,

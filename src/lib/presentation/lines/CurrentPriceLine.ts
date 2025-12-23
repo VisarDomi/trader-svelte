@@ -1,35 +1,36 @@
-import { TradeCalculator } from '$lib/domain/trade/TradeCalculator.js';
-import { LineTitleFormatter } from '$lib/presentation/formatters/LineTitleFormatter.js';
+import type { TradeCalculator } from '$lib/domain/trade/TradeCalculator.js';
+import type { LineTitleFormatter } from '$lib/presentation/formatters/LineTitleFormatter.js';
 import type { PositionBody } from '$lib/types/trading.js';
-import type { IChartLine, LineData } from './types.js';
+import type { LineData } from './types.js';
 
-export class CurrentPriceLine implements IChartLine {
-    private readonly PROFIT_COLOR = "#22958a";
-    private readonly LOSS_COLOR = "#bf4240";
+const PROFIT_COLOR = "#22958a";
+const LOSS_COLOR = "#bf4240";
 
-    constructor(
-        private readonly position: PositionBody,
-        private readonly currentPrice: number,
-        private readonly initialBalance: number,
-        private readonly calculator: TradeCalculator,
-        private readonly formatter: LineTitleFormatter
-    ) {}
+/**
+ * Pure function to calculate current price line data.
+ * Replaces the Class implementation to reduce object allocation in the hot render loop.
+ */
+export function calculateCurrentPriceLine(
+    position: PositionBody,
+    currentPrice: number,
+    initialBalance: number,
+    calculator: TradeCalculator,
+    formatter: LineTitleFormatter,
+    isLandscape: boolean
+): LineData {
+    const result = calculator.calculatePnL(
+        position.level,
+        currentPrice,
+        position.size,
+        position.direction,
+        initialBalance
+    );
 
-    getData(isLandscape: boolean): LineData {
-        const result = this.calculator.calculatePnL(
-            this.position.level,
-            this.currentPrice,
-            this.position.size,
-            this.position.direction,
-            this.initialBalance
-        );
+    const isProfit = result.rawPnL >= 0;
 
-        const isProfit = result.rawPnL >= 0;
-
-        return {
-            price: this.currentPrice,
-            color: isProfit ? this.PROFIT_COLOR : this.LOSS_COLOR,
-            title: this.formatter.formatPnL(result, isLandscape)
-        };
-    }
+    return {
+        price: currentPrice,
+        color: isProfit ? PROFIT_COLOR : LOSS_COLOR,
+        title: formatter.formatPnL(result, isLandscape)
+    };
 }

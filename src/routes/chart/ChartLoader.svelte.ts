@@ -41,11 +41,10 @@ export class ChartDataLoader {
     }
 
     async loadContext(epic: string): Promise<ChartContext | null> {
-        // 1. Init Base Stores (Parallel)
-        await Promise.all([
-            this.accountStore.init(),
-            this.positionStore.init(epic)
-        ]);
+        // 1. Init Stores SEQUENTIALLY to avoid race conditions
+        // PositionStore requires AccountStore to be ready for PnL calcs
+        await this.accountStore.init();
+        await this.positionStore.init(epic);
 
         const client = api.client;
         if (!client) return null;
@@ -83,14 +82,10 @@ export class ChartDataLoader {
         this.marketStore.disconnect();
     }
 
-    /**
-     * Handles reconnection logic (used by Watchdog or recovery)
-     */
     async reconnectStream(epic: string) {
         this.disconnectStream();
         const authorized = await this.ensureSession();
         if (authorized) {
-            // Preserve existing data source selection (Bid vs Ask)
             await this.marketStore.init(epic, this.marketStore.dataSource);
         }
     }

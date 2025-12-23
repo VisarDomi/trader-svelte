@@ -32,20 +32,22 @@ export class PositionStore {
         try {
             const list = await getPositions(client);
 
+            // Client-side fix for Initial Balance (for PnL calcs)
+            // We iterate ALL positions to ensure data integrity
+            if (accountStore.activeAccount) {
+                for (const p of list.positions) {
+                    p.position.initialBalance = resolveInitialBalance(
+                        p.position,
+                        accountStore.activeAccount
+                    );
+                }
+            }
+
             // 1. Identify if ANY position exists (Global Lock)
             const globalPos = list.positions[0] || null;
 
             // 2. Identify if LOCAL position exists (Chart Lines)
             const localPos = list.positions.find(p => p.market.epic === this.epic);
-
-            // 3. Client-side fix for Initial Balance (for PnL calcs)
-            // We need to do this for the global position so the Overlay works everywhere
-            if (globalPos && accountStore.activeAccount) {
-                globalPos.position.initialBalance = resolveInitialBalance(
-                    globalPos.position,
-                    accountStore.activeAccount
-                );
-            }
 
             this.anyActivePosition = globalPos;
             this.activePosition = localPos || null;
@@ -61,12 +63,11 @@ export class PositionStore {
      * Manually set position (e.g. after immediate execution)
      */
     set(p: PositionResponse | null) {
-        this.activePosition = p; // If it matches epic, this is correct
-        this.anyActivePosition = p; // This becomes the new global position
+        this.activePosition = p;
+        this.anyActivePosition = p;
     }
 
     async close() {
-        // We close the 'any' position because that's what the button is bound to
         if (!this.anyActivePosition) return;
 
         this.isClosing = true;
@@ -94,7 +95,7 @@ export class PositionStore {
             this.activePosition = null;
             this.anyActivePosition = null;
 
-            await accountStore.refreshActive(); // Update balance
+            await accountStore.refreshActive();
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

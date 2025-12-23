@@ -14,10 +14,8 @@ import {
     type VisiblePriceScaleOptions,
     type CrosshairOptions
 } from "lightweight-charts";
-import { DateTime } from "luxon";
-import { formatTimestampToLocalTime } from "$lib/utils/time.js";
+import { formatTimestampToLocalTime, formatFullDateTime } from "$lib/utils/time.js";
 import * as CHART from "$lib/constants/chart.js";
-import * as TIME from "$lib/constants/time";
 
 export interface ChartLayoutConfig {
     width: number;
@@ -70,8 +68,7 @@ export function getChartOptions(config: ChartLayoutConfig): DeepPartial<ChartOpt
 
     const localization: DeepPartial<LocalizationOptions<Time>> = {
         timeFormatter: (time: Time) => {
-            const wsTime = DateTime.fromSeconds(time as number, { zone: "system" });
-            return wsTime.toFormat(TIME.DATETIME_FORMAT);
+            return formatFullDateTime(time as number);
         },
     };
 
