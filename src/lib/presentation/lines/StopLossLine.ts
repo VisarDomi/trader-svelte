@@ -5,21 +5,16 @@ import type { PositionBody } from '$lib/types/trading.js';
 import type { IChartLine, LineData } from './types.js';
 
 export class StopLossLine implements IChartLine {
-    private calculator = new TradeCalculator();
-    private formatter: LineTitleFormatter;
-
     constructor(
         private readonly position: PositionBody,
         private readonly initialBalance: number,
-        currencySymbol: string
-    ) {
-        this.formatter = new LineTitleFormatter(currencySymbol);
-    }
+        private readonly calculator: TradeCalculator,
+        private readonly formatter: LineTitleFormatter
+    ) {}
 
     getData(isLandscape: boolean): LineData | null {
         if (!this.position.stopLevel) return null;
 
-        // Force calculation as if price hit the stop level
         const result = this.calculator.calculatePnL(
             this.position.level,
             this.position.stopLevel,

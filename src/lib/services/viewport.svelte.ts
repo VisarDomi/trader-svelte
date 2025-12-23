@@ -9,16 +9,15 @@ interface ViewportCache {
 }
 
 export class ViewportService {
-    // Current window state (reactive)
     width = $state(0);
     height = $state(0);
 
-    // Persisted Physical Dimensions
     maxWidth = $state(0);
     maxHeight = $state(0);
 
-    // Platform Flags
     isIos = $state(false);
+
+    private frameId: number | null = null;
 
     constructor() {
         if (typeof window !== 'undefined') {
@@ -58,35 +57,39 @@ export class ViewportService {
         window.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
         window.removeEventListener(EVENTS.WINDOW_ORIENTATION_CHANGE, this.handleResize);
         window.visualViewport?.removeEventListener(EVENTS.WINDOW_RESIZE, this.handleResize);
+
+        if (this.frameId) {
+            cancelAnimationFrame(this.frameId);
+        }
     }
 
     private handleResize = () => {
-        this.scan();
+        if (this.frameId) return;
+
+        this.frameId = requestAnimationFrame(() => {
+            this.scan();
+            this.frameId = null;
+        });
     }
 
     scan = () => {
-        // Internal check only - not exposed to state
         const _isPwa = isPWA();
 
-        // 1. Non-iOS: Standard Window behavior
         if (!this.isIos) {
             this.width = window.innerWidth;
             this.height = window.innerHeight;
             return;
         }
 
-        // 2. iOS Logic
         let rawW = 0;
         let rawH = 0;
         let isValidMeasurement = false;
 
         if (_isPwa) {
-            // iOS PWA: Screen is truth
             rawW = screen.width;
             rawH = screen.height;
             isValidMeasurement = true;
         } else {
-            // iOS Non-PWA: Window is truth, but ONLY if Zoom is ~1.0
             const scale = window.visualViewport?.scale || 1;
 
             if (Math.abs(scale - 1) < 0.02) {
@@ -116,14 +119,12 @@ export class ViewportService {
             }
         }
 
-        // 3. Determine Output for iOS
         const isLandscape = window.matchMedia('(orientation: landscape)').matches;
 
         if (this.maxWidth > 0 && this.maxHeight > 0) {
             this.width = isLandscape ? this.maxWidth : this.maxHeight;
             this.height = isLandscape ? this.maxHeight : this.maxWidth;
         } else {
-            // Fallback (First load Non-PWA or zoomed)
             this.width = window.innerWidth;
             this.height = window.innerHeight;
         }

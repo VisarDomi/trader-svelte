@@ -5,10 +5,19 @@ import type { PositionBody } from '$lib/types/trading.js';
 import type { IChartLine, LineData } from './types.js';
 
 export class EntryLine implements IChartLine {
+    private readonly formattedTime: string;
+
     constructor(
         private readonly position: PositionBody,
         private readonly epic: string
-    ) {}
+    ) {
+        if (this.position.createdDateUTC) {
+            const dateSeconds = DateTime.fromISO(this.position.createdDateUTC, { zone: "utc" }).toSeconds();
+            this.formattedTime = formatTimestampToLocalTime(dateSeconds as any);
+        } else {
+            this.formattedTime = '';
+        }
+    }
 
     getData(isLandscape: boolean): LineData {
         return {
@@ -20,21 +29,12 @@ export class EntryLine implements IChartLine {
 
     private getLandscapeTitle(): string {
         const action = this.position.direction === "BUY" ? "You bought" : "You sold";
-        const timeString = this.getFormattedTime();
-        const suffix = timeString ? ` at ${timeString}` : '';
+        const suffix = this.formattedTime ? ` at ${this.formattedTime}` : '';
 
         return `${action} ${this.position.size} ${this.epic}${suffix}`;
     }
 
     private getPortraitTitle(): string {
-        const timeString = this.getFormattedTime();
-        return `${this.position.size}@${timeString}`;
-    }
-
-    private getFormattedTime(): string {
-        if (!this.position.createdDateUTC) return '';
-
-        const dateSeconds = DateTime.fromISO(this.position.createdDateUTC, { zone: "utc" }).toSeconds();
-        return formatTimestampToLocalTime(dateSeconds as any);
+        return `${this.position.size}@${this.formattedTime}`;
     }
 }

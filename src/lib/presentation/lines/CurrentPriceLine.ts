@@ -7,17 +7,13 @@ export class CurrentPriceLine implements IChartLine {
     private readonly PROFIT_COLOR = "#22958a";
     private readonly LOSS_COLOR = "#bf4240";
 
-    private calculator = new TradeCalculator();
-    private formatter: LineTitleFormatter;
-
     constructor(
         private readonly position: PositionBody,
         private readonly currentPrice: number,
         private readonly initialBalance: number,
-        currencySymbol: string
-    ) {
-        this.formatter = new LineTitleFormatter(currencySymbol);
-    }
+        private readonly calculator: TradeCalculator,
+        private readonly formatter: LineTitleFormatter
+    ) {}
 
     getData(isLandscape: boolean): LineData {
         const result = this.calculator.calculatePnL(
