@@ -95,6 +95,7 @@ export class ChartLogic {
     }
 
     destroy() {
+        this.cancelPlanning();
         this.stopHeartbeat();
         this.watchdog.stop();
         this.layout.destroy();
