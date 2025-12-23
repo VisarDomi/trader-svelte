@@ -26,7 +26,7 @@
         transform: translateX(-50%);
         background: rgba(20, 20, 20, 0.95);
         border: 1px solid #444;
-        padding: 1.5rem;
+        padding: 1rem;
         border-radius: 8px;
         z-index: 100;
         text-align: center;
