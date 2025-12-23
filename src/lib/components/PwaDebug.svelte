@@ -12,14 +12,13 @@
         const chartDims = viewport.getChartDimensions();
 
         metrics = {
+            'Is PWA': viewport.isPwa ? 'YES' : 'NO',
+            'Is iOS': viewport.isIos ? 'YES' : 'NO',
             'Win Inner': `${window.innerWidth} x ${window.innerHeight}`,
             'Win Outer': `${window.outerWidth} x ${window.outerHeight}`,
             'Screen': `${screen.width} x ${screen.height}`,
             'VisualVP': vv ? `${vv.width.toFixed(0)} x ${vv.height.toFixed(0)}` : 'N/A',
             'Zoom (Scale)': vv ? vv.scale.toFixed(3) : 'N/A',
-            'Pixel Ratio': window.devicePixelRatio.toFixed(3),
-            'Service W': viewport.width,
-            'Service H': viewport.height,
             'Cache Long': viewport.maxWidth,
             'Cache Short': viewport.maxHeight,
             'Chart CALC': `${chartDims.width} x ${chartDims.height}`
@@ -50,11 +49,11 @@
 <div style="
     position: fixed;
     bottom: 0;
-    right: 0; /* MOVED TO RIGHT */
+    right: 0;
     width: 240px;
     background: rgba(0, 0, 0, 0.85);
     border: 1px solid #FF00FF;
-    border-top-left-radius: 8px; /* Changed radius corner */
+    border-top-left-radius: 8px;
     padding: 10px;
     z-index: 9999;
     font-family: monospace;
