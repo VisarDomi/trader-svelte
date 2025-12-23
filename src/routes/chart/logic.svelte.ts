@@ -1,8 +1,7 @@
 import { viewport } from '$lib/services/viewport.svelte.js';
 import * as TRADING from '$lib/constants/trading.js';
 
-// Components / Services
-import { ChartController } from './ChartController.js'; // New Dependency
+import { ChartController } from './ChartController.js';
 import { ChartUI } from './ui.svelte.js';
 import { ChartRenderer } from './ChartRenderer.svelte.js';
 import { ChartOverlay } from './overlay.svelte.js';
@@ -10,7 +9,6 @@ import { ChartInputHandler, type TradeIntent } from './ChartInputHandler.svelte.
 import { ChartDataLoader } from './loader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 
-// Types
 import type { MarketStore } from '$lib/stores/market.svelte.js';
 import type { AccountStore } from '$lib/stores/account.svelte.js';
 import type { PositionStore } from '$lib/stores/position.svelte.js';
@@ -19,18 +17,15 @@ import type { SessionManager } from '$lib/services/session.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
 
 export class ChartLogic {
-    // Sub-Controllers
     layout = new ChartUI(viewport);
     overlay: ChartOverlay;
-    controller = new ChartController(); // View Wrapper
+    controller = new ChartController();
 
-    // Logic Helpers
     private renderer: ChartRenderer;
     private inputHandler: ChartInputHandler;
     private loader: ChartDataLoader;
     private watchdog: Watchdog;
 
-    // State
     private currentEpic = "";
     private userLeverage = 1;
     private marketDetails: MarketDetailsResponse | null = null;
@@ -42,46 +37,40 @@ export class ChartLogic {
         private tradeStore: TradeStore,
         private session: SessionManager
     ) {
-        // Initialize helpers
         this.overlay = new ChartOverlay(accountStore, positionStore, session);
         this.loader = new ChartDataLoader(accountStore, positionStore, marketStore);
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
         this.watchdog = new Watchdog(() => this.handleFreeze());
 
         this.inputHandler = new ChartInputHandler(
+            marketStore,
             (intent) => this.handleTradeIntent(intent),
             () => this.isInteractionBlocked()
         );
     }
 
     async init(container: HTMLDivElement) {
-        // 1. Session Check
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
         this.currentEpic = this.session.lastEpic;
         this.watchdog.start();
 
-        // 2. View Initialization
         this.controller.init(container);
         this.layout.init(this.controller.chart, container);
 
-        // 3. Data Context Loading
         const context = await this.loader.loadContext(this.currentEpic);
         if (!context) return;
 
         this.userLeverage = context.userLeverage;
         this.marketDetails = context.marketDetails;
 
-        // 4. Series & Logic Wiring
         this.controller.createMainSeries(context.precision);
 
-        // Pass the concrete series to the helpers that need it
         this.renderer.init(this.controller.series);
-        this.inputHandler.configure(this.controller.series, context.marketDetails);
+        this.inputHandler.configure(this.controller.series);
         this.controller.subscribeClick(this.inputHandler.handleChartClick);
 
-        // 5. Start Data Stream
         await this.loader.initStream(
             this.currentEpic,
             this.positionStore.activePosition?.position.direction
@@ -98,12 +87,9 @@ export class ChartLogic {
         this.loader.disconnectStream();
         this.overlay.destroy();
 
-        // Clean up Controller interactions
         this.controller.unsubscribeClick(this.inputHandler.handleChartClick);
         this.controller.destroy();
     }
-
-    // --- Actions ---
 
     async confirmTrade() {
         const result = await this.tradeStore.execute();
@@ -122,8 +108,6 @@ export class ChartLogic {
         }
     }
 
-    // --- Private Interaction Logic ---
-
     private isInteractionBlocked(): boolean {
         return !!(this.positionStore.activePosition || this.tradeStore.isExecuting);
     }
@@ -131,10 +115,8 @@ export class ChartLogic {
     private handleTradeIntent(intent: TradeIntent) {
         if (!this.marketDetails) return;
 
-        // 1. Visual Feedback
         this.marketStore.setDataSource(intent.source);
 
-        // 2. Business Logic
         this.tradeStore.plan(
             intent.entryPrice,
             intent.targetPrice,

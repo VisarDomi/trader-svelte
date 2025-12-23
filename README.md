@@ -34,3 +34,5 @@ install the profile
 important hidden step - go to general-about-certificate settings - trust the certificate (again...)
 https is now ready for 192.168.1.197 - pwa and hls is unlocked for local network
 
+## notes
+the yellow line should be called break even point
