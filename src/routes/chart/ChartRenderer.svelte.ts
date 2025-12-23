@@ -2,14 +2,12 @@ import { LineStyle, type ISeriesApi, type IPriceLine } from "lightweight-charts"
 import { viewport } from "$lib/services/viewport.svelte.js";
 import * as TRADING from "$lib/constants/trading.js";
 
-// Domain & Presentation
 import { EntryLine } from '$lib/presentation/lines/EntryLine.js';
 import { StopLossLine } from '$lib/presentation/lines/StopLossLine.js';
 import { TakeProfitLine } from '$lib/presentation/lines/TakeProfitLine.js';
 import { CurrentPriceLine } from '$lib/presentation/lines/CurrentPriceLine.js';
 import type { LineData } from '$lib/presentation/lines/types.js';
 
-// Types
 import type { MarketStore } from '$lib/stores/market.svelte.js';
 import type { AccountStore } from '$lib/stores/account.svelte.js';
 import type { PositionStore } from '$lib/stores/position.svelte.js';
@@ -26,8 +24,6 @@ export class ChartRenderer {
         private readonly tradeStore: TradeStore,
         private readonly accountStore: AccountStore
     ) {
-        // 1. Reactive History Painting (Heavy Operation)
-        // Only runs when the history array reference changes (Load or Source Switch)
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
             const history = this.marketStore.history;
@@ -37,8 +33,6 @@ export class ChartRenderer {
             }
         });
 
-        // 2. Reactive Live Update (Light Operation)
-        // Runs on every tick
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
             const lastCandle = this.marketStore.lastCandle;
@@ -48,7 +42,6 @@ export class ChartRenderer {
             }
         });
 
-        // 3. Reactive Line Painting
         $effect(() => {
             let targetPosition: PositionResponse | null = null;
 
@@ -58,7 +51,6 @@ export class ChartRenderer {
                 targetPosition = this.positionStore.activePosition;
             }
 
-            // Trigger re-render when these change
             const _tick = this.marketStore.currentPrice;
             const _width = viewport.width;
 
@@ -69,7 +61,6 @@ export class ChartRenderer {
     init(series: ISeriesApi<"Candlestick">) {
         this.series = series;
 
-        // Initial Data Hydration (handles race condition if data loaded before init)
         if (this.marketStore.isLoaded && this.marketStore.history.length > 0) {
             this.series.setData(this.marketStore.history);
         }
@@ -79,7 +70,12 @@ export class ChartRenderer {
         if (!this.series) return;
 
         this.clearLines();
-        this.series.applyOptions({ priceLineColor: "", title: "" } as any);
+
+        // Correct way to reset the price line without "as any"
+        this.series.applyOptions({
+            priceLineVisible: false,
+            title: ""
+        });
 
         if (!response) return;
 
@@ -89,7 +85,6 @@ export class ChartRenderer {
         const symbol = this.accountStore.activeSymbol;
         const isLandscape = viewport.width > viewport.height;
 
-        // 1. Static Lines
         const linesToDraw = [
             new EntryLine(position, market.epic),
             new TakeProfitLine(position, initialBalance, symbol),
@@ -101,7 +96,6 @@ export class ChartRenderer {
             this.renderPriceLine(data);
         });
 
-        // 2. Dynamic Line (Current Price)
         const currentPrice = position.direction === TRADING.BUY_DIRECTION
             ? this.marketStore.bid
             : this.marketStore.offer;
@@ -110,10 +104,12 @@ export class ChartRenderer {
             const currentObj = new CurrentPriceLine(position, currentPrice, initialBalance, symbol);
             const data = currentObj.getData(isLandscape);
 
+            // Re-enable the price line for the active position
             this.series.applyOptions({
+                priceLineVisible: true,
                 priceLineColor: data.color,
                 title: data.title,
-            } as any);
+            });
         }
     }
 

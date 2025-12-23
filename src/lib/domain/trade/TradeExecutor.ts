@@ -1,5 +1,6 @@
 import { createPosition, getConfirmation } from '$lib/services/trading.js';
 import { session } from '$lib/services/session.js';
+import { MarketMapper } from '$lib/domain/market/MarketMapper.js';
 import type { ApiClient } from '$lib/api/client.js';
 import type { TradeRequest, PositionResponse, PositionBody } from '$lib/types/trading.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
@@ -46,16 +47,11 @@ export class TradeExecutor {
             initialBalance: currentBalance
         };
 
-        // Construct a proper market object with identity fields
-        const optimisticMarket = {
-            ...market.snapshot,
-            epic: market.instrument.epic,
-            symbol: market.instrument.symbol,
-            instrumentName: market.instrument.name
-        };
+        // Use the Mapper here as well for consistency
+        const optimisticMarket = MarketMapper.toPositionMarket(market);
 
         return {
-            market: optimisticMarket as any,
+            market: optimisticMarket,
             position: newPositionBody
         };
     }

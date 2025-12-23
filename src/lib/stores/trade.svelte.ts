@@ -2,6 +2,7 @@ import { notifications } from '$lib/services/notifications.svelte.js';
 import { api } from '$lib/services/api.svelte.js';
 import { TradePlanner, type PlannedTrade } from '$lib/domain/trade/TradePlanner.js';
 import { TradeExecutor } from '$lib/domain/trade/TradeExecutor.js';
+import { MarketMapper } from '$lib/domain/market/MarketMapper.js';
 
 import * as TRADING from '$lib/constants/trading.js';
 import type { Direction, PositionResponse, PositionBody } from '$lib/types/trading.js';
@@ -170,16 +171,11 @@ export class TradeStore {
             initialBalance: accountStore.balance
         };
 
-        // Inject the missing epic/symbol info into the snapshot
-        const mockMarket = {
-            ...draft.market.snapshot,
-            epic: draft.market.instrument.epic,
-            symbol: draft.market.instrument.symbol,
-            instrumentName: draft.market.instrument.name
-        };
+        // Use the Mapper to create a valid PositionMarket object
+        const mockMarket = MarketMapper.toPositionMarket(draft.market);
 
         return {
-            market: mockMarket as any,
+            market: mockMarket,
             position: mockBody
         };
     }
