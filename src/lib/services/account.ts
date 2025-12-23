@@ -99,3 +99,7 @@ export async function updatePreferences(
     }
     return await response.json() as PreferencesUpdateResponse;
 }
+
+export function topUpAccount(client: ApiClient, amount: number): Promise<{ successful: boolean }> {
+    return client.post<{ successful: boolean }>(API.TOPUP_ENDPOINT, { amount });
+}

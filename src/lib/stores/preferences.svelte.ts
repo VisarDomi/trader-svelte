@@ -1,4 +1,4 @@
-import { getPreferences, updatePreferences, getSyncedAccounts } from '$lib/services/account.js';
+import { getPreferences, updatePreferences, getSyncedAccounts, topUpAccount } from '$lib/services/account.js';
 import { api } from '$lib/services/api.svelte.js';
 import { session } from '$lib/services/session.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
@@ -97,6 +97,43 @@ export class PreferencesStore {
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             this.error = msg;
+            notifications.error(msg);
+        } finally {
+            this.isSaving = false;
+        }
+    }
+
+    async resetDemoBalance() {
+        if (this.activeType !== AUTH.DEMO_TYPE) return;
+        if (!this.account) return;
+
+        this.isSaving = true;
+        const currentBalance = this.account.balance.deposit;
+        const target = 1000;
+        const delta = target - currentBalance;
+
+        // Round to 2 decimal places to be safe
+        const amount = Math.round(delta * 100) / 100;
+
+        if (Math.abs(amount) < 0.01) {
+            notifications.info("Balance already at $1000");
+            this.isSaving = false;
+            return;
+        }
+
+        const client = api.getClientForMode(this.activeType);
+        if (!client) {
+            this.isSaving = false;
+            notifications.error("Session invalid");
+            return;
+        }
+
+        try {
+            await topUpAccount(client, amount);
+            notifications.success("Account reset to $1000");
+            await this.init(this.activeType);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
             notifications.error(msg);
         } finally {
             this.isSaving = false;

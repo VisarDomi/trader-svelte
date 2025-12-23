@@ -11,6 +11,7 @@ export const PREFERENCES_ENDPOINT = "/api/v1/accounts/preferences";
 export const PRICES_ENDPOINT = "/api/v1/prices";
 export const MARKETS_ENDPOINT = "/api/v1/markets";
 export const POSITIONS_ENDPOINT = "/api/v1/positions";
+export const TOPUP_ENDPOINT = "/api/v1/accounts/topUp";
 
 export const getDealReferenceEndpoint = (dealReference: string) => `/api/v1/confirms/${dealReference}`;
 

@@ -34,10 +34,6 @@
         />
     {/if}
 
-    <!--
-        Fix: Only replace content with "Loading..." if we have no data.
-        Otherwise, keep the content in the DOM and just dim it.
-    -->
     {#if preferencesStore.isLoading && !preferencesStore.data}
         <p>Loading preferences...</p>
     {:else}
@@ -67,6 +63,16 @@
                 />
 
                 <div class="actions">
+                    {#if preferencesStore.activeType === AUTH.DEMO_TYPE}
+                        <button
+                                onclick={() => preferencesStore.resetDemoBalance()}
+                                disabled={preferencesStore.isSaving}
+                                class="reset-btn"
+                        >
+                            Reset to $1000
+                        </button>
+                    {/if}
+
                     <button
                             onclick={() => preferencesStore.save()}
                             disabled={preferencesStore.isSaving}
@@ -95,10 +101,30 @@
     .hedging-label { display: flex; align-items: center; gap: 0.5rem; cursor: not-allowed; font-weight: bold; color: #888; }
     .hedging-desc { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
 
-    .actions { margin-top: 2rem; border-top: 1px solid #333; padding-top: 1.5rem; text-align: right; }
+    .actions {
+        margin-top: 2rem;
+        border-top: 1px solid #333;
+        padding-top: 1.5rem;
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+    }
+
     .save-btn {
         padding: 0.75rem 2rem; color: white; border: none; border-radius: 4px;
         font-weight: bold; cursor: pointer;
     }
     .save-btn:disabled { opacity: 0.7; }
+
+    .reset-btn {
+        padding: 0.75rem 1.5rem;
+        background: transparent;
+        border: 1px solid #444;
+        color: #aaa;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .reset-btn:hover { border-color: #ef5350; color: #ef5350; }
+    .reset-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
