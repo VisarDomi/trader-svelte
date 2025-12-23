@@ -31,18 +31,10 @@ export class ChartUI {
         this.container = container;
 
         if (typeof window !== 'undefined' && this.isIosDevice) {
-            // 1. Blur to release focus-zoom
             if (document.activeElement instanceof HTMLElement) {
                 document.activeElement.blur();
             }
-
-            // Note: We removed the viewport meta tag manipulation and gesture listeners
-            // from here because they are now handled globally in +layout.svelte
-            // and app.html to ensure consistency across all pages (e.g. /instrument).
-
             window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
-
-            // 2. Force Scans
             setTimeout(() => this.viewportService.scan(), 100);
             setTimeout(() => this.viewportService.scan(), 500);
         }
