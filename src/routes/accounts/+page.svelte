@@ -19,7 +19,10 @@
             const id = hash.substring(1); // remove #
             const el = document.getElementById(id);
             if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Ensure browser paint is complete for geometry to be valid
+                setTimeout(() => {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 50);
             }
         }
     });
@@ -60,17 +63,15 @@
                     <div class="grid">
                         {#each accountStore.realAccounts as account (account.accountId)}
                             {@const isActive = isTradingAccount(account, AUTH.REAL_TYPE)}
-                            <!-- Wrapper div to provide ID for anchor scrolling without breaking Grid -->
-                            <div id={account.accountId} style="display: contents;">
-                                <AccountCard
-                                        {account}
-                                        mode={AUTH.REAL_TYPE}
-                                        isActive={isActive}
-                                        href={isActive ? `/preferences?type=${AUTH.REAL_TYPE}` : undefined}
-                                        actionLabel={!isActive ? 'Switch' : undefined}
-                                        onAction={() => accountStore.switchTo(account, AUTH.REAL_TYPE)}
-                                />
-                            </div>
+                            <AccountCard
+                                    id={account.accountId}
+                                    {account}
+                                    mode={AUTH.REAL_TYPE}
+                                    isActive={isActive}
+                                    href={isActive ? `/preferences?type=${AUTH.REAL_TYPE}` : undefined}
+                                    actionLabel={!isActive ? 'Switch' : undefined}
+                                    onAction={() => accountStore.switchTo(account, AUTH.REAL_TYPE)}
+                            />
                         {/each}
                     </div>
                 {/if}
@@ -84,17 +85,15 @@
                     <div class="grid">
                         {#each accountStore.demoAccounts as account (account.accountId)}
                             {@const isActive = isTradingAccount(account, AUTH.DEMO_TYPE)}
-                            <!-- Wrapper div to provide ID for anchor scrolling without breaking Grid -->
-                            <div id={account.accountId} style="display: contents;">
-                                <AccountCard
-                                        {account}
-                                        mode={AUTH.DEMO_TYPE}
-                                        isActive={isActive}
-                                        href={isActive ? `/preferences?type=${AUTH.DEMO_TYPE}` : undefined}
-                                        actionLabel={!isActive ? 'Switch' : undefined}
-                                        onAction={() => accountStore.switchTo(account, AUTH.DEMO_TYPE)}
-                                />
-                            </div>
+                            <AccountCard
+                                    id={account.accountId}
+                                    {account}
+                                    mode={AUTH.DEMO_TYPE}
+                                    isActive={isActive}
+                                    href={isActive ? `/preferences?type=${AUTH.DEMO_TYPE}` : undefined}
+                                    actionLabel={!isActive ? 'Switch' : undefined}
+                                    onAction={() => accountStore.switchTo(account, AUTH.DEMO_TYPE)}
+                            />
                         {/each}
                     </div>
                 {/if}
