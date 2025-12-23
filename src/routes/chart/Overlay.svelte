@@ -64,24 +64,45 @@
                     max-width: 85vw;
                 "
             >
-                <!-- 1. Market Name -->
-                <div
-                        role="button"
-                        tabindex="0"
-                        onclick={() => overlay.navToInstrument()}
-                        onkeydown={(e) => e.key === 'Enter' && overlay.navToInstrument()}
-                        style="
+                <!-- 1. Market Name + Reset -->
+                <div style="
+                    display: flex;
+                    flex-direction: column;
+                    border-right: 1px solid #444;
+                    min-width: 100px;
+                ">
+                    <div
+                            role="button"
+                            tabindex="0"
+                            onclick={() => overlay.navToInstrument()}
+                            onkeydown={(e) => e.key === 'Enter' && overlay.navToInstrument()}
+                            style="
                         padding: 0.25rem 0.5rem;
                         cursor: pointer;
                         display: flex;
                         align-items: center;
-                        border-right: 1px solid #444;
-                        max-width: 100px;
-                    "
-                >
-                    <div style="font-size: 0.8rem; font-weight: bold; line-height: 1.1; word-wrap: break-word;">
-                        {overlay.marketName}
+                        flex-grow: 1;
+                        border-bottom: 1px solid #444;
+                    ">
+                        <div style="font-size: 0.8rem; font-weight: bold; line-height: 1.1; word-wrap: break-word;">
+                            {overlay.marketName}
+                        </div>
                     </div>
+
+                    <button
+                            onclick={() => overlay.resetChart()}
+                            style="
+                        background: transparent;
+                        border: none;
+                        color: #888;
+                        font-size: 0.7rem;
+                        padding: 4px;
+                        cursor: pointer;
+                        text-align: center;
+                        width: 100%;
+                    ">
+                        Reset Chart
+                    </button>
                 </div>
 
                 <!-- 2. Account Info -->

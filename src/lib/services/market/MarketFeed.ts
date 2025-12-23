@@ -43,6 +43,24 @@ export class MarketFeed {
         }
     }
 
+    /**
+     * Merges authoritative external data (REST) into the live aggregators.
+     */
+    mergeExternalData(bidCandle: ChartCandle | null, askCandle: ChartCandle | null) {
+        if (bidCandle) this.bidAgg.merge(bidCandle);
+        if (askCandle) this.askAgg.merge(askCandle);
+
+        // Immediately emit an update to reflect the merge on the chart
+        this.onUpdate({
+            bid: bidCandle?.close || 0, // Fallback if no ticks yet
+            offer: askCandle?.close || 0,
+            completedBid: null,
+            completedAsk: null,
+            liveBid: this.bidAgg.getLiveCandle(),
+            liveAsk: this.askAgg.getLiveCandle()
+        });
+    }
+
     private processMessage(msg: QuoteMessage) {
         const p = msg.payload;
 

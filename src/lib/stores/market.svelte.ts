@@ -12,11 +12,9 @@ export class MarketStore {
     offer = $state(0);
 
     // The active candle to be drawn by the chart
-    // Note: This reference might not change between ticks due to mutable aggregation optimization
     lastCandle = $state.raw<ChartCandle | null>(null);
 
-    // A signal that increments on every feed update to force UI refreshes
-    // even when object references (like lastCandle) remain static.
+    // A signal that increments on every feed update
     updateTrigger = $state(0);
 
     // The active history to be loaded by the chart
@@ -81,6 +79,53 @@ export class MarketStore {
         }
     }
 
+    /**
+     * FEATURE: Mid-minute History Sync
+     * Fetches fresh history from API.
+     * 1. Updates historical (closed) minutes.
+     * 2. Merges the REST "last" candle (current minute) into the live aggregator
+     *    to ensure High/Low/Open accuracy.
+     */
+    async syncHistory() {
+        if (!this.epic || !this.isLoaded) return;
+
+        const client = api.client;
+        if (!client) return;
+
+        try {
+            const repo = new MarketRepository(client);
+            const { bid, ask } = await repo.getHistory(this.epic);
+
+            // Helper: Split array into [History, Current]
+            const split = (arr: ChartCandle[]) => {
+                if (arr.length === 0) return { history: [], current: null };
+                const current = arr[arr.length - 1];
+                const history = arr.slice(0, -1);
+                return { history, current };
+            };
+
+            const bidData = split(bid);
+            const askData = split(ask);
+
+            // 1. Update Historical Data (Closed minutes)
+            this.bidHistory = bidData.history;
+            this.askHistory = askData.history;
+
+            // 2. Update View (Triggers setData on Chart)
+            this.syncViewToSource();
+
+            // 3. Merge Current Minute Data into Feed
+            // This updates liveBidCandle/liveAskCandle internally with proper Open/High/Low
+            this.feed.mergeExternalData(bidData.current, askData.current);
+
+            // 4. Force trigger for Renderer to redraw the merged live candle
+            this.updateTrigger++;
+
+        } catch (e) {
+            console.warn("[MarketStore] History sync failed", e);
+        }
+    }
+
     setDataSource(source: ChartData) {
         if (this.dataSource === source) return;
         this.dataSource = source;
@@ -123,7 +168,7 @@ export class MarketStore {
         if (u.completedBid) this.bidHistory.push(u.completedBid);
         if (u.completedAsk) this.askHistory.push(u.completedAsk);
 
-        // Update Live Refs (Likely same object as before)
+        // Update Live Refs
         this.liveBidCandle = u.liveBid;
         this.liveAskCandle = u.liveAsk;
 
@@ -133,7 +178,6 @@ export class MarketStore {
                 ? this.liveAskCandle
                 : this.liveBidCandle;
 
-            // Force reactivity for consumers who depend on object mutation
             this.updateTrigger++;
         }
     }

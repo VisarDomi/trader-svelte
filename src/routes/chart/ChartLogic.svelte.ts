@@ -1,8 +1,9 @@
 import { viewport } from '$lib/services/viewport.svelte.js';
 import * as TRADING from '$lib/constants/trading.js';
+import * as STORAGE from '$lib/constants/storage.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
 
-import { ChartController } from './ChartController.js';
+import { ChartController, type ChartState } from './ChartController.js';
 import { ChartUI } from './ChartUI.svelte.js';
 import { ChartRenderer } from './ChartRenderer.svelte.js';
 import { ChartOverlay } from './ChartOverlay.svelte.js';
@@ -34,6 +35,10 @@ export class ChartLogic {
     // Polling & Sentinel State
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
     private isBurstChecking = false;
+    private saveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    // Feature: Mid-minute sync
+    private lastSyncMinute = -1;
 
     constructor(
         private marketStore: MarketStore,
@@ -42,7 +47,8 @@ export class ChartLogic {
         private tradeStore: TradeStore,
         private session: SessionManager
     ) {
-        this.overlay = new ChartOverlay(accountStore, positionStore, session);
+        // Pass 'this' to overlay so it can call resetZoom()
+        this.overlay = new ChartOverlay(accountStore, positionStore, session, this);
         this.loader = new ChartDataLoader(accountStore, positionStore, marketStore);
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
         this.watchdog = new Watchdog(() => this.handleFreeze());
@@ -53,7 +59,6 @@ export class ChartLogic {
             () => this.isInteractionBlocked()
         );
 
-        // Sentinel Effect: Watch price vs Position Limits
         $effect(() => {
             const price = this.marketStore.currentPrice;
             if (price > 0 && this.positionStore.activePosition) {
@@ -85,6 +90,11 @@ export class ChartLogic {
         this.inputHandler.configure(this.controller.series);
         this.controller.subscribeClick(this.inputHandler.handleChartClick);
 
+        // Feature: Restore Zoom
+        this.restoreZoom();
+        // Listen for Zoom changes (Debounced save)
+        this.controller.subscribeCameraChange(() => this.scheduleSaveZoom());
+
         await this.loader.initStream(
             this.currentEpic,
             this.positionStore.activePosition?.position.direction
@@ -107,6 +117,44 @@ export class ChartLogic {
         this.controller.destroy();
     }
 
+    // --- Feature: Zoom Persistence ---
+
+    private scheduleSaveZoom() {
+        if (this.saveTimeout) clearTimeout(this.saveTimeout);
+        this.saveTimeout = setTimeout(() => this.saveZoom(), 1000);
+    }
+
+    private saveZoom() {
+        if (typeof window === 'undefined') return;
+        const state = this.controller.getState();
+        if (state) {
+            localStorage.setItem(STORAGE.CHART_STATE_KEY, JSON.stringify(state));
+        }
+    }
+
+    private restoreZoom() {
+        if (typeof window === 'undefined') return;
+        const raw = localStorage.getItem(STORAGE.CHART_STATE_KEY);
+        if (raw) {
+            try {
+                const state: ChartState = JSON.parse(raw);
+                // Apply after a short delay to ensure data/layout has settled
+                setTimeout(() => {
+                    this.controller.restoreState(state);
+                }, 200);
+            } catch {
+                // Ignore corrupt state
+            }
+        }
+    }
+
+    resetChartZoom() {
+        this.controller.resetZoom();
+        localStorage.removeItem(STORAGE.CHART_STATE_KEY);
+    }
+
+    // --- Trade Logic ---
+
     async confirmTrade() {
         const result = await this.tradeStore.execute();
         if (result) {
@@ -124,65 +172,50 @@ export class ChartLogic {
         }
     }
 
-    // --- Sentinel Logic ---
+    // --- Sentinel & Heartbeat ---
 
     private checkLimits(currentPrice: number) {
-        // If already aggressively checking, don't trigger again
         if (this.isBurstChecking) return;
-
+        // ... (existing limit logic)
         const pos = this.positionStore.activePosition?.position;
         if (!pos) return;
-
         const isBuy = pos.direction === TRADING.BUY_DIRECTION;
-
-        // Check Stop Loss Breach
         let hitSL = false;
-        if (pos.stopLevel) {
-            hitSL = isBuy ? currentPrice <= pos.stopLevel : currentPrice >= pos.stopLevel;
-        }
-
-        // Check Take Profit Breach
+        if (pos.stopLevel) hitSL = isBuy ? currentPrice <= pos.stopLevel : currentPrice >= pos.stopLevel;
         let hitTP = false;
-        if (pos.profitLevel) {
-            hitTP = isBuy ? currentPrice >= pos.profitLevel : currentPrice <= pos.profitLevel;
-        }
+        if (pos.profitLevel) hitTP = isBuy ? currentPrice >= pos.profitLevel : currentPrice <= pos.profitLevel;
 
-        if (hitSL || hitTP) {
-            console.log("Limit hit locally - triggering burst check");
-            this.runBurstCheck();
-        }
+        if (hitSL || hitTP) this.runBurstCheck();
     }
 
     private async runBurstCheck() {
         this.isBurstChecking = true;
-
-        // Poll 1x per second for 5 seconds
-        // CRITICAL FIX: Do NOT break the loop early.
-        // We need to keep polling to catch the Account Balance update
-        // which often happens 1-2 seconds AFTER the position closes.
         for (let i = 0; i < 5; i++) {
-            await Promise.all([
-                this.positionStore.refresh(),       // Check if lines should be removed
-                this.accountStore.refreshActive()   // Check if balance updated
-            ]);
+            await Promise.all([this.positionStore.refresh(), this.accountStore.refreshActive()]);
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
-
         this.isBurstChecking = false;
     }
 
     private startHeartbeat() {
         this.stopHeartbeat();
-        // General background sync every 15 seconds
-        // Keeps the chart in sync if you close a position on your phone
+
         this.heartbeatInterval = setInterval(() => {
-            if (!this.isBurstChecking) {
-                // We sync positions regularly.
-                // We don't spam account sync in heartbeat to save API calls,
-                // but you could add it here if strictly needed.
+            const now = new Date();
+            const sec = now.getSeconds();
+
+            // Feature: Mid-Minute History Sync
+            // Update historical data (excluding current minute) at 30s mark
+            if (sec >= 30 && sec <= 32 && this.lastSyncMinute !== now.getMinutes()) {
+                this.lastSyncMinute = now.getMinutes();
+                this.marketStore.syncHistory();
+            }
+
+            // General background sync
+            if (sec % 15 === 0 && !this.isBurstChecking) {
                 this.positionStore.refresh();
             }
-        }, 15000);
+        }, 1000);
     }
 
     private stopHeartbeat() {
@@ -192,33 +225,17 @@ export class ChartLogic {
         }
     }
 
-    // --- Existing Logic ---
-
     private isInteractionBlocked(): boolean {
+        // ... (existing block logic)
         if (this.tradeStore.isExecuting) return true;
-        if (this.positionStore.anyActivePosition) {
-            const p = this.positionStore.anyActivePosition;
-            const isLocal = p.market.epic === this.currentEpic;
-            if (!isLocal) {
-                notifications.info(`Trade active in ${p.market.instrumentName}`);
-            }
-            return true;
-        }
+        if (this.positionStore.anyActivePosition) return true;
         return false;
     }
 
     private handleTradeIntent(intent: TradeIntent) {
         if (!this.marketDetails) return;
-
         this.marketStore.setDataSource(intent.source);
-
-        this.tradeStore.plan(
-            intent.entryPrice,
-            intent.targetPrice,
-            intent.direction,
-            this.marketDetails,
-            this.userLeverage
-        );
+        this.tradeStore.plan(intent.entryPrice, intent.targetPrice, intent.direction, this.marketDetails, this.userLeverage);
     }
 
     private async handleFreeze() {

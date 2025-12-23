@@ -18,6 +18,36 @@ export class CandleAggregator {
     }
 
     /**
+     * Merges an external (REST) candle into the current live state.
+     * This ensures we capture Highs/Lows that the WS might have missed due to packet loss,
+     * or correct the official Open price.
+     */
+    merge(external: ChartCandle) {
+        if (!this.liveCandle) {
+            this.liveCandle = { ...external };
+            return;
+        }
+
+        // Only merge if they belong to the same minute
+        if (this.liveCandle.time === external.time) {
+            // REST Authority for Open
+            this.liveCandle.open = external.open;
+
+            // Boundary Expansion (Truth is the widest range)
+            this.liveCandle.high = Math.max(this.liveCandle.high, external.high);
+            this.liveCandle.low = Math.min(this.liveCandle.low, external.low);
+
+            // We accept the external close as the "current" state until the next tick
+            this.liveCandle.close = external.close;
+        }
+        else if (external.time > this.liveCandle.time) {
+            // External is newer (we missed the minute switch?)
+            this.liveCandle = { ...external };
+        }
+        // If external is older, ignore it.
+    }
+
+    /**
      * Updates the current candle state in-place to save allocations.
      * Returns a new ChartCandle object ONLY if a minute bar just completed (closed).
      * Otherwise returns null.

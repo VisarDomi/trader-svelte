@@ -15,3 +15,6 @@ export const VIEWPORT_KEY = `${STORAGE_PREFIX}viewport`;
 
 // 5. Trade Context (Logic) - Persisting data not available in API (Initial Balance)
 export const TRADE_CONTEXT_KEY = `${STORAGE_PREFIX}trade_context`;
+
+// 6. Chart Settings (Time Span + Price Range)
+export const CHART_STATE_KEY = `${STORAGE_PREFIX}chart_state`;

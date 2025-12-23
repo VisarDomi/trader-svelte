@@ -7,6 +7,7 @@ import * as TRADING from '$lib/constants/trading.js';
 import type { AccountStore } from '$lib/stores/account.svelte.js';
 import type { PositionStore } from '$lib/stores/position.svelte.js';
 import type { SessionManager } from '$lib/services/session.js';
+import type { ChartLogic } from './ChartLogic.svelte.js';
 
 export class ChartOverlay {
     isOpen = $state(false);
@@ -15,7 +16,9 @@ export class ChartOverlay {
     constructor(
         private readonly accountStore: AccountStore,
         private readonly positionStore: PositionStore,
-        private readonly session: SessionManager
+        private readonly session: SessionManager,
+        // Injected Logic to access chart actions
+        private readonly chartLogic: ChartLogic
     ) {}
 
     // --- Derived View State ---
@@ -45,7 +48,6 @@ export class ChartOverlay {
     }
 
     // 3. Position Information
-    // WE USE anyActivePosition HERE TO SHOW GLOBAL STATUS
     get hasPosition() {
         return !!this.positionStore.anyActivePosition;
     }
@@ -92,6 +94,11 @@ export class ChartOverlay {
 
     toggle() {
         this.isOpen = !this.isOpen;
+    }
+
+    // New Action
+    resetChart() {
+        this.chartLogic.resetChartZoom();
     }
 
     async closePosition() {
