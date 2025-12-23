@@ -10,7 +10,6 @@ export class ChartUI {
 
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
-    private originalViewportContent: string | null = null;
 
     constructor(private readonly viewportService: ViewportService) {
         if (typeof window !== 'undefined') {
@@ -37,20 +36,13 @@ export class ChartUI {
                 document.activeElement.blur();
             }
 
-            // 2. Enforce Strict Viewport (The Clamp)
-            this.enforceStrictViewport();
+            // Note: We removed the viewport meta tag manipulation and gesture listeners
+            // from here because they are now handled globally in +layout.svelte
+            // and app.html to ensure consistency across all pages (e.g. /instrument).
 
-            // 3. Listeners
-            // REMOVED: window.addEventListener('scroll', this.handleScroll); -> Causes fighting loop
-            document.addEventListener('gesturestart', this.preventZoom);
-            document.addEventListener('gesturechange', this.preventZoom);
-            document.addEventListener('gestureend', this.preventZoom);
             window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
 
-            // Only use visualViewport scroll to detect major shifts, not to enforce position
-            // window.visualViewport?.addEventListener('scroll', this.handleZoomCheck);
-
-            // 4. Force Scans
+            // 2. Force Scans
             setTimeout(() => this.viewportService.scan(), 100);
             setTimeout(() => this.viewportService.scan(), 500);
         }
@@ -75,50 +67,12 @@ export class ChartUI {
     destroy() {
         if (typeof window === 'undefined') return;
 
-        this.restoreViewport();
-
-        // window.removeEventListener('scroll', this.handleScroll);
-        document.removeEventListener('gesturestart', this.preventZoom);
-        document.removeEventListener('gesturechange', this.preventZoom);
-        document.removeEventListener('gestureend', this.preventZoom);
         window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
     }
 
-    private enforceStrictViewport() {
-        const meta = document.querySelector('meta[name="viewport"]');
-        if (!meta) return;
-
-        if (!this.originalViewportContent) {
-            this.originalViewportContent = meta.getAttribute('content');
-        }
-
-        // We use the existing tag but update attributes to force the clamp
-        meta.setAttribute('content', 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
-    }
-
-    private restoreViewport() {
-        if (!this.originalViewportContent) return;
-        const meta = document.querySelector('meta[name="viewport"]');
-        if (meta) {
-            meta.setAttribute('content', this.originalViewportContent);
-        }
-    }
-
-    private preventZoom = (e: Event) => {
-        e.preventDefault();
-    };
-
     private handleZoomCheck = () => {
         if (!window.visualViewport) return;
-
-        if (Math.abs(window.visualViewport.scale - 1.0) > 0.05) {
-            // Re-apply clamp if drift detected
-            this.enforceStrictViewport();
-        } else {
-            // If we are back to 1.0, ensure we are scrolled correctly
-            // Debounce this to avoid loops
-            // setTimeout(() => this.enforceScrollPosition(), 100);
-        }
+        // Keep listener for drift monitoring if needed
     };
 
     private getScrollTarget(chartH: number, winH: number): number {
@@ -129,7 +83,6 @@ export class ChartUI {
         if (!this.isIosDevice || !this.isDataLoaded || !this.container) return;
 
         // CRITICAL GUARD: Never programmatically scroll if zoomed in.
-        // This causes the "slow scroll up" fight.
         if (window.visualViewport && window.visualViewport.scale > 1.01) {
             return;
         }
@@ -138,7 +91,7 @@ export class ChartUI {
 
         // Only scroll if we are "above" the target (showing the spacer)
         if (window.scrollY < target) {
-            window.scrollTo({ top: target, behavior: 'instant' }); // 'auto' is cleaner than 'instant' for major jumps sometimes
+            window.scrollTo({ top: target, behavior: 'instant' });
         }
     };
 
