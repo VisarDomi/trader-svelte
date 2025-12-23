@@ -1,10 +1,24 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import { goto } from '$app/navigation';
     import { authStore } from '$lib/stores/auth.svelte.js';
 
     onMount(() => {
         authStore.init();
     });
+
+    async function handleLogin() {
+        await authStore.loginBoth();
+
+        if (authStore.realTokens || authStore.demoTokens) {
+            // Note: If manual zooming ever becomes an issue, using window.location.href
+            // instead of goto() forces a full page reload which resets the viewport.
+
+            // setTimeout(() => {
+            //    // goto('/chart');
+            // }, 100);
+        }
+    }
 </script>
 
 <h1>Authentication</h1>
@@ -16,18 +30,19 @@
 
     <label>
         API Key
-        <input type="text" bind:value={authStore.apiKey} placeholder="X-CAP-API-KEY" style="width: 100%; padding: 8px;" />
+        <!-- font-size: 16px is the magic number that prevents iOS Safari from zooming in on focus -->
+        <input type="text" bind:value={authStore.apiKey} placeholder="X-CAP-API-KEY" style="width: 100%; padding: 8px; font-size: 16px;" />
     </label>
     <label>
         Identifier
-        <input type="text" bind:value={authStore.identifier} placeholder="user@example.com" style="width: 100%; padding: 8px;" />
+        <input type="text" bind:value={authStore.identifier} placeholder="user@example.com" style="width: 100%; padding: 8px; font-size: 16px;" />
     </label>
     <label>
         Password
-        <input type="password" bind:value={authStore.password} placeholder="password" style="width: 100%; padding: 8px;" />
+        <input type="password" bind:value={authStore.password} placeholder="password" style="width: 100%; padding: 8px; font-size: 16px;" />
     </label>
 
-    <button onclick={() => authStore.loginBoth()} style="padding: 1rem; background-color: #26a69a; color: white; border: none; font-weight: bold; cursor: pointer;">
+    <button onclick={handleLogin} style="padding: 1rem; background-color: #26a69a; color: white; border: none; font-weight: bold; cursor: pointer;">
         LOGIN TO BOTH
     </button>
 </div>
