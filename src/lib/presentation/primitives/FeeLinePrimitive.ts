@@ -17,6 +17,9 @@ interface CanvasRenderingTarget2D {
     ) => void;
 }
 
+const FEE_LINE_COLOR = '#FF5252'; // Lighter, distinct red
+const FEE_TEXT_COLOR = '#FFFFFF';
+
 class FeeLineRenderer implements IPrimitivePaneRenderer {
     constructor(
         private readonly x: number | null,
@@ -30,20 +33,15 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
         target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
             const height = mediaSize.height;
 
-            // Visual Configuration
-            const lineColor = '#FF1744'; // Vivid Red
-            const textColor = '#FF1744';
-            const dashPattern: number[] = []; // Solid line
-
             ctx.save();
 
             // 1. Draw Vertical Line
             ctx.beginPath();
-            ctx.strokeStyle = lineColor;
-            ctx.lineWidth = 2; // Matching standard line thickness
-            ctx.setLineDash(dashPattern);
+            ctx.strokeStyle = FEE_LINE_COLOR;
+            ctx.lineWidth = 2;
+            const dashPattern: number[] = [];
+            ctx.setLineDash(dashPattern); // no dash
 
-            // Snap to pixel grid for crisp lines
             const sharpX = Math.round(this.x as number) + 0.5;
 
             ctx.moveTo(sharpX, 0);
@@ -51,22 +49,52 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
             ctx.stroke();
 
             // 2. Draw Labels
-            ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.fillStyle = textColor;
+            ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
 
-            // Bottom Label (Time)
+            // Draw Bottom Label (Time)
             if (this.bottomLabel) {
-                ctx.fillText(this.bottomLabel, sharpX, height - 10);
+                this.drawLabel(ctx, this.bottomLabel, sharpX, height - 20);
             }
 
-            // Top Label (Fee Amount)
+            // Draw Top Label (Fee Amount)
             if (this.topLabel) {
-                ctx.fillText(this.topLabel, sharpX, 20);
+                this.drawLabel(ctx, this.topLabel, sharpX, 20);
             }
 
             ctx.restore();
         });
+    }
+
+    private drawLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
+        const paddingX = 6;
+        const textMetrics = ctx.measureText(text);
+        const textWidth = textMetrics.width;
+        const boxHeight = 20;
+        const boxWidth = textWidth + (paddingX * 2);
+
+        const left = x - (boxWidth / 2);
+        const top = y - (boxHeight / 2);
+
+        // Background Box (Rounded Rectangle)
+        ctx.fillStyle = FEE_LINE_COLOR;
+        ctx.beginPath();
+        const r = 4; // corner radius
+        ctx.moveTo(left + r, top);
+        ctx.lineTo(left + boxWidth - r, top);
+        ctx.quadraticCurveTo(left + boxWidth, top, left + boxWidth, top + r);
+        ctx.lineTo(left + boxWidth, top + boxHeight - r);
+        ctx.quadraticCurveTo(left + boxWidth, top + boxHeight, left + boxWidth - r, top + boxHeight);
+        ctx.lineTo(left + r, top + boxHeight);
+        ctx.quadraticCurveTo(left, top + boxHeight, left, top + boxHeight - r);
+        ctx.lineTo(left, top + r);
+        ctx.quadraticCurveTo(left, top, left + r, top);
+        ctx.fill();
+
+        // Text
+        ctx.fillStyle = FEE_TEXT_COLOR;
+        ctx.fillText(text, x, y + 1); // +1 for visual vertical alignment
     }
 }
 
@@ -114,10 +142,6 @@ export class FeeLinePrimitive implements ISeriesPrimitive<Time> {
         this.timestamp = timestamp;
         this.formattedTime = formattedTime;
         this.label = label;
-        // In lightweight-charts, changing properties usually requires a redraw request
-        // We don't have direct access to requestUpdate() on the chart here easily without storing params,
-        // but since this is usually called inside the chart's update loop/reactivity,
-        // the re-render of the chart often picks it up.
     }
 
     // --- ISeriesPrimitive Implementation ---
