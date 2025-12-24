@@ -126,6 +126,7 @@ export class ChartRenderer {
             const timestampSeconds = Math.floor(timestampMs / 1000);
             const fmt = DateTime.fromMillis(timestampMs).toFormat("HH:mm");
 
+            // ChartLogic has ensured the timescale extends far enough
             this.feePrimitive = new FeeLinePrimitive(timestampSeconds, fmt, "Fee: —");
             this.series.attachPrimitive(this.feePrimitive);
         }

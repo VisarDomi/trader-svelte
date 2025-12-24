@@ -86,6 +86,17 @@ export class ChartLogic {
 
         this.controller.createMainSeries(context.precision);
 
+        // --- GHOST SERIES EXTENSION ---
+        // Ensure continuous time resolution into the future (24H) so fees draw correctly.
+        // We use the snapshot bid as a safe anchor, though it's isolated on its own scale anyway.
+        if (this.marketDetails.instrument.overnightFee?.swapChargeTimestamp) {
+            const currentPrice = this.marketDetails.snapshot.bid;
+            if (currentPrice > 0) {
+                this.controller.extendTimeScale24H(currentPrice);
+            }
+        }
+        // ------------------------------
+
         this.renderer.init(this.controller.series, this.marketDetails);
         this.inputHandler.configure(this.controller.series);
         this.controller.subscribeClick(this.inputHandler.handleChartClick);

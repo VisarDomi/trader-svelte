@@ -1,10 +1,11 @@
 import {
     createChart,
     CandlestickSeries,
+    LineSeries,
     type IChartApi,
     type ISeriesApi,
     type MouseEventParams,
-    type IRange
+    type UTCTimestamp
 } from 'lightweight-charts';
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
 import { isIOS } from "$lib/utils/platform.js";
@@ -18,6 +19,7 @@ export interface ChartState {
 export class ChartController {
     private _chart: IChartApi | null = null;
     private _series: ISeriesApi<"Candlestick"> | null = null;
+    private _ghostSeries: ISeriesApi<"Line"> | null = null;
 
     get chart() {
         if (!this._chart) throw new Error("Chart not initialized");
@@ -50,6 +52,52 @@ export class ChartController {
         this._series = this._chart.addSeries(CandlestickSeries, getBaseSeriesOptions(precision));
     }
 
+    /**
+     * EXTENSION: Populates an invisible series with 24 hours of minute data
+     * into the future to force the TimeScale to render continuous time.
+     *
+     * FIX: Uses a separate 'ghost' priceScaleId to prevent squashing the main chart.
+     */
+    extendTimeScale24H(anchorPrice: number) {
+        if (!this._chart) return;
+
+        // Create the ghost series if it doesn't exist
+        if (!this._ghostSeries) {
+            this._ghostSeries = this._chart.addSeries(LineSeries, {
+                color: 'transparent', // Invisible
+                lastValueVisible: false,
+                priceLineVisible: false,
+                crosshairMarkerVisible: false,
+                visible: true, // Must be true for TimeScale to acknowledge it
+                priceScaleId: 'ghost_scale', // CRITICAL: Isolate to custom scale
+                autoscaleInfoProvider: () => null // Double-safety: ignore for auto-scaling
+            });
+
+            // Ensure the ghost scale itself is hidden so it doesn't show numbers
+            this._chart.priceScale('ghost_scale').applyOptions({
+                visible: false,
+                autoScale: true
+            });
+        }
+
+        // Start 1 minute in the future to avoid collision with the live candle
+        const now = Math.floor(Date.now() / 1000 / 60) * 60;
+        const start = now + 60;
+        const oneDaySeconds = 24 * 60 * 60;
+        const limit = start + oneDaySeconds;
+
+        const data = [];
+        // Generate points for every minute from Now+1m to Now+24H
+        for (let t = start; t <= limit; t += 60) {
+            data.push({
+                time: t as UTCTimestamp,
+                value: anchorPrice // Value doesn't matter much on hidden scale, but keep it steady
+            });
+        }
+
+        this._ghostSeries.setData(data);
+    }
+
     subscribeClick(handler: (param: MouseEventParams) => void) {
         this._chart?.subscribeClick(handler);
     }
@@ -71,7 +119,6 @@ export class ChartController {
         const timeSpan = timeRange ? (timeRange.to - timeRange.from) : 0;
 
         // 2. Price Range (Right scale)
-        // Note: IPriceScaleApi.getVisibleRange() returns IRange<number> | null
         const priceScale = this._chart.priceScale('right');
         const priceRange = priceScale.getVisibleRange();
 
@@ -88,7 +135,6 @@ export class ChartController {
         if (!this._chart) return;
 
         // 1. Restore Price Scale
-        // Note: IPriceScaleApi.setVisibleRange(range: IRange<number>)
         if (state.priceRange) {
             this._chart.priceScale('right').setVisibleRange({
                 from: state.priceRange.min,
@@ -118,21 +164,13 @@ export class ChartController {
         this._chart.timeScale().resetTimeScale();
 
         // Reset Price (Force AutoScale)
-        // Toggling autoScale off then on usually resets manual overrides
         const ps = this._chart.priceScale('right');
         ps.applyOptions({ autoScale: true });
     }
 
     subscribeCameraChange(handler: () => void) {
         if (!this._chart) return;
-
-        // Listen to TimeScale changes
         this._chart.timeScale().subscribeVisibleLogicalRangeChange(handler);
-
-        // There is no direct subscription for PriceScale changes in the public API provided.
-        // We rely on time scale changes (zoom usually affects both) or save manually on interactions.
-        // For a robust solution, we can just save state periodically or on other events if needed,
-        // but for now, we attach to time scale.
     }
 
     destroy() {
@@ -140,6 +178,7 @@ export class ChartController {
             this._chart.remove();
             this._chart = null;
             this._series = null;
+            this._ghostSeries = null;
         }
     }
 }
