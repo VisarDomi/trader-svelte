@@ -31,16 +31,16 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
             const height = mediaSize.height;
 
             // Visual Configuration
-            const lineColor = '#E0E0E0'; // Light grey
-            const textColor = '#AAAAAA';
-            const dashPattern = [4, 4];
+            const lineColor = '#FF1744'; // Vivid Red
+            const textColor = '#FF1744';
+            const dashPattern: number[] = []; // Solid line
 
             ctx.save();
 
-            // 1. Draw Vertical Dashed Line
+            // 1. Draw Vertical Line
             ctx.beginPath();
             ctx.strokeStyle = lineColor;
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 2; // Matching standard line thickness
             ctx.setLineDash(dashPattern);
 
             // Snap to pixel grid for crisp lines
@@ -51,7 +51,7 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
             ctx.stroke();
 
             // 2. Draw Labels
-            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             ctx.fillStyle = textColor;
             ctx.textAlign = 'center';
 
