@@ -8,6 +8,11 @@ interface GroupedHours {
     hours: string[];
 }
 
+interface TimeRange {
+    start: DateTime;
+    end: DateTime;
+}
+
 export class InstrumentFormatter {
     private readonly PROFIT_COLOR = '#26a69a';
     private readonly LOSS_COLOR = '#ef5350';
@@ -40,16 +45,10 @@ export class InstrumentFormatter {
         return DateTime.fromMillis(ts).toLocal().toFormat('dd MMM HH:mm');
     }
 
-    /**
-     * Parses, groups, and shifts trading hours to the user's local timezone.
-     * Uses a reference week (Jan 1 2024 was a Monday) to handle day-boundary crossings correctly.
-     */
     getGroupedHours(market: MarketDetailsResponse): GroupedHours[] {
         const schedule = market.instrument.openingHours;
         const sourceZone = schedule.zone || 'UTC';
 
-        // Map API keys to a specific reference date (Mon Jan 01 2024 to Sun Jan 07 2024)
-        // This ensures Luxon handles "Monday 23:00 UTC" -> "Tuesday 01:00 Local" correctly.
         const referenceWeekMap: Record<string, string> = {
             'mon': '2024-01-01',
             'tue': '2024-01-02',
@@ -61,9 +60,8 @@ export class InstrumentFormatter {
         };
 
         const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-        // Storage for re-bucketed local hours (0=Mon, 6=Sun)
-        // We use a map to handle wrapping (e.g. Sunday night becoming Monday morning)
-        const localBuckets: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+        // 0=Mon, 6=Sun
+        const buckets: Record<number, TimeRange[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 
         dayKeys.forEach((key) => {
             const rawHours = schedule[key];
@@ -75,52 +73,56 @@ export class InstrumentFormatter {
 
                 const refDateStr = referenceWeekMap[key];
 
-                // Parse Start Time in Source Zone
+                // 1. Parse in Source Zone
                 let startDt = DateTime.fromFormat(`${refDateStr} ${startStr}`, 'yyyy-MM-dd HH:mm', { zone: sourceZone });
-
-                // Parse End Time in Source Zone
-                // If endStr is "00:00", we treat it as the next day's midnight if it's conceptually "after" start
                 let endDt = DateTime.fromFormat(`${refDateStr} ${endStr}`, 'yyyy-MM-dd HH:mm', { zone: sourceZone });
 
-                // Handle wrapping (e.g. 23:00 - 00:00 or 23:00 - 02:00)
-                if (endDt <= startDt) {
-                    endDt = endDt.plus({ days: 1 });
-                }
+                if (endDt <= startDt) endDt = endDt.plus({ days: 1 });
 
-                // Convert to Local
+                // 2. Convert to Local
                 const localStart = startDt.toLocal();
                 const localEnd = endDt.toLocal();
 
-                const formattedRange = `${localStart.toFormat('HH:mm')} - ${localEnd.toFormat('HH:mm')}`;
+                // 3. Handle Day Splits (Local Midnight)
+                // We define the "boundary" as the midnight following the start time
+                const midnight = localStart.plus({ days: 1 }).startOf('day');
 
-                // Determine which bucket (Day of week) this falls into LOCALLY
-                // Luxon weekday: 1=Mon, 7=Sun. We map to 0-6 index.
-                const localDayIndex = localStart.weekday - 1;
-
-                // If the shift moved it to a different week (rare edge case with reference dates), normalize it
-                // But since we use Jan 1-7, it stays within boundaries mostly.
-                // Just use valid 0-6 index.
-                if (localBuckets[localDayIndex]) {
-                    localBuckets[localDayIndex].push(formattedRange);
+                if (localEnd > midnight) {
+                    // Split needed
+                    // Part A: Start -> Midnight (Current Day)
+                    this.addToBucket(buckets, { start: localStart, end: midnight });
+                    // Part B: Midnight -> End (Next Day)
+                    this.addToBucket(buckets, { start: midnight, end: localEnd });
+                } else {
+                    // No split
+                    this.addToBucket(buckets, { start: localStart, end: localEnd });
                 }
             });
         });
 
-        // Convert buckets to grouped array
         const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         const result: GroupedHours[] = [];
 
         let currentGroup: { startIdx: number; endIdx: number; hoursStr: string } | null = null;
 
         for (let i = 0; i < 7; i++) {
-            const hours = localBuckets[i];
+            const ranges = buckets[i];
 
-            // Sort hours for consistency (e.g. 09:00 before 14:00)
-            hours.sort();
-            const hoursSignature = JSON.stringify(hours);
+            // 4. Sort by Start Time
+            ranges.sort((a, b) => a.start.toMillis() - b.start.toMillis());
 
-            if (hours.length === 0) {
-                // If we have an active group, close it
+            // 5. Merge Continuous
+            const mergedRanges = this.mergeRanges(ranges);
+
+            const hoursStrings = mergedRanges.map(r => {
+                // If end is 00:00 of next day, format as 00:00 (or 24:00 if preferred, but usually 00:00 is clearer in ranges)
+                // Luxon toFormat 'HH:mm' for midnight is '00:00'
+                return `${r.start.toFormat('HH:mm')} - ${r.end.toFormat('HH:mm')}`;
+            });
+
+            const hoursSignature = JSON.stringify(hoursStrings);
+
+            if (hoursStrings.length === 0) {
                 if (currentGroup) {
                     this.pushGroup(result, currentGroup, dayLabels);
                     currentGroup = null;
@@ -129,12 +131,9 @@ export class InstrumentFormatter {
             }
 
             if (currentGroup && currentGroup.hoursStr === hoursSignature) {
-                // Extend
                 currentGroup.endIdx = i;
             } else {
-                // Close prev
                 if (currentGroup) this.pushGroup(result, currentGroup, dayLabels);
-                // Start new
                 currentGroup = {
                     startIdx: i,
                     endIdx: i,
@@ -142,10 +141,46 @@ export class InstrumentFormatter {
                 };
             }
         }
-        // Close final
         if (currentGroup) this.pushGroup(result, currentGroup, dayLabels);
 
         return result;
+    }
+
+    private addToBucket(buckets: Record<number, TimeRange[]>, range: TimeRange) {
+        // Luxon weekday 1=Mon .. 7=Sun. Convert to 0-6 index.
+        const dayIdx = range.start.weekday - 1;
+
+        // Safety: ensure index is 0-6.
+        // If splitting pushed us to next week (e.g. Sunday night split to Monday morning), wrap around.
+        // Monday (1) - 1 = 0.
+        // Sunday (7) - 1 = 6.
+        // If reference dates drifted, we might get 8? Normalize.
+        const normalizedIdx = dayIdx % 7;
+
+        if (buckets[normalizedIdx]) {
+            buckets[normalizedIdx].push(range);
+        }
+    }
+
+    private mergeRanges(ranges: TimeRange[]): TimeRange[] {
+        if (ranges.length <= 1) return ranges;
+
+        const merged: TimeRange[] = [];
+        let current = ranges[0];
+
+        for (let i = 1; i < ranges.length; i++) {
+            const next = ranges[i];
+
+            // Strict equality on timestamps for continuity
+            if (current.end.toMillis() === next.start.toMillis()) {
+                current = { start: current.start, end: next.end };
+            } else {
+                merged.push(current);
+                current = next;
+            }
+        }
+        merged.push(current);
+        return merged;
     }
 
     private pushGroup(result: GroupedHours[], group: { startIdx: number, endIdx: number, hoursStr: string }, labels: string[]) {
