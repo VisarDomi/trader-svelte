@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import type { MarketDetailsResponse, MarketOpeningHours } from '$lib/types/market.js';
+import type { MarketDetailsResponse } from '$lib/types/market.js';
 import type { AccountPreferences } from '$lib/types/account.js';
 import { LeverageService } from '$lib/domain/account/LeverageService.js';
 
@@ -34,96 +34,128 @@ export class InstrumentFormatter {
         return price.toFixed(decimalPlaces);
     }
 
-    /**
-     * Formats the overnight fee next charge time to local string
-     */
     getNextChargeTime(market: MarketDetailsResponse): string {
         const ts = market.instrument.overnightFee?.swapChargeTimestamp;
         if (!ts) return '—';
-
         return DateTime.fromMillis(ts).toLocal().toFormat('dd MMM HH:mm');
     }
 
     /**
-     * Parses, converts to local time, and groups trading hours.
+     * Parses, groups, and shifts trading hours to the user's local timezone.
+     * Uses a reference week (Jan 1 2024 was a Monday) to handle day-boundary crossings correctly.
      */
     getGroupedHours(market: MarketDetailsResponse): GroupedHours[] {
         const schedule = market.instrument.openingHours;
         const sourceZone = schedule.zone || 'UTC';
 
-        const daysMap = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-        const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        // Map API keys to a specific reference date (Mon Jan 01 2024 to Sun Jan 07 2024)
+        // This ensures Luxon handles "Monday 23:00 UTC" -> "Tuesday 01:00 Local" correctly.
+        const referenceWeekMap: Record<string, string> = {
+            'mon': '2024-01-01',
+            'tue': '2024-01-02',
+            'wed': '2024-01-03',
+            'thu': '2024-01-04',
+            'fri': '2024-01-05',
+            'sat': '2024-01-06',
+            'sun': '2024-01-07'
+        };
 
-        const dailySchedules: { label: string; hours: string[] }[] = [];
+        const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+        // Storage for re-bucketed local hours (0=Mon, 6=Sun)
+        // We use a map to handle wrapping (e.g. Sunday night becoming Monday morning)
+        const localBuckets: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 
-        // 1. Convert all days to Local Time strings
-        daysMap.forEach((key, index) => {
-            const rawHours = schedule[key]; // string[] | undefined
-            if (!rawHours || rawHours.length === 0) return; // Skip closed days
+        dayKeys.forEach((key) => {
+            const rawHours = schedule[key];
+            if (!rawHours || rawHours.length === 0) return;
 
-            const localHours = rawHours.map(range => this.convertRangeToLocal(range, sourceZone));
-            dailySchedules.push({
-                label: dayLabels[index],
-                hours: localHours
+            rawHours.forEach(range => {
+                const [startStr, endStr] = range.split(' - ');
+                if (!startStr || !endStr) return;
+
+                const refDateStr = referenceWeekMap[key];
+
+                // Parse Start Time in Source Zone
+                let startDt = DateTime.fromFormat(`${refDateStr} ${startStr}`, 'yyyy-MM-dd HH:mm', { zone: sourceZone });
+
+                // Parse End Time in Source Zone
+                // If endStr is "00:00", we treat it as the next day's midnight if it's conceptually "after" start
+                let endDt = DateTime.fromFormat(`${refDateStr} ${endStr}`, 'yyyy-MM-dd HH:mm', { zone: sourceZone });
+
+                // Handle wrapping (e.g. 23:00 - 00:00 or 23:00 - 02:00)
+                if (endDt <= startDt) {
+                    endDt = endDt.plus({ days: 1 });
+                }
+
+                // Convert to Local
+                const localStart = startDt.toLocal();
+                const localEnd = endDt.toLocal();
+
+                const formattedRange = `${localStart.toFormat('HH:mm')} - ${localEnd.toFormat('HH:mm')}`;
+
+                // Determine which bucket (Day of week) this falls into LOCALLY
+                // Luxon weekday: 1=Mon, 7=Sun. We map to 0-6 index.
+                const localDayIndex = localStart.weekday - 1;
+
+                // If the shift moved it to a different week (rare edge case with reference dates), normalize it
+                // But since we use Jan 1-7, it stays within boundaries mostly.
+                // Just use valid 0-6 index.
+                if (localBuckets[localDayIndex]) {
+                    localBuckets[localDayIndex].push(formattedRange);
+                }
             });
         });
 
-        if (dailySchedules.length === 0) return [];
+        // Convert buckets to grouped array
+        const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const result: GroupedHours[] = [];
 
-        // 2. Group consecutive identical days
-        const groups: GroupedHours[] = [];
-        let currentGroup: { start: string; end: string; hours: string[] } | null = null;
+        let currentGroup: { startIdx: number; endIdx: number; hoursStr: string } | null = null;
 
-        for (const ds of dailySchedules) {
-            const hoursStr = JSON.stringify(ds.hours);
+        for (let i = 0; i < 7; i++) {
+            const hours = localBuckets[i];
 
-            if (currentGroup && JSON.stringify(currentGroup.hours) === hoursStr) {
-                // Extend current group
-                currentGroup.end = ds.label;
-            } else {
-                // Push previous
+            // Sort hours for consistency (e.g. 09:00 before 14:00)
+            hours.sort();
+            const hoursSignature = JSON.stringify(hours);
+
+            if (hours.length === 0) {
+                // If we have an active group, close it
                 if (currentGroup) {
-                    groups.push({
-                        days: currentGroup.start === currentGroup.end
-                            ? currentGroup.start
-                            : `${currentGroup.start}-${currentGroup.end}`,
-                        hours: currentGroup.hours
-                    });
+                    this.pushGroup(result, currentGroup, dayLabels);
+                    currentGroup = null;
                 }
+                continue;
+            }
+
+            if (currentGroup && currentGroup.hoursStr === hoursSignature) {
+                // Extend
+                currentGroup.endIdx = i;
+            } else {
+                // Close prev
+                if (currentGroup) this.pushGroup(result, currentGroup, dayLabels);
                 // Start new
                 currentGroup = {
-                    start: ds.label,
-                    end: ds.label,
-                    hours: ds.hours
+                    startIdx: i,
+                    endIdx: i,
+                    hoursStr: hoursSignature
                 };
             }
         }
+        // Close final
+        if (currentGroup) this.pushGroup(result, currentGroup, dayLabels);
 
-        // Push final group
-        if (currentGroup) {
-            groups.push({
-                days: currentGroup.start === currentGroup.end
-                    ? currentGroup.start
-                    : `${currentGroup.start}-${currentGroup.end}`,
-                hours: currentGroup.hours
-            });
-        }
-
-        return groups;
+        return result;
     }
 
-    private convertRangeToLocal(range: string, zone: string): string {
-        // range format: "HH:mm - HH:mm"
-        const [start, end] = range.split(' - ');
-        if (!start || !end) return range;
+    private pushGroup(result: GroupedHours[], group: { startIdx: number, endIdx: number, hoursStr: string }, labels: string[]) {
+        const startName = labels[group.startIdx];
+        const endName = labels[group.endIdx];
+        const days = group.startIdx === group.endIdx ? startName : `${startName}-${endName}`;
 
-        const convert = (timeStr: string) => {
-            const [h, m] = timeStr.split(':').map(Number);
-            // We use "today" as a reference date, but keep the zone
-            const dt = DateTime.utc().setZone(zone).set({ hour: h, minute: m });
-            return dt.toLocal().toFormat('HH:mm');
-        };
-
-        return `${convert(start)}-${convert(end)}`;
+        result.push({
+            days,
+            hours: JSON.parse(group.hoursStr)
+        });
     }
 }
