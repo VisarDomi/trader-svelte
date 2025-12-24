@@ -13,28 +13,30 @@
         onSelect: (epic: string) => void
     }>();
 
-    // Instantiate Formatter derived from props
     let fmt = $derived(new InstrumentFormatter(preferences));
+    let groupedHours = $derived(fmt.getGroupedHours(market));
 
-    // Handler for accessibility
+    // UI State for expanding details
+    let showDetails = $state(false);
+
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Enter') onSelect(market.instrument.epic);
     }
 </script>
 
-<div
-        role="button"
-        tabindex="0"
-        onclick={() => onSelect(market.instrument.epic)}
-        onkeydown={handleKeydown}
-        class="card"
->
-    <!-- Header -->
-    <div class="header">
+<div class="card">
+    <!-- Header (Always Visible) -->
+    <div
+            class="header"
+            role="button"
+            tabindex="0"
+            onclick={() => onSelect(market.instrument.epic)}
+            onkeydown={handleKeydown}
+    >
         <div>
             <div class="name">{market.instrument.name}</div>
             <div class="meta">
-                {market.instrument.epic} • {market.instrument.type} • {market.instrument.currency}
+                {market.instrument.epic} • {market.instrument.type}
             </div>
         </div>
         <div style="text-align: right;">
@@ -66,80 +68,85 @@
                 </div>
             </div>
             <div>
-                <div class="label">NET CHANGE</div>
+                <div class="label">CHANGE</div>
                 <div style="color: {fmt.getNetChangeColor(market.snapshot.netChange)}">
-                    {market.snapshot.netChange} ({market.snapshot.percentageChange}%)
-                </div>
-            </div>
-            <div>
-                <div class="label">RANGE (H/L)</div>
-                <div>{market.snapshot.high} / {market.snapshot.low}</div>
-            </div>
-        </div>
-
-        <!-- Dealing Rules -->
-        <div class="section">
-            <h4 class="section-title">Dealing Rules</h4>
-            <div class="rules-grid">
-                <div>
-                    <span class="label">Min Deal:</span>
-                    {market.dealingRules.minDealSize.value} {market.dealingRules.minDealSize.unit}
-                </div>
-                <div>
-                    <span class="label">Max Deal:</span>
-                    {market.dealingRules.maxDealSize.value}
-                </div>
-                <div>
-                    <span class="label">Step:</span>
-                    {market.dealingRules.minSizeIncrement.value}
-                </div>
-                <div>
-                    <span class="label">Min Stop Dist:</span>
-                    {market.dealingRules.minStopOrProfitDistance?.value ?? '-'}%
-                </div>
-                <div>
-                    <span class="label">Lot Size:</span>
-                    {market.instrument.lotSize}
+                    {market.snapshot.percentageChange}%
                 </div>
             </div>
         </div>
 
-        <!-- Fees & Hours -->
-        <div class="split-section">
-            <!-- Overnight Fees -->
-            <div>
-                <h4 class="section-title">Overnight Fees</h4>
-                {#if market.instrument.overnightFee}
-                    <div class="info-text">
-                        <div class="row">
-                            <span class="label">Long Rate:</span>
-                            <span>{market.instrument.overnightFee.longRate}</span>
+        <!-- Toggle for Details -->
+        <button class="toggle-btn" onclick={() => showDetails = !showDetails}>
+            {showDetails ? 'Hide Details ▲' : 'Show Rules & Hours ▼'}
+        </button>
+
+        {#if showDetails}
+            <!-- Detailed Info Section -->
+            <div class="details-container">
+
+                <!-- 1. Dealing Rules -->
+                <div class="section">
+                    <h4 class="section-title">Dealing Rules</h4>
+                    <div class="rules-grid">
+                        <div>
+                            <span class="label">Min Deal:</span>
+                            {market.dealingRules.minDealSize.value}
                         </div>
-                        <div class="row">
-                            <span class="label">Short Rate:</span>
-                            <span>{market.instrument.overnightFee.shortRate}</span>
+                        <div>
+                            <span class="label">Max Deal:</span>
+                            {market.dealingRules.maxDealSize.value}
+                        </div>
+                        <div>
+                            <span class="label">Lot Size:</span>
+                            {market.instrument.lotSize}
                         </div>
                     </div>
-                {:else}
-                    <span class="info-text">None</span>
-                {/if}
-            </div>
+                </div>
 
-            <!-- Schedule -->
-            <div>
-                <h4 class="section-title">Schedule</h4>
-                <div class="info-text">
-                    <div class="row">
-                        <span class="label">Zone:</span>
-                        <span>{market.instrument.openingHours.zone}</span>
+                <!-- 2. Overnight Fees -->
+                <div class="section">
+                    <h4 class="section-title">Overnight Fees</h4>
+                    <div class="split-row">
+                        <div class="fee-box">
+                            <span class="label">Long Rate</span>
+                            <span class:negative={market.instrument.overnightFee?.longRate < 0}>
+                                {market.instrument.overnightFee?.longRate ?? '-'}
+                            </span>
+                        </div>
+                        <div class="fee-box">
+                            <span class="label">Short Rate</span>
+                            <span class:negative={market.instrument.overnightFee?.shortRate < 0}>
+                                {market.instrument.overnightFee?.shortRate ?? '-'}
+                            </span>
+                        </div>
                     </div>
-                    <div class="row">
-                        <span class="label">Update:</span>
-                        <span>{new Date(market.snapshot.updateTime).toLocaleTimeString()}</span>
+                    <div class="next-charge">
+                        <span class="label">Next Charge:</span>
+                        {fmt.getNextChargeTime(market)}
+                    </div>
+                </div>
+
+                <!-- 3. Trading Hours -->
+                <div class="section">
+                    <h4 class="section-title">Trading Hours (Local)</h4>
+                    <div class="hours-list">
+                        {#each groupedHours as group}
+                            <div class="hour-row">
+                                <span class="days">{group.days}</span>
+                                <div class="times">
+                                    {#each group.hours as h}
+                                        <span>{h}</span>
+                                    {/each}
+                                </div>
+                            </div>
+                        {/each}
+                        {#if groupedHours.length === 0}
+                            <div class="hour-row">No hours available</div>
+                        {/if}
                     </div>
                 </div>
             </div>
-        </div>
+        {/if}
     </div>
 </div>
 
@@ -153,40 +160,68 @@
         border-radius: 8px;
         overflow: hidden;
         color: inherit;
-        cursor: pointer;
-        outline: none;
         transition: border-color 0.2s;
-    }
-    .card:hover, .card:focus {
-        border-color: #666;
     }
 
     .header {
-        padding: 1.5rem;
+        padding: 1rem 1.5rem;
         background: #222;
         display: flex;
         justify-content: space-between;
         align-items: center;
         border-bottom: 1px solid #333;
+        cursor: pointer;
     }
-    .name { font-size: 1.5rem; font-weight: bold; color: white; }
-    .meta { color: #888; margin-top: 0.25rem; font-family: monospace; }
-    .status { font-size: 1.2rem; font-weight: bold; }
-    .leverage { color: #aaa; font-size: 0.9rem; margin-top: 0.25rem; }
+    .header:hover { background: #2a2a2a; }
 
-    .body { padding: 1.5rem; display: grid; gap: 1.5rem; }
+    .name { font-size: 1.2rem; font-weight: bold; color: white; }
+    .meta { color: #888; font-size: 0.8rem; margin-top: 0.2rem; }
+    .status { font-size: 1rem; font-weight: bold; }
+    .leverage { color: #aaa; font-size: 0.8rem; margin-top: 0.2rem; }
 
-    .price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 1rem; }
-    .label { color: #888; font-size: 0.8rem; }
-    .price-val { font-size: 1.2rem; font-weight: bold; }
+    .body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+
+    .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center; }
+    .label { color: #888; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem; }
+    .price-val { font-size: 1.1rem; font-weight: bold; }
     .bid { color: #ef5350; }
     .offer { color: #26a69a; }
 
-    .section { border-top: 1px solid #333; padding-top: 1rem; }
-    .split-section { border-top: 1px solid #333; padding-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
-    .section-title { color: #666; margin-bottom: 0.75rem; font-size: 0.8rem; text-transform: uppercase; }
+    .toggle-btn {
+        background: #222;
+        border: 1px solid #333;
+        color: #888;
+        padding: 0.5rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        width: 100%;
+        transition: color 0.2s;
+    }
+    .toggle-btn:hover { color: #ccc; border-color: #555; }
 
-    .rules-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; font-size: 0.9rem; }
-    .info-text { font-size: 0.9rem; }
-    .row { display: flex; justify-content: space-between; }
+    .details-container {
+        display: grid;
+        gap: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid #333;
+        animation: slideDown 0.2s ease-out;
+    }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .section-title { color: #666; margin-bottom: 0.5rem; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 4px; }
+
+    .rules-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; font-size: 0.9rem; }
+
+    /* Overnight Fees */
+    .split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.5rem; }
+    .fee-box { background: #222; padding: 0.5rem; border-radius: 4px; display: flex; flex-direction: column; align-items: center; }
+    .negative { color: #aaa; } /* Rates are often negative meaning you pay */
+    .next-charge { font-size: 0.8rem; color: #888; text-align: center; margin-top: 0.5rem; }
+
+    /* Hours */
+    .hours-list { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; }
+    .hour-row { display: flex; justify-content: space-between; border-bottom: 1px dashed #333; padding-bottom: 0.25rem; }
+    .days { color: #fff; font-weight: bold; }
+    .times { display: flex; flex-direction: column; align-items: flex-end; color: #aaa; }
 </style>
