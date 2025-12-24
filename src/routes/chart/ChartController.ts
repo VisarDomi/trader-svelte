@@ -55,8 +55,6 @@ export class ChartController {
     /**
      * EXTENSION: Populates an invisible series with 24 hours of minute data
      * into the future to force the TimeScale to render continuous time.
-     *
-     * FIX: Uses a separate 'ghost' priceScaleId to prevent squashing the main chart.
      */
     extendTimeScale24H(anchorPrice: number) {
         if (!this._chart) return;
@@ -69,33 +67,57 @@ export class ChartController {
                 priceLineVisible: false,
                 crosshairMarkerVisible: false,
                 visible: true, // Must be true for TimeScale to acknowledge it
-                priceScaleId: 'ghost_scale', // CRITICAL: Isolate to custom scale
+                priceScaleId: 'ghost_scale', // Isolate to custom scale
                 autoscaleInfoProvider: () => null // Double-safety: ignore for auto-scaling
             });
 
-            // Ensure the ghost scale itself is hidden so it doesn't show numbers
+            // Ensure the ghost scale itself is hidden
             this._chart.priceScale('ghost_scale').applyOptions({
                 visible: false,
                 autoScale: true
             });
         }
 
-        // Start 1 minute in the future to avoid collision with the live candle
         const now = Math.floor(Date.now() / 1000 / 60) * 60;
-        const start = now + 60;
+        const start = now + 60; // Start 1 min in future
         const oneDaySeconds = 24 * 60 * 60;
         const limit = start + oneDaySeconds;
 
         const data = [];
-        // Generate points for every minute from Now+1m to Now+24H
         for (let t = start; t <= limit; t += 60) {
             data.push({
                 time: t as UTCTimestamp,
-                value: anchorPrice // Value doesn't matter much on hidden scale, but keep it steady
+                value: anchorPrice
             });
         }
 
         this._ghostSeries.setData(data);
+    }
+
+    /**
+     * Sets the visible range to end at the specific target time.
+     * Preserves the current zoom span (width of the view).
+     */
+    scrollToTimestamp(target: UTCTimestamp) {
+        if (!this._chart) return;
+
+        const timeScale = this._chart.timeScale();
+        const currentRange = timeScale.getVisibleRange();
+
+        // Default span (2 hours) if chart is not yet rendered
+        let span = 2 * 60 * 60;
+
+        if (currentRange) {
+            span = (currentRange.to as number) - (currentRange.from as number);
+        }
+
+        // Ensure we don't have a 0 or negative span
+        if (span <= 0) span = 2 * 60 * 60;
+
+        timeScale.setVisibleRange({
+            from: (target - span) as UTCTimestamp,
+            to: target as UTCTimestamp
+        });
     }
 
     subscribeClick(handler: (param: MouseEventParams) => void) {
@@ -108,17 +130,12 @@ export class ChartController {
 
     // --- Zoom / State Logic ---
 
-    /**
-     * Captures both TimeScale (zoom) and PriceScale (vertical zoom/scroll)
-     */
     getState(): ChartState | null {
         if (!this._chart) return null;
 
-        // 1. Time Span
         const timeRange = this._chart.timeScale().getVisibleLogicalRange();
         const timeSpan = timeRange ? (timeRange.to - timeRange.from) : 0;
 
-        // 2. Price Range (Right scale)
         const priceScale = this._chart.priceScale('right');
         const priceRange = priceScale.getVisibleRange();
 
@@ -128,13 +145,9 @@ export class ChartController {
         };
     }
 
-    /**
-     * Restores state. Should be called AFTER data is loaded.
-     */
     restoreState(state: ChartState) {
         if (!this._chart) return;
 
-        // 1. Restore Price Scale
         if (state.priceRange) {
             this._chart.priceScale('right').setVisibleRange({
                 from: state.priceRange.min,
@@ -144,7 +157,6 @@ export class ChartController {
             this._chart.priceScale('right').applyOptions({ autoScale: true });
         }
 
-        // 2. Restore Time Scale (Span from right)
         if (state.timeSpan > 0) {
             const current = this._chart.timeScale().getVisibleLogicalRange();
             if (current) {
@@ -159,13 +171,11 @@ export class ChartController {
     resetZoom() {
         if (!this._chart) return;
 
-        // Reset Time
-        this._chart.timeScale().scrollToRealTime();
-        this._chart.timeScale().resetTimeScale();
+        const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
+        this.scrollToTimestamp(now);
 
-        // Reset Price (Force AutoScale)
-        const ps = this._chart.priceScale('right');
-        ps.applyOptions({ autoScale: true });
+        // Reset Price
+        this._chart.priceScale('right').applyOptions({ autoScale: true });
     }
 
     subscribeCameraChange(handler: () => void) {

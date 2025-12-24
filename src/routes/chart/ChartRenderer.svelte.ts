@@ -30,7 +30,6 @@ export class ChartRenderer {
 
     // Primitives
     private feePrimitive: FeeLinePrimitive | null = null;
-    private debugPrimitive: FeeLinePrimitive | null = null;
 
     // State
     private marketDetails: MarketDetailsResponse | null = null;
@@ -113,10 +112,6 @@ export class ChartRenderer {
             this.series.detachPrimitive(this.feePrimitive);
             this.feePrimitive = null;
         }
-        if (this.debugPrimitive) {
-            this.series.detachPrimitive(this.debugPrimitive);
-            this.debugPrimitive = null;
-        }
 
         // 1. Future Fee Line
         const feeData = marketDetails?.instrument.overnightFee;
@@ -130,16 +125,6 @@ export class ChartRenderer {
             this.feePrimitive = new FeeLinePrimitive(timestampSeconds, fmt, "Fee: —");
             this.series.attachPrimitive(this.feePrimitive);
         }
-
-        // 2. DEBUG Line: 1 Minute Ago
-        const nowMs = Date.now();
-        const oneMinuteAgoMs = nowMs - (60 * 1000);
-        // Align to minute boundary
-        const debugSeconds = Math.floor(oneMinuteAgoMs / 1000 / 60) * 60;
-        const debugFmt = DateTime.fromMillis(oneMinuteAgoMs).toFormat("HH:mm");
-
-        this.debugPrimitive = new FeeLinePrimitive(debugSeconds, debugFmt, "DEBUG");
-        this.series.attachPrimitive(this.debugPrimitive);
     }
 
     private getTargetPosition(): PositionResponse | null {
@@ -190,11 +175,6 @@ export class ChartRenderer {
 
         if (this.feePrimitive) {
             this.feePrimitive.update(this.feePrimitive.timestamp, this.feePrimitive.formattedTime, feeLabel);
-        }
-
-        // Also update Debug primitive for verification
-        if (this.debugPrimitive) {
-            this.debugPrimitive.update(this.debugPrimitive.timestamp, this.debugPrimitive.formattedTime, feeLabel);
         }
     }
 
@@ -286,12 +266,10 @@ export class ChartRenderer {
     destroy() {
         if (this.series) {
             if (this.feePrimitive) this.series.detachPrimitive(this.feePrimitive);
-            if (this.debugPrimitive) this.series.detachPrimitive(this.debugPrimitive);
         }
         this.lines.forEach(line => this.series?.removePriceLine(line));
         this.lines.clear();
         this.series = null;
         this.feePrimitive = null;
-        this.debugPrimitive = null;
     }
 }

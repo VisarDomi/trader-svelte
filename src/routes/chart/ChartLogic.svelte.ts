@@ -17,6 +17,7 @@ import type { PositionStore } from '$lib/stores/position.svelte.js';
 import type { TradeStore } from '$lib/stores/trade.svelte.js';
 import type { SessionManager } from '$lib/services/session.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
+import type { UTCTimestamp } from 'lightweight-charts';
 
 export class ChartLogic {
     layout = new ChartUI(viewport);
@@ -47,7 +48,6 @@ export class ChartLogic {
         private tradeStore: TradeStore,
         private session: SessionManager
     ) {
-        // Pass 'this' to overlay so it can call resetZoom()
         this.overlay = new ChartOverlay(accountStore, positionStore, session, this);
         this.loader = new ChartDataLoader(accountStore, positionStore, marketStore);
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
@@ -87,8 +87,8 @@ export class ChartLogic {
         this.controller.createMainSeries(context.precision);
 
         // --- GHOST SERIES EXTENSION ---
-        // Ensure continuous time resolution into the future (24H) so fees draw correctly.
-        // We use the snapshot bid as a safe anchor, though it's isolated on its own scale anyway.
+        // Ensure continuous time resolution into the future (24H).
+        // Using isolated priceScale to prevent affecting main chart.
         if (this.marketDetails.instrument.overnightFee?.swapChargeTimestamp) {
             const currentPrice = this.marketDetails.snapshot.bid;
             if (currentPrice > 0) {
@@ -101,9 +101,15 @@ export class ChartLogic {
         this.inputHandler.configure(this.controller.series);
         this.controller.subscribeClick(this.inputHandler.handleChartClick);
 
-        // Feature: Restore Zoom
-        this.restoreZoom();
-        // Listen for Zoom changes (Debounced save)
+        // Feature: Restore Zoom or Default to Now
+        // Note: restoreZoom is async in effect (uses setTimeout internally).
+        // If it finds nothing, we want to ensure we aren't stuck 24h in the future.
+        if (!this.restoreZoom()) {
+            const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
+            this.controller.scrollToTimestamp(now);
+        }
+
+        // Listen for Zoom changes
         this.controller.subscribeCameraChange(() => this.scheduleSaveZoom());
 
         await this.loader.initStream(
@@ -143,20 +149,24 @@ export class ChartLogic {
         }
     }
 
-    private restoreZoom() {
-        if (typeof window === 'undefined') return;
+    /**
+     * returns true if restore was attempted (state existed), false otherwise.
+     */
+    private restoreZoom(): boolean {
+        if (typeof window === 'undefined') return false;
         const raw = localStorage.getItem(STORAGE.CHART_STATE_KEY);
         if (raw) {
             try {
                 const state: ChartState = JSON.parse(raw);
-                // Apply after a short delay to ensure data/layout has settled
                 setTimeout(() => {
                     this.controller.restoreState(state);
                 }, 200);
+                return true;
             } catch {
-                // Ignore corrupt state
+                return false;
             }
         }
+        return false;
     }
 
     resetChartZoom() {
@@ -216,7 +226,6 @@ export class ChartLogic {
             const sec = now.getSeconds();
 
             // Feature: Mid-Minute History Sync
-            // Update historical data (excluding current minute) at 30s mark
             if (sec >= 30 && sec <= 32 && this.lastSyncMinute !== now.getMinutes()) {
                 this.lastSyncMinute = now.getMinutes();
                 this.marketStore.syncHistory();
@@ -237,7 +246,6 @@ export class ChartLogic {
     }
 
     private isInteractionBlocked(): boolean {
-        // ... (existing block logic)
         if (this.tradeStore.isExecuting) return true;
         if (this.positionStore.anyActivePosition) return true;
         return false;
