@@ -45,31 +45,47 @@ export class ChartRenderer {
         private readonly tradeStore: TradeStore,
         private readonly accountStore: AccountStore
     ) {
+        // Effect 1: History Loading
+        // STRICT: We extract dependencies to consts to ensure Svelte tracks them
+        // even if this.series is null initially.
         $effect(() => {
-            if (this.series && this.marketStore.isLoaded && this.marketStore.history.length > 0) {
-                this.series.setData(this.marketStore.history);
+            const loaded = this.marketStore.isLoaded;
+            const history = this.marketStore.history;
+
+            if (this.series && loaded && history.length > 0) {
+                this.series.setData(history);
             }
         });
 
+        // Effect 2: Live Candle Updates
         $effect(() => {
+            const loaded = this.marketStore.isLoaded;
+            const lastCandle = this.marketStore.lastCandle;
+            // Force dependency on trigger to handle rapid updates
             const _trigger = this.marketStore.updateTrigger;
-            if (this.series && this.marketStore.isLoaded && this.marketStore.lastCandle) {
-                this.series.update(this.marketStore.lastCandle);
+
+            if (this.series && loaded && lastCandle) {
+                this.series.update(lastCandle);
             }
         });
 
+        // Effect 3: Static Position Lines
         $effect(() => {
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
+            // Redraw on viewport resize to update PnL titles
             const _width = viewport.width;
+
             this.renderStatic();
         });
 
+        // Effect 4: Dynamic Price Line
         $effect(() => {
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
             const tick = this.marketStore.currentPrice;
             const _width = viewport.width;
+
             this.renderDynamic(tick);
         });
     }
@@ -81,6 +97,7 @@ export class ChartRenderer {
 
         this.initPrimitives(marketDetails);
 
+        // Manual initial load in case effects already ran before series was ready
         if (this.marketStore.isLoaded && this.marketStore.history.length > 0) {
             this.series.setData(this.marketStore.history);
         }
@@ -116,6 +133,7 @@ export class ChartRenderer {
         // 2. DEBUG Line: 1 Minute Ago
         const nowMs = Date.now();
         const oneMinuteAgoMs = nowMs - (60 * 1000);
+        // Align to minute boundary
         const debugSeconds = Math.floor(oneMinuteAgoMs / 1000 / 60) * 60;
         const debugFmt = DateTime.fromMillis(oneMinuteAgoMs).toFormat("HH:mm");
 
