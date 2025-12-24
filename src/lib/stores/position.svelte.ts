@@ -1,4 +1,4 @@
-import { getPositions, createPosition, getConfirmation } from '$lib/services/trading.js';
+import { getPositions, createPosition, updatePosition, getConfirmation } from '$lib/services/trading.js';
 import { resolveInitialBalance } from '$lib/utils/position.js';
 import { session } from '$lib/services/session.js';
 import { api } from '$lib/services/api.svelte.js';
@@ -103,6 +103,32 @@ export class PositionStore {
             notifications.error(msg);
         } finally {
             this.isClosing = false;
+        }
+    }
+
+    async updateStopLoss(newLevel: number) {
+        if (!this.anyActivePosition) return;
+
+        const mode = session.mode;
+        const tokens = session.getTokens(mode);
+        if (!tokens) return;
+
+        try {
+            const p = this.anyActivePosition.position;
+
+            await updatePosition(mode, tokens, p.dealId, {
+                stopLevel: newLevel
+            });
+
+            notifications.success(`Stop Loss Auto-Corrected to ${newLevel}`);
+
+            // Refresh to confirm changes in UI
+            await this.refresh();
+
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error("Failed to auto-correct SL", e);
+            notifications.error("Risk Manager: Failed to update SL");
         }
     }
 

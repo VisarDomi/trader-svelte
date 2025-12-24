@@ -52,4 +52,8 @@ export class ApiClient {
     post<T>(endpoint: string, body: unknown) {
         return this.request<T>(API.POST_METHOD, endpoint, body);
     }
+
+    put<T>(endpoint: string, body: unknown) {
+        return this.request<T>(API.PUT_METHOD, endpoint, body);
+    }
 }

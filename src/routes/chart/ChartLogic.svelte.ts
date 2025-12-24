@@ -10,6 +10,7 @@ import { ChartOverlay } from './ChartOverlay.svelte.js';
 import { ChartInputHandler, type TradeIntent } from './ChartInputHandler.svelte.js';
 import { ChartDataLoader } from './ChartLoader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
+import { RiskManager } from '$lib/domain/trade/RiskManager.js';
 
 import type { MarketStore } from '$lib/stores/market.svelte.js';
 import type { AccountStore } from '$lib/stores/account.svelte.js';
@@ -28,6 +29,7 @@ export class ChartLogic {
     private inputHandler: ChartInputHandler;
     private loader: ChartDataLoader;
     private watchdog: Watchdog;
+    private riskManager = new RiskManager();
 
     private currentEpic = "";
     private userLeverage = 1;
@@ -244,7 +246,7 @@ export class ChartLogic {
     private startHeartbeat() {
         this.stopHeartbeat();
 
-        this.heartbeatInterval = setInterval(() => {
+        this.heartbeatInterval = setInterval(async () => {
             const now = new Date();
             const sec = now.getSeconds();
 
@@ -256,9 +258,34 @@ export class ChartLogic {
 
             // General background sync
             if (sec % 15 === 0 && !this.isBurstChecking) {
-                this.positionStore.refresh();
+                await this.positionStore.refresh();
+            }
+
+            // Feature: Risk Management (Every 60s, checking at :00)
+            if (sec < 2 && !this.isBurstChecking) {
+                await this.checkRiskCompliance();
             }
         }, 1000);
+    }
+
+    private async checkRiskCompliance() {
+        const position = this.positionStore.anyActivePosition;
+        if (!position || !this.marketDetails) return;
+
+        // Ensure we have fresh balance info
+        await this.accountStore.refreshActive();
+        const balance = this.accountStore.balance;
+
+        const newSL = this.riskManager.calculateCorrection(
+            position.position,
+            this.marketDetails,
+            balance
+        );
+
+        if (newSL !== null) {
+            console.log(`[RiskManager] Correction Needed. Updating SL to ${newSL}`);
+            await this.positionStore.updateStopLoss(newSL);
+        }
     }
 
     private stopHeartbeat() {
