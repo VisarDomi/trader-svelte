@@ -121,20 +121,22 @@
 
             <!-- 3. Trading Hours -->
             <div class="section full-width">
-                <h4 class="section-title">Trading Hours (Local)</h4>
-                <div class="hours-list">
+                <h4 class="section-title">Trading Hours</h4>
+                <p class="section-subtitle">Your local time</p>
+
+                <div class="hours-container">
                     {#each groupedHours as group}
-                        <div class="hour-row">
-                            <span class="days">{group.days}</span>
-                            <div class="times">
+                        <div class="hours-block">
+                            <div class="days-label">{group.days}</div>
+                            <div class="time-list">
                                 {#each group.hours as h}
-                                    <span>{h}</span>
+                                    <div class="time-row">{h}</div>
                                 {/each}
                             </div>
                         </div>
                     {/each}
                     {#if groupedHours.length === 0}
-                        <div class="hour-row" style="color:#666">Schedule unavailable</div>
+                        <div style="color:#666">Schedule unavailable</div>
                     {/if}
                 </div>
             </div>
@@ -191,19 +193,48 @@
         .details-grid { grid-template-columns: 1fr; gap: 1.5rem; }
     }
 
-    .section-title { color: #666; margin-bottom: 0.75rem; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 4px; }
+    .section-title { color: #d1d4dc; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: bold; }
+    .section-subtitle { color: #666; font-size: 0.75rem; margin-bottom: 1rem; }
     .full-width { grid-column: 1 / -1; }
 
     /* Key-Value Lists */
-    .key-val-list { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.9rem; }
-    .kv-row { display: flex; justify-content: space-between; }
+    .key-val-list { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; }
+    .kv-row { display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid #2a2a2a; }
     .kv-label { color: #aaa; }
     .kv-val { font-weight: bold; color: #fff; }
     .negative { color: #aaa; }
 
-    /* Hours */
-    .hours-list { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.9rem; }
-    .hour-row { display: flex; justify-content: space-between; border-bottom: 1px dashed #333; padding-bottom: 0.25rem; }
-    .days { color: #fff; font-weight: bold; }
-    .times { display: flex; flex-direction: column; align-items: flex-end; color: #aaa; text-align: right; }
+    /* Hours specific layout */
+    .hours-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .hours-block {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .days-label {
+        font-weight: bold;
+        color: #fff;
+        font-size: 0.95rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .time-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        border-left: 2px solid #333;
+        padding-left: 0.75rem;
+    }
+
+    .time-row {
+        color: #aaa;
+        font-size: 0.9rem;
+        font-family: monospace;
+    }
 </style>

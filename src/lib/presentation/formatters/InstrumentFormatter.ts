@@ -3,7 +3,7 @@ import type { MarketDetailsResponse } from '$lib/types/market.js';
 import type { AccountPreferences } from '$lib/types/account.js';
 import { LeverageService } from '$lib/domain/account/LeverageService.js';
 
-interface GroupedHours {
+export interface GroupedHours {
     days: string;
     hours: string[];
 }
@@ -60,7 +60,6 @@ export class InstrumentFormatter {
         };
 
         const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-        // 0=Mon, 6=Sun
         const buckets: Record<number, TimeRange[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
 
         dayKeys.forEach((key) => {
@@ -73,28 +72,20 @@ export class InstrumentFormatter {
 
                 const refDateStr = referenceWeekMap[key];
 
-                // 1. Parse in Source Zone
                 let startDt = DateTime.fromFormat(`${refDateStr} ${startStr}`, 'yyyy-MM-dd HH:mm', { zone: sourceZone });
                 let endDt = DateTime.fromFormat(`${refDateStr} ${endStr}`, 'yyyy-MM-dd HH:mm', { zone: sourceZone });
 
                 if (endDt <= startDt) endDt = endDt.plus({ days: 1 });
 
-                // 2. Convert to Local
                 const localStart = startDt.toLocal();
                 const localEnd = endDt.toLocal();
 
-                // 3. Handle Day Splits (Local Midnight)
-                // We define the "boundary" as the midnight following the start time
                 const midnight = localStart.plus({ days: 1 }).startOf('day');
 
                 if (localEnd > midnight) {
-                    // Split needed
-                    // Part A: Start -> Midnight (Current Day)
                     this.addToBucket(buckets, { start: localStart, end: midnight });
-                    // Part B: Midnight -> End (Next Day)
                     this.addToBucket(buckets, { start: midnight, end: localEnd });
                 } else {
-                    // No split
                     this.addToBucket(buckets, { start: localStart, end: localEnd });
                 }
             });
@@ -108,15 +99,11 @@ export class InstrumentFormatter {
         for (let i = 0; i < 7; i++) {
             const ranges = buckets[i];
 
-            // 4. Sort by Start Time
             ranges.sort((a, b) => a.start.toMillis() - b.start.toMillis());
 
-            // 5. Merge Continuous
             const mergedRanges = this.mergeRanges(ranges);
 
             const hoursStrings = mergedRanges.map(r => {
-                // If end is 00:00 of next day, format as 00:00 (or 24:00 if preferred, but usually 00:00 is clearer in ranges)
-                // Luxon toFormat 'HH:mm' for midnight is '00:00'
                 return `${r.start.toFormat('HH:mm')} - ${r.end.toFormat('HH:mm')}`;
             });
 
@@ -147,14 +134,7 @@ export class InstrumentFormatter {
     }
 
     private addToBucket(buckets: Record<number, TimeRange[]>, range: TimeRange) {
-        // Luxon weekday 1=Mon .. 7=Sun. Convert to 0-6 index.
         const dayIdx = range.start.weekday - 1;
-
-        // Safety: ensure index is 0-6.
-        // If splitting pushed us to next week (e.g. Sunday night split to Monday morning), wrap around.
-        // Monday (1) - 1 = 0.
-        // Sunday (7) - 1 = 6.
-        // If reference dates drifted, we might get 8? Normalize.
         const normalizedIdx = dayIdx % 7;
 
         if (buckets[normalizedIdx]) {
@@ -171,7 +151,6 @@ export class InstrumentFormatter {
         for (let i = 1; i < ranges.length; i++) {
             const next = ranges[i];
 
-            // Strict equality on timestamps for continuity
             if (current.end.toMillis() === next.start.toMillis()) {
                 current = { start: current.start, end: next.end };
             } else {
