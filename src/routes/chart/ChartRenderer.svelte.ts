@@ -32,6 +32,9 @@ export class ChartRenderer {
     private feePrimitive: FeeLinePrimitive | null = null;
     private debugPrimitive: FeeLinePrimitive | null = null;
 
+    // State
+    private marketDetails: MarketDetailsResponse | null = null;
+
     // Retained Mode: Store line references mapped by ID
     private lines = new Map<string, IPriceLine>();
 
@@ -46,8 +49,6 @@ export class ChartRenderer {
         private readonly accountStore: AccountStore
     ) {
         // Effect 1: History Loading
-        // STRICT: We extract dependencies to consts to ensure Svelte tracks them
-        // even if this.series is null initially.
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
             const history = this.marketStore.history;
@@ -61,7 +62,6 @@ export class ChartRenderer {
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
             const lastCandle = this.marketStore.lastCandle;
-            // Force dependency on trigger to handle rapid updates
             const _trigger = this.marketStore.updateTrigger;
 
             if (this.series && loaded && lastCandle) {
@@ -73,13 +73,12 @@ export class ChartRenderer {
         $effect(() => {
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
-            // Redraw on viewport resize to update PnL titles
             const _width = viewport.width;
 
             this.renderStatic();
         });
 
-        // Effect 4: Dynamic Price Line
+        // Effect 4: Dynamic Price Line & Fees
         $effect(() => {
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
@@ -92,12 +91,13 @@ export class ChartRenderer {
 
     init(series: ISeriesApi<"Candlestick">, marketDetails: MarketDetailsResponse | null) {
         this.series = series;
+        this.marketDetails = marketDetails;
         this.formatter = new LineTitleFormatter(this.accountStore.activeSymbol);
         this.lines.clear();
 
         this.initPrimitives(marketDetails);
 
-        // Manual initial load in case effects already ran before series was ready
+        // Manual initial load
         if (this.marketStore.isLoaded && this.marketStore.history.length > 0) {
             this.series.setData(this.marketStore.history);
         }
@@ -126,7 +126,7 @@ export class ChartRenderer {
             const timestampSeconds = Math.floor(timestampMs / 1000);
             const fmt = DateTime.fromMillis(timestampMs).toFormat("HH:mm");
 
-            this.feePrimitive = new FeeLinePrimitive(timestampSeconds, fmt, "OVERNIGHT FEE");
+            this.feePrimitive = new FeeLinePrimitive(timestampSeconds, fmt, "Fee: —");
             this.series.attachPrimitive(this.feePrimitive);
         }
 
@@ -148,6 +148,29 @@ export class ChartRenderer {
         return this.positionStore.activePosition;
     }
 
+    private calculateFee(price: number, position: PositionResponse | null): string {
+        if (!position || !this.marketDetails || price <= 0) return "Fee: —";
+
+        const feeData = this.marketDetails.instrument.overnightFee;
+        if (!feeData) return "Fee: —";
+
+        const size = position.position.size;
+        const isBuy = position.position.direction === TRADING.BUY_DIRECTION;
+
+        // Rate is in percentage (e.g., -0.021%)
+        const rate = isBuy ? feeData.longRate : feeData.shortRate;
+
+        // Formula: Size * Price * (Rate / 100)
+        // Note: Exposure = Size * Price
+        const rawFee = (size * price * rate) / 100;
+
+        const symbol = this.accountStore.activeSymbol || "$";
+        const formattedFee = Math.abs(rawFee).toFixed(2);
+        const sign = rawFee >= 0 ? "+" : "-"; // Fees are usually negative (you pay)
+
+        return `${sign}${symbol}${formattedFee}`;
+    }
+
     private renderStatic() {
         if (!this.series || !this.formatter) return;
         this.updateStaticLines(this.getTargetPosition());
@@ -155,7 +178,23 @@ export class ChartRenderer {
 
     private renderDynamic(currentPrice: number) {
         if (!this.series || !this.formatter) return;
-        this.updateCurrentPriceLine(this.getTargetPosition(), currentPrice);
+
+        const target = this.getTargetPosition();
+
+        // 1. Update Price Line
+        this.updateCurrentPriceLine(target, currentPrice);
+
+        // 2. Update Fee Primitives
+        const feeLabel = this.calculateFee(currentPrice, target);
+
+        if (this.feePrimitive) {
+            this.feePrimitive.update(this.feePrimitive.timestamp, this.feePrimitive.formattedTime, feeLabel);
+        }
+
+        // Also update Debug primitive for verification
+        if (this.debugPrimitive) {
+            this.debugPrimitive.update(this.debugPrimitive.timestamp, this.debugPrimitive.formattedTime, feeLabel);
+        }
     }
 
     private updateStaticLines(response: PositionResponse | null) {

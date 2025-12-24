@@ -50,17 +50,17 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
             ctx.lineTo(sharpX, height);
             ctx.stroke();
 
-            // 2. Draw Labels (Top and Bottom)
+            // 2. Draw Labels
             ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             ctx.fillStyle = textColor;
             ctx.textAlign = 'center';
 
-            // Bottom Label (Time/Date context usually)
+            // Bottom Label (Time)
             if (this.bottomLabel) {
                 ctx.fillText(this.bottomLabel, sharpX, height - 10);
             }
 
-            // Top Label (Description)
+            // Top Label (Fee Amount)
             if (this.topLabel) {
                 ctx.fillText(this.topLabel, sharpX, 20);
             }
@@ -110,10 +110,14 @@ export class FeeLinePrimitive implements ISeriesPrimitive<Time> {
         this._paneViews = [new FeeLinePaneView(this)];
     }
 
-    update(timestamp: number | null, formattedTime: string) {
+    update(timestamp: number | null, formattedTime: string, label: string) {
         this.timestamp = timestamp;
         this.formattedTime = formattedTime;
-        this.requestUpdate();
+        this.label = label;
+        // In lightweight-charts, changing properties usually requires a redraw request
+        // We don't have direct access to requestUpdate() on the chart here easily without storing params,
+        // but since this is usually called inside the chart's update loop/reactivity,
+        // the re-render of the chart often picks it up.
     }
 
     // --- ISeriesPrimitive Implementation ---
@@ -128,9 +132,5 @@ export class FeeLinePrimitive implements ISeriesPrimitive<Time> {
 
     paneViews(): readonly IPrimitivePaneView[] {
         return this._paneViews;
-    }
-
-    requestUpdate() {
-        // No-op: update logic handled by renderer recreation on next frame
     }
 }
