@@ -4,12 +4,21 @@ import { getTimeScaleHeight } from "$lib/utils/chart.js";
 import * as CHART_CONST from '$lib/constants/chart.js';
 import type { ViewportService } from "$lib/services/viewport.svelte.js";
 
+// Optional callbacks for State Preservation during resize
+export interface ResizeCallbacks {
+    onBeforeResize?: () => void;
+    onAfterResize?: () => void;
+}
+
 export class ChartUI {
     isIosDevice = $state(false);
     isDataLoaded = $state(false);
 
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
+
+    // Callbacks to freeze/restore state
+    private callbacks: ResizeCallbacks | null = null;
 
     constructor(private readonly viewportService: ViewportService) {
         if (typeof window !== 'undefined') {
@@ -21,14 +30,25 @@ export class ChartUI {
             const _h = this.viewportService.height;
 
             if (this.container && this.chart) {
+                // Capture state BEFORE dimensions change
+                if (this.callbacks?.onBeforeResize) {
+                    this.callbacks.onBeforeResize();
+                }
+
                 this.updateDimensions();
+
+                // Restore state AFTER dimensions change
+                if (this.callbacks?.onAfterResize) {
+                    this.callbacks.onAfterResize();
+                }
             }
         });
     }
 
-    init(chart: IChartApi, container: HTMLDivElement) {
+    init(chart: IChartApi, container: HTMLDivElement, callbacks?: ResizeCallbacks) {
         this.chart = chart;
         this.container = container;
+        if (callbacks) this.callbacks = callbacks;
 
         if (typeof window !== 'undefined' && this.isIosDevice) {
             if (document.activeElement instanceof HTMLElement) {

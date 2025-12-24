@@ -3,7 +3,7 @@ import * as TRADING from '$lib/constants/trading.js';
 import * as STORAGE from '$lib/constants/storage.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
 
-import { ChartController, type ChartState } from './ChartController.js';
+import { ChartController, type ViewState } from './ChartController.js';
 import { ChartUI } from './ChartUI.svelte.js';
 import { ChartRenderer } from './ChartRenderer.svelte.js';
 import { ChartOverlay } from './ChartOverlay.svelte.js';
@@ -41,6 +41,9 @@ export class ChartLogic {
     // Feature: Mid-minute sync
     private lastSyncMinute = -1;
 
+    // Transient state for rotation
+    private preResizeState: ViewState | null = null;
+
     constructor(
         private marketStore: MarketStore,
         private accountStore: AccountStore,
@@ -76,7 +79,19 @@ export class ChartLogic {
         this.startHeartbeat();
 
         this.controller.init(container);
-        this.layout.init(this.controller.chart, container);
+
+        // Pass callbacks to ChartUI to handle immediate restoration during rotation/resize
+        this.layout.init(this.controller.chart, container, {
+            onBeforeResize: () => {
+                this.preResizeState = this.controller.getViewState();
+            },
+            onAfterResize: () => {
+                if (this.preResizeState) {
+                    this.controller.restoreViewState(this.preResizeState);
+                    this.preResizeState = null;
+                }
+            }
+        });
 
         const context = await this.loader.loadContext(this.currentEpic);
         if (!context) return;
@@ -109,7 +124,7 @@ export class ChartLogic {
             this.controller.scrollToTimestamp(now);
         }
 
-        // Listen for Zoom changes
+        // Listen for Zoom changes (Debounced save)
         this.controller.subscribeCameraChange(() => this.scheduleSaveZoom());
 
         await this.loader.initStream(
@@ -143,7 +158,8 @@ export class ChartLogic {
 
     private saveZoom() {
         if (typeof window === 'undefined') return;
-        const state = this.controller.getState();
+        // Use the Center/Span state format for resilience against aspect ratio changes
+        const state = this.controller.getViewState();
         if (state) {
             localStorage.setItem(STORAGE.CHART_STATE_KEY, JSON.stringify(state));
         }
@@ -157,9 +173,10 @@ export class ChartLogic {
         const raw = localStorage.getItem(STORAGE.CHART_STATE_KEY);
         if (raw) {
             try {
-                const state: ChartState = JSON.parse(raw);
+                // Restore using Center/Span logic
+                const state: ViewState = JSON.parse(raw);
                 setTimeout(() => {
-                    this.controller.restoreState(state);
+                    this.controller.restoreViewState(state);
                 }, 200);
                 return true;
             } catch {

@@ -5,15 +5,18 @@ import {
     type IChartApi,
     type ISeriesApi,
     type MouseEventParams,
-    type UTCTimestamp
+    type UTCTimestamp,
 } from 'lightweight-charts';
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
 import { isIOS } from "$lib/utils/platform.js";
 import { viewport } from "$lib/services/viewport.svelte.js";
 
-export interface ChartState {
-    timeRange: { from: UTCTimestamp, to: UTCTimestamp } | null;
-    priceRange: { min: number, max: number } | null;
+// We store Center + Span to be resilient to aspect ratio changes
+export interface ViewState {
+    centerTime: number;
+    timeSpan: number;
+    centerPrice: number;
+    priceSpan: number;
 }
 
 export class ChartController {
@@ -128,42 +131,54 @@ export class ChartController {
         this._chart?.unsubscribeClick(handler);
     }
 
-    // --- Zoom / State Logic ---
+    // --- State Management (Center/Span Strategy) ---
 
-    getState(): ChartState | null {
+    getViewState(): ViewState | null {
         if (!this._chart) return null;
 
         const timeRange = this._chart.timeScale().getVisibleRange();
         const priceScale = this._chart.priceScale('right');
         const priceRange = priceScale.getVisibleRange();
 
-        // We convert null to null explicitly to match interface if needed,
-        // though LWC types usually align.
+        if (!timeRange || !priceRange) return null;
+
+        // Calculate Time Center
+        const tFrom = timeRange.from as number;
+        const tTo = timeRange.to as number;
+        const timeSpan = tTo - tFrom;
+        const centerTime = tFrom + (timeSpan / 2);
+
+        // Calculate Price Center
+        const pMin = priceRange.from;
+        const pMax = priceRange.to;
+        const priceSpan = pMax - pMin;
+        const centerPrice = pMin + (priceSpan / 2);
+
         return {
-            timeRange: timeRange ? { from: timeRange.from as UTCTimestamp, to: timeRange.to as UTCTimestamp } : null,
-            priceRange: priceRange ? { min: priceRange.from, max: priceRange.to } : null
+            centerTime,
+            timeSpan,
+            centerPrice,
+            priceSpan
         };
     }
 
-    restoreState(state: ChartState) {
+    restoreViewState(state: ViewState) {
         if (!this._chart) return;
 
-        if (state.priceRange) {
-            this._chart.priceScale('right').setVisibleRange({
-                from: state.priceRange.min,
-                to: state.priceRange.max
-            });
-        } else {
-            this._chart.priceScale('right').applyOptions({ autoScale: true });
-        }
+        // Restore Price (Centered)
+        const pHalf = state.priceSpan / 2;
+        this._chart.priceScale('right').setVisibleRange({
+            from: state.centerPrice - pHalf,
+            to: state.centerPrice + pHalf
+        });
 
-        // Fix: Use absolute timestamps to ignore the Ghost Series "Future" end point
-        if (state.timeRange) {
-            this._chart.timeScale().setVisibleRange({
-                from: state.timeRange.from,
-                to: state.timeRange.to
-            });
-        }
+        // Restore Time (Centered)
+        // This explicitly overrides auto-scaling, preventing the Ghost Series jump
+        const tHalf = state.timeSpan / 2;
+        this._chart.timeScale().setVisibleRange({
+            from: (state.centerTime - tHalf) as UTCTimestamp,
+            to: (state.centerTime + tHalf) as UTCTimestamp
+        });
     }
 
     resetZoom() {
