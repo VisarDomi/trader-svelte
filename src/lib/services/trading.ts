@@ -7,6 +7,13 @@ import type { URL_TYPE } from '$lib/types/url.js';
 import { getBaseUrl } from '$lib/utils/helpers.js';
 import { DEFAULT_ERROR } from '$lib/constants/error.js';
 
+export interface PositionUpdateBody {
+    stopLevel?: number;
+    profitLevel?: number;
+    guaranteedStop?: boolean;
+    trailingStop?: boolean;
+}
+
 export function getPositions(client: ApiClient): Promise<PositionListResponse> {
     return client.get<PositionListResponse>(API.POSITIONS_ENDPOINT);
 }
@@ -19,7 +26,7 @@ export async function updatePosition(
     type: URL_TYPE,
     tokens: SessionTokens,
     dealId: string,
-    updates: { stopLevel?: number; profitLevel?: number; guaranteedStop?: boolean }
+    updates: PositionUpdateBody
 ): Promise<CreatePositionResponse> {
     const brokerUrl = `${getBaseUrl(type)}${API.POSITIONS_ENDPOINT}/${dealId}`;
 

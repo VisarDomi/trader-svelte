@@ -116,9 +116,17 @@ export class PositionStore {
         try {
             const p = this.anyActivePosition.position;
 
-            await updatePosition(mode, tokens, p.dealId, {
-                stopLevel: newLevel
-            });
+            // IDEMPOTENCY:
+            // We must send the COMPLETE state of the protection orders.
+            // If we omit profitLevel, the broker might remove it.
+            const payload = {
+                stopLevel: newLevel,
+                profitLevel: p.profitLevel,
+                guaranteedStop: p.guaranteedStop,
+                trailingStop: false // We don't support trailing stops in this logic yet
+            };
+
+            await updatePosition(mode, tokens, p.dealId, payload);
 
             notifications.success(`Stop Loss Auto-Corrected to ${newLevel}`);
 
