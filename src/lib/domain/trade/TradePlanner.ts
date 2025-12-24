@@ -34,12 +34,17 @@ export class TradePlanner {
         const lotSize = market.instrument.lotSize || 1;
         const minSizeIncrement = market.dealingRules.minSizeIncrement.value;
         const minDealSize = market.dealingRules.minDealSize.value;
+        const maxDealSize = market.dealingRules.maxDealSize.value;
         const decimalPlaces = market.snapshot.decimalPlacesFactor;
 
         // 2. Calculate Position Size
         // Formula: (Balance * Leverage) / (LotSize * Price)
         const rawSize = (accountBalance * userLeverage) / (lotSize * entryPrice);
-        const size = roundDownToStep(rawSize, minSizeIncrement);
+        let size = roundDownToStep(rawSize, minSizeIncrement);
+
+        if (size > maxDealSize) {
+            size = maxDealSize;
+        }
 
         if (size < minDealSize) {
             return null;
