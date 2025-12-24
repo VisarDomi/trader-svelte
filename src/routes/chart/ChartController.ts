@@ -12,7 +12,7 @@ import { isIOS } from "$lib/utils/platform.js";
 import { viewport } from "$lib/services/viewport.svelte.js";
 
 export interface ChartState {
-    timeSpan: number;
+    timeRange: { from: UTCTimestamp, to: UTCTimestamp } | null;
     priceRange: { min: number, max: number } | null;
 }
 
@@ -133,14 +133,14 @@ export class ChartController {
     getState(): ChartState | null {
         if (!this._chart) return null;
 
-        const timeRange = this._chart.timeScale().getVisibleLogicalRange();
-        const timeSpan = timeRange ? (timeRange.to - timeRange.from) : 0;
-
+        const timeRange = this._chart.timeScale().getVisibleRange();
         const priceScale = this._chart.priceScale('right');
         const priceRange = priceScale.getVisibleRange();
 
+        // We convert null to null explicitly to match interface if needed,
+        // though LWC types usually align.
         return {
-            timeSpan,
+            timeRange: timeRange ? { from: timeRange.from as UTCTimestamp, to: timeRange.to as UTCTimestamp } : null,
             priceRange: priceRange ? { min: priceRange.from, max: priceRange.to } : null
         };
     }
@@ -157,14 +157,12 @@ export class ChartController {
             this._chart.priceScale('right').applyOptions({ autoScale: true });
         }
 
-        if (state.timeSpan > 0) {
-            const current = this._chart.timeScale().getVisibleLogicalRange();
-            if (current) {
-                this._chart.timeScale().setVisibleLogicalRange({
-                    from: current.to - state.timeSpan,
-                    to: current.to
-                });
-            }
+        // Fix: Use absolute timestamps to ignore the Ghost Series "Future" end point
+        if (state.timeRange) {
+            this._chart.timeScale().setVisibleRange({
+                from: state.timeRange.from,
+                to: state.timeRange.to
+            });
         }
     }
 
