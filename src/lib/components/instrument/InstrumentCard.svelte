@@ -126,11 +126,11 @@
 
                 <div class="hours-container">
                     {#each groupedHours as group}
-                        <div class="hours-block">
+                        <div class="hours-row">
                             <div class="days-label">{group.days}</div>
                             <div class="time-list">
                                 {#each group.hours as h}
-                                    <div class="time-row">{h}</div>
+                                    <div class="time-item">{h}</div>
                                 {/each}
                             </div>
                         </div>
@@ -208,33 +208,32 @@
     .hours-container {
         display: flex;
         flex-direction: column;
-        gap: 1.5rem;
+        gap: 0.5rem;
     }
 
-    .hours-block {
+    .hours-row {
         display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding-bottom: 0.25rem;
+        border-bottom: 1px solid #2a2a2a;
     }
 
     .days-label {
-        font-weight: bold;
-        color: #fff;
-        font-size: 0.95rem;
-        margin-bottom: 0.25rem;
+        color: #aaa; /* Match kv-label */
+        font-size: 0.9rem;
     }
 
     .time-list {
         display: flex;
         flex-direction: column;
-        gap: 0.2rem;
-        border-left: 2px solid #333;
-        padding-left: 0.75rem;
+        align-items: flex-end;
     }
 
-    .time-row {
-        color: #aaa;
+    .time-item {
+        color: #fff; /* Match kv-val */
+        font-weight: bold;
         font-size: 0.9rem;
-        font-family: monospace;
+        font-family: monospace; /* Keep times monospace for alignment */
     }
 </style>
