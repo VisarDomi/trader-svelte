@@ -103,13 +103,13 @@
                     <div class="kv-row">
                         <span class="kv-label">Long</span>
                         <span class="kv-val" class:negative={market.instrument.overnightFee?.longRate < 0}>
-                            {market.instrument.overnightFee?.longRate ?? '-'}
+                            {market.instrument.overnightFee?.longRate ?? '-'}%
                         </span>
                     </div>
                     <div class="kv-row">
                         <span class="kv-label">Short</span>
                         <span class="kv-val" class:negative={market.instrument.overnightFee?.shortRate < 0}>
-                            {market.instrument.overnightFee?.shortRate ?? '-'}
+                            {market.instrument.overnightFee?.shortRate ?? '-'}%
                         </span>
                     </div>
                     <div class="kv-row">
