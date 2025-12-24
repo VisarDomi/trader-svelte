@@ -1,7 +1,7 @@
 import { LineStyle, type ISeriesApi, type IPriceLine } from "lightweight-charts";
 import { viewport } from "$lib/services/viewport.svelte.js";
-import * as TRADING from "$lib/constants/trading.js";
 import { DateTime } from 'luxon';
+import * as TRADING from "$lib/constants/trading.js";
 
 import { TradeCalculator } from '$lib/domain/trade/TradeCalculator.js';
 import { LineTitleFormatter } from '$lib/presentation/formatters/LineTitleFormatter.js';
@@ -27,7 +27,10 @@ const KEY_CURRENT = 'CURRENT';
 
 export class ChartRenderer {
     private series: ISeriesApi<"Candlestick"> | null = null;
+
+    // Primitives
     private feePrimitive: FeeLinePrimitive | null = null;
+    private debugPrimitive: FeeLinePrimitive | null = null;
 
     // Retained Mode: Store line references mapped by ID
     private lines = new Map<string, IPriceLine>();
@@ -42,43 +45,31 @@ export class ChartRenderer {
         private readonly tradeStore: TradeStore,
         private readonly accountStore: AccountStore
     ) {
-        // Effect 1: History Loading
         $effect(() => {
-            const loaded = this.marketStore.isLoaded;
-            const history = this.marketStore.history;
-
-            if (this.series && loaded && history.length > 0) {
-                this.series.setData(history);
+            if (this.series && this.marketStore.isLoaded && this.marketStore.history.length > 0) {
+                this.series.setData(this.marketStore.history);
             }
         });
 
-        // Effect 2: Live Candle Updates
         $effect(() => {
-            const loaded = this.marketStore.isLoaded;
-            const lastCandle = this.marketStore.lastCandle;
             const _trigger = this.marketStore.updateTrigger;
-
-            if (this.series && loaded && lastCandle) {
-                this.series.update(lastCandle);
+            if (this.series && this.marketStore.isLoaded && this.marketStore.lastCandle) {
+                this.series.update(this.marketStore.lastCandle);
             }
         });
 
-        // Effect 3: Static Position Lines
         $effect(() => {
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
             const _width = viewport.width;
-
             this.renderStatic();
         });
 
-        // Effect 4: Dynamic Price Line
         $effect(() => {
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
             const tick = this.marketStore.currentPrice;
             const _width = viewport.width;
-
             this.renderDynamic(tick);
         });
     }
@@ -88,15 +79,12 @@ export class ChartRenderer {
         this.formatter = new LineTitleFormatter(this.accountStore.activeSymbol);
         this.lines.clear();
 
-        // 0. Initialize Primitives
         this.initPrimitives(marketDetails);
 
-        // 1. Restore History
         if (this.marketStore.isLoaded && this.marketStore.history.length > 0) {
             this.series.setData(this.marketStore.history);
         }
 
-        // 2. Force Render
         this.renderStatic();
         this.renderDynamic(this.marketStore.currentPrice);
     }
@@ -104,24 +92,35 @@ export class ChartRenderer {
     private initPrimitives(marketDetails: MarketDetailsResponse | null) {
         if (!this.series) return;
 
-        // Cleanup existing if any (though init implies fresh start usually)
         if (this.feePrimitive) {
             this.series.detachPrimitive(this.feePrimitive);
+            this.feePrimitive = null;
+        }
+        if (this.debugPrimitive) {
+            this.series.detachPrimitive(this.debugPrimitive);
+            this.debugPrimitive = null;
         }
 
+        // 1. Future Fee Line
         const feeData = marketDetails?.instrument.overnightFee;
         const timestampMs = feeData?.swapChargeTimestamp;
 
         if (timestampMs) {
-            // Convert MS to Seconds (UTCTimestamp)
             const timestampSeconds = Math.floor(timestampMs / 1000);
-
-            // Format for display
             const fmt = DateTime.fromMillis(timestampMs).toFormat("HH:mm");
 
-            this.feePrimitive = new FeeLinePrimitive(timestampSeconds, fmt);
+            this.feePrimitive = new FeeLinePrimitive(timestampSeconds, fmt, "OVERNIGHT FEE");
             this.series.attachPrimitive(this.feePrimitive);
         }
+
+        // 2. DEBUG Line: 1 Minute Ago
+        const nowMs = Date.now();
+        const oneMinuteAgoMs = nowMs - (60 * 1000);
+        const debugSeconds = Math.floor(oneMinuteAgoMs / 1000 / 60) * 60;
+        const debugFmt = DateTime.fromMillis(oneMinuteAgoMs).toFormat("HH:mm");
+
+        this.debugPrimitive = new FeeLinePrimitive(debugSeconds, debugFmt, "DEBUG");
+        this.series.attachPrimitive(this.debugPrimitive);
     }
 
     private getTargetPosition(): PositionResponse | null {
@@ -133,16 +132,12 @@ export class ChartRenderer {
 
     private renderStatic() {
         if (!this.series || !this.formatter) return;
-
-        const target = this.getTargetPosition();
-        this.updateStaticLines(target);
+        this.updateStaticLines(this.getTargetPosition());
     }
 
     private renderDynamic(currentPrice: number) {
         if (!this.series || !this.formatter) return;
-
-        const target = this.getTargetPosition();
-        this.updateCurrentPriceLine(target, currentPrice);
+        this.updateCurrentPriceLine(this.getTargetPosition(), currentPrice);
     }
 
     private updateStaticLines(response: PositionResponse | null) {
@@ -182,7 +177,6 @@ export class ChartRenderer {
         const position = response.position;
         const initialBalance = position.initialBalance || 0;
         const isLandscape = viewport.width > viewport.height;
-
         const relevantPrice = position.direction === TRADING.BUY_DIRECTION
             ? this.marketStore.bid
             : this.marketStore.offer;
@@ -207,28 +201,18 @@ export class ChartRenderer {
 
     private updateLine(key: string, data: LineData | null) {
         if (!this.series) return;
-
         if (data) {
             if (this.lines.has(key)) {
                 const line = this.lines.get(key)!;
-                line.applyOptions({
-                    price: data.price,
-                    color: data.color,
-                    title: data.title
-                });
+                line.applyOptions({ price: data.price, color: data.color, title: data.title });
             } else {
                 const line = this.series.createPriceLine({
-                    price: data.price,
-                    color: data.color,
-                    lineWidth: 2,
-                    lineStyle: LineStyle.Solid,
-                    axisLabelVisible: true,
-                    title: data.title,
+                    price: data.price, color: data.color, lineWidth: 2,
+                    lineStyle: LineStyle.Solid, axisLabelVisible: true, title: data.title,
                 });
                 this.lines.set(key, line);
             }
-        }
-        else {
+        } else {
             this.removeLine(key);
         }
     }
@@ -242,12 +226,14 @@ export class ChartRenderer {
     }
 
     destroy() {
-        if (this.series && this.feePrimitive) {
-            this.series.detachPrimitive(this.feePrimitive);
+        if (this.series) {
+            if (this.feePrimitive) this.series.detachPrimitive(this.feePrimitive);
+            if (this.debugPrimitive) this.series.detachPrimitive(this.debugPrimitive);
         }
         this.lines.forEach(line => this.series?.removePriceLine(line));
         this.lines.clear();
         this.series = null;
         this.feePrimitive = null;
+        this.debugPrimitive = null;
     }
 }

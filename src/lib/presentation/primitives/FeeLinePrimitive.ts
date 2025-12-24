@@ -7,6 +7,16 @@ import {
     type Time
 } from 'lightweight-charts';
 
+// Shim for the fancy-canvas type used by lightweight-charts internal renderer
+interface CanvasRenderingTarget2D {
+    useMediaCoordinateSpace: (
+        callback: (scope: {
+            context: CanvasRenderingContext2D;
+            mediaSize: { width: number; height: number }
+        }) => void
+    ) => void;
+}
+
 class FeeLineRenderer implements IPrimitivePaneRenderer {
     constructor(
         private readonly x: number | null,
@@ -17,41 +27,46 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
     draw(target: CanvasRenderingTarget2D) {
         if (this.x === null) return;
 
-        const ctx = target.context;
-        const height = target.mediaSize.height;
+        target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+            const height = mediaSize.height;
 
-        // Visual Configuration
-        const lineColor = '#E0E0E0'; // Light grey
-        const textColor = '#AAAAAA';
-        const dashPattern = [4, 4];
+            // Visual Configuration
+            const lineColor = '#E0E0E0'; // Light grey
+            const textColor = '#AAAAAA';
+            const dashPattern = [4, 4];
 
-        ctx.save();
+            ctx.save();
 
-        // 1. Draw Vertical Dashed Line
-        ctx.beginPath();
-        ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 1;
-        ctx.setLineDash(dashPattern);
-        ctx.moveTo(this.x, 0);
-        ctx.lineTo(this.x, height);
-        ctx.stroke();
+            // 1. Draw Vertical Dashed Line
+            ctx.beginPath();
+            ctx.strokeStyle = lineColor;
+            ctx.lineWidth = 1;
+            ctx.setLineDash(dashPattern);
 
-        // 2. Draw Labels (Top and Bottom)
-        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillStyle = textColor;
-        ctx.textAlign = 'center';
+            // Snap to pixel grid for crisp lines
+            const sharpX = Math.round(this.x as number) + 0.5;
 
-        // Bottom Label (Time/Date context usually)
-        if (this.bottomLabel) {
-            ctx.fillText(this.bottomLabel, this.x, height - 10);
-        }
+            ctx.moveTo(sharpX, 0);
+            ctx.lineTo(sharpX, height);
+            ctx.stroke();
 
-        // Top Label (Description)
-        if (this.topLabel) {
-            ctx.fillText(this.topLabel, this.x, 20);
-        }
+            // 2. Draw Labels (Top and Bottom)
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = textColor;
+            ctx.textAlign = 'center';
 
-        ctx.restore();
+            // Bottom Label (Time/Date context usually)
+            if (this.bottomLabel) {
+                ctx.fillText(this.bottomLabel, sharpX, height - 10);
+            }
+
+            // Top Label (Description)
+            if (this.topLabel) {
+                ctx.fillText(this.topLabel, sharpX, 20);
+            }
+
+            ctx.restore();
+        });
     }
 }
 
@@ -61,7 +76,7 @@ class FeeLinePaneView implements IPrimitivePaneView {
     ) {}
 
     zOrder(): PrimitivePaneViewZOrder {
-        return 'bottom'; // Draw behind candles so it doesn't obscure price action
+        return 'bottom';
     }
 
     renderer(): IPrimitivePaneRenderer {
@@ -72,14 +87,13 @@ class FeeLinePaneView implements IPrimitivePaneView {
 
         if (time && chart) {
             // Convert time to pixel coordinate
-            // Returns null if the time is not currently visible or valid in the scale
             x = chart.timeScale().timeToCoordinate(time as Time);
         }
 
         return new FeeLineRenderer(
             x,
             this.source.formattedTime,
-            "OVERNIGHT FEE"
+            this.source.label
         );
     }
 }
@@ -90,7 +104,8 @@ export class FeeLinePrimitive implements ISeriesPrimitive<Time> {
 
     constructor(
         public timestamp: number | null,
-        public formattedTime: string
+        public formattedTime: string,
+        public label: string = "OVERNIGHT FEE"
     ) {
         this._paneViews = [new FeeLinePaneView(this)];
     }
@@ -116,10 +131,6 @@ export class FeeLinePrimitive implements ISeriesPrimitive<Time> {
     }
 
     requestUpdate() {
-        if (this.chart) {
-            // We cannot easily call requestUpdate on the chart from here directly without storing the callback
-            // But usually simply returning a new state in renderer() is enough when the chart redraws.
-            // To force a redraw, we might need to rely on external triggers or interaction.
-        }
+        // No-op: update logic handled by renderer recreation on next frame
     }
 }
