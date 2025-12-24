@@ -1,6 +1,7 @@
 import { LineStyle, type ISeriesApi, type IPriceLine } from "lightweight-charts";
 import { viewport } from "$lib/services/viewport.svelte.js";
 import * as TRADING from "$lib/constants/trading.js";
+import { DateTime } from 'luxon';
 
 import { TradeCalculator } from '$lib/domain/trade/TradeCalculator.js';
 import { LineTitleFormatter } from '$lib/presentation/formatters/LineTitleFormatter.js';
@@ -10,12 +11,14 @@ import { StopLossLine } from '$lib/presentation/lines/StopLossLine.js';
 import { TakeProfitLine } from '$lib/presentation/lines/TakeProfitLine.js';
 import { calculateCurrentPriceLine } from '$lib/presentation/lines/CurrentPriceLine.js';
 import type { LineData } from '$lib/presentation/lines/types.js';
+import { FeeLinePrimitive } from '$lib/presentation/primitives/FeeLinePrimitive.js';
 
 import type { MarketStore } from '$lib/stores/market.svelte.js';
 import type { AccountStore } from '$lib/stores/account.svelte.js';
 import type { PositionStore } from '$lib/stores/position.svelte.js';
 import type { TradeStore } from '$lib/stores/trade.svelte.js';
 import type { PositionResponse } from "$lib/types/trading.js";
+import type { MarketDetailsResponse } from "$lib/types/market.js";
 
 const KEY_ENTRY = 'ENTRY';
 const KEY_SL = 'SL';
@@ -24,6 +27,7 @@ const KEY_CURRENT = 'CURRENT';
 
 export class ChartRenderer {
     private series: ISeriesApi<"Candlestick"> | null = null;
+    private feePrimitive: FeeLinePrimitive | null = null;
 
     // Retained Mode: Store line references mapped by ID
     private lines = new Map<string, IPriceLine>();
@@ -52,9 +56,6 @@ export class ChartRenderer {
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
             const lastCandle = this.marketStore.lastCandle;
-
-            // BUGFIX: Svelte 5 won't trigger if lastCandle ref stays same.
-            // We listen to the updateTrigger to force the update call.
             const _trigger = this.marketStore.updateTrigger;
 
             if (this.series && loaded && lastCandle) {
@@ -82,10 +83,13 @@ export class ChartRenderer {
         });
     }
 
-    init(series: ISeriesApi<"Candlestick">) {
+    init(series: ISeriesApi<"Candlestick">, marketDetails: MarketDetailsResponse | null) {
         this.series = series;
         this.formatter = new LineTitleFormatter(this.accountStore.activeSymbol);
         this.lines.clear();
+
+        // 0. Initialize Primitives
+        this.initPrimitives(marketDetails);
 
         // 1. Restore History
         if (this.marketStore.isLoaded && this.marketStore.history.length > 0) {
@@ -95,6 +99,29 @@ export class ChartRenderer {
         // 2. Force Render
         this.renderStatic();
         this.renderDynamic(this.marketStore.currentPrice);
+    }
+
+    private initPrimitives(marketDetails: MarketDetailsResponse | null) {
+        if (!this.series) return;
+
+        // Cleanup existing if any (though init implies fresh start usually)
+        if (this.feePrimitive) {
+            this.series.detachPrimitive(this.feePrimitive);
+        }
+
+        const feeData = marketDetails?.instrument.overnightFee;
+        const timestampMs = feeData?.swapChargeTimestamp;
+
+        if (timestampMs) {
+            // Convert MS to Seconds (UTCTimestamp)
+            const timestampSeconds = Math.floor(timestampMs / 1000);
+
+            // Format for display
+            const fmt = DateTime.fromMillis(timestampMs).toFormat("HH:mm");
+
+            this.feePrimitive = new FeeLinePrimitive(timestampSeconds, fmt);
+            this.series.attachPrimitive(this.feePrimitive);
+        }
     }
 
     private getTargetPosition(): PositionResponse | null {
@@ -215,8 +242,12 @@ export class ChartRenderer {
     }
 
     destroy() {
+        if (this.series && this.feePrimitive) {
+            this.series.detachPrimitive(this.feePrimitive);
+        }
         this.lines.forEach(line => this.series?.removePriceLine(line));
         this.lines.clear();
         this.series = null;
+        this.feePrimitive = null;
     }
 }

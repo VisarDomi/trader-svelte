@@ -86,7 +86,7 @@ export class ChartLogic {
 
         this.controller.createMainSeries(context.precision);
 
-        this.renderer.init(this.controller.series);
+        this.renderer.init(this.controller.series, this.marketDetails);
         this.inputHandler.configure(this.controller.series);
         this.controller.subscribeClick(this.inputHandler.handleChartClick);
 
