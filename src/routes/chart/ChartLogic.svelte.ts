@@ -74,6 +74,11 @@ export class ChartLogic {
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
+        // Register unload handler to save state immediately on refresh
+        if (typeof window !== 'undefined') {
+            window.addEventListener('beforeunload', this.saveZoom);
+        }
+
         this.currentEpic = this.session.lastEpic;
         this.watchdog.start();
         this.startHeartbeat();
@@ -102,8 +107,6 @@ export class ChartLogic {
         this.controller.createMainSeries(context.precision);
 
         // --- GHOST SERIES EXTENSION ---
-        // Ensure continuous time resolution into the future (24H).
-        // Using isolated priceScale to prevent affecting main chart.
         if (this.marketDetails.instrument.overnightFee?.swapChargeTimestamp) {
             const currentPrice = this.marketDetails.snapshot.bid;
             if (currentPrice > 0) {
@@ -117,14 +120,13 @@ export class ChartLogic {
         this.controller.subscribeClick(this.inputHandler.handleChartClick);
 
         // Feature: Restore Zoom or Default to Now
-        // Note: restoreZoom is async in effect (uses setTimeout internally).
-        // If it finds nothing, we want to ensure we aren't stuck 24h in the future.
+        // If restoration fails (no state), explicitly reset zoom.
         if (!this.restoreZoom()) {
-            const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
-            this.controller.scrollToTimestamp(now);
+            this.controller.resetZoom();
         }
 
         // Listen for Zoom changes (Debounced save)
+        // Reduced debounce to 500ms to catch quicker interactions before refresh
         this.controller.subscribeCameraChange(() => this.scheduleSaveZoom());
 
         await this.loader.initStream(
@@ -137,6 +139,9 @@ export class ChartLogic {
     }
 
     destroy() {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('beforeunload', this.saveZoom);
+        }
         this.cancelPlanning();
         this.stopHeartbeat();
         this.watchdog.stop();
@@ -153,17 +158,18 @@ export class ChartLogic {
 
     private scheduleSaveZoom() {
         if (this.saveTimeout) clearTimeout(this.saveTimeout);
-        this.saveTimeout = setTimeout(() => this.saveZoom(), 1000);
+        this.saveTimeout = setTimeout(() => this.saveZoom(), 500);
     }
 
-    private saveZoom() {
+    // Arrow function to bind context for event listeners
+    private saveZoom = () => {
         if (typeof window === 'undefined') return;
-        // Use the Center/Span state format for resilience against aspect ratio changes
+
         const state = this.controller.getViewState();
         if (state) {
             localStorage.setItem(STORAGE.CHART_STATE_KEY, JSON.stringify(state));
         }
-    }
+    };
 
     /**
      * returns true if restore was attempted (state existed), false otherwise.
@@ -177,7 +183,7 @@ export class ChartLogic {
                 const state: ViewState = JSON.parse(raw);
                 setTimeout(() => {
                     this.controller.restoreViewState(state);
-                }, 200);
+                }, 100); // Slight delay to ensure chart geometry is settled
                 return true;
             } catch {
                 return false;

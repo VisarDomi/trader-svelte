@@ -5,7 +5,7 @@ import {
     type IChartApi,
     type ISeriesApi,
     type MouseEventParams,
-    type UTCTimestamp,
+    type UTCTimestamp
 } from 'lightweight-charts';
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
 import { isIOS } from "$lib/utils/platform.js";
@@ -166,6 +166,11 @@ export class ChartController {
         if (!this._chart) return;
 
         // Restore Price (Centered)
+        // CRITICAL: Disable autoScale to prevent LWC from overriding our manual range immediately
+        this._chart.priceScale('right').applyOptions({
+            autoScale: false
+        });
+
         const pHalf = state.priceSpan / 2;
         this._chart.priceScale('right').setVisibleRange({
             from: state.centerPrice - pHalf,
@@ -187,7 +192,7 @@ export class ChartController {
         const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
         this.scrollToTimestamp(now);
 
-        // Reset Price
+        // Reset Price to AutoScale
         this._chart.priceScale('right').applyOptions({ autoScale: true });
     }
 
