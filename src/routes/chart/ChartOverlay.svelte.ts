@@ -17,7 +17,6 @@ export class ChartOverlay {
         private readonly accountStore: AccountStore,
         private readonly positionStore: PositionStore,
         private readonly session: SessionManager,
-        // Injected Logic to access chart actions
         private readonly chartLogic: ChartLogic
     ) {}
 
@@ -65,22 +64,9 @@ export class ChartOverlay {
         return dir === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350';
     }
 
-    get isClosing() {
-        return this.positionStore.isClosing;
-    }
-
-    get closeButtonText() {
-        return this.positionStore.isClosing ? '...' : 'Close Position';
-    }
-
-    get closeButtonColor() {
-        return this.positionStore.isClosing ? '#444' : '#ef5350';
-    }
-
     // --- Actions ---
 
     async init(epic: string) {
-        // Fetch the friendly name for the UI
         const client = api.client;
         if (client) {
             try {
@@ -96,14 +82,8 @@ export class ChartOverlay {
         this.isOpen = !this.isOpen;
     }
 
-    // New Action
     resetChart() {
         this.chartLogic.resetChartZoom();
-    }
-
-    async closePosition() {
-        if (this.isClosing) return;
-        await this.positionStore.close();
     }
 
     // Navigation Actions
@@ -122,6 +102,6 @@ export class ChartOverlay {
     }
 
     destroy() {
-        // No explicit cleanup needed for runes usually, unless listeners attached
+        // No explicit cleanup needed
     }
 }
