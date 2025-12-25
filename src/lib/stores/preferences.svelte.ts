@@ -1,3 +1,4 @@
+import { BaseStore } from '$lib/core/BaseStore.svelte.js';
 import { getPreferences, updatePreferences, getSyncedAccounts, topUpAccount } from '$lib/services/account.js';
 import { api } from '$lib/services/api.svelte.js';
 import { session } from '$lib/services/session.js';
@@ -6,33 +7,28 @@ import * as AUTH from '$lib/constants/auth.js';
 import type { Account, AccountPreferences, LeverageCategory, LeverageUpdate } from '$lib/types/account.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 
-export class PreferencesStore {
+export class PreferencesStore extends BaseStore {
     account = $state<Account | null>(null);
     data = $state<AccountPreferences | null>(null);
-
     leverages = $state<Partial<Record<LeverageCategory, number>>>({});
     activeType = $state<URL_TYPE>(AUTH.REAL_TYPE);
 
-    isLoading = $state(false);
+    // isSaving specific to preferences logic (separate from general isLoading)
     isSaving = $state(false);
-    error = $state("");
 
     async init(type: URL_TYPE) {
         this.activeType = type;
-        this.isLoading = true;
-        this.error = "";
-        this.account = null;
 
+        // We get client specific to the type requested, not just the global active one
         const client = api.getClientForMode(type);
         const tokens = session.getTokens(type);
 
         if (!client || !tokens) {
             this.error = "Session invalid";
-            this.isLoading = false;
             return;
         }
 
-        try {
+        await this.execute(async () => {
             const [prefs, accounts] = await Promise.all([
                 getPreferences(client),
                 getSyncedAccounts(type, tokens, client)
@@ -50,13 +46,7 @@ export class PreferencesStore {
             for (const [key, val] of Object.entries(prefs.leverages)) {
                 this.leverages[key as LeverageCategory] = val.current;
             }
-
-        } catch (e) {
-            console.error("Preferences load failed", e);
-            this.error = "Failed to load preferences";
-        } finally {
-            this.isLoading = false;
-        }
+        });
     }
 
     setLeverage(category: string, value: number) {
@@ -67,14 +57,10 @@ export class PreferencesStore {
         this.isSaving = true;
         this.error = "";
 
-        const tokens = session.getTokens(this.activeType);
-        if (!tokens) {
-            notifications.error("Session expired");
-            this.isSaving = false;
-            return;
-        }
-
         try {
+            const tokens = session.getTokens(this.activeType);
+            if (!tokens) throw new Error("Session expired");
+
             const leverageUpdate = { ...this.leverages } as LeverageUpdate;
 
             const response = await updatePreferences(
@@ -85,10 +71,7 @@ export class PreferencesStore {
             );
 
             if (response.status !== 'SUCCESS') {
-                const failureMessage = "Update failed: Unknown status";
-                this.error = failureMessage;
-                notifications.error(failureMessage);
-                return;
+                throw new Error("Update failed: Unknown status");
             }
 
             notifications.success("Preferences updated successfully");
@@ -108,27 +91,21 @@ export class PreferencesStore {
         if (!this.account) return;
 
         this.isSaving = true;
-        const currentBalance = this.account.balance.deposit;
-        const target = 1000;
-        const delta = target - currentBalance;
-
-        // Round to 2 decimal places to be safe
-        const amount = Math.round(delta * 100) / 100;
-
-        if (Math.abs(amount) < 0.01) {
-            notifications.info("Balance already at $1000");
-            this.isSaving = false;
-            return;
-        }
-
-        const client = api.getClientForMode(this.activeType);
-        if (!client) {
-            this.isSaving = false;
-            notifications.error("Session invalid");
-            return;
-        }
 
         try {
+            const currentBalance = this.account.balance.deposit;
+            const target = 1000;
+            const delta = target - currentBalance;
+            const amount = Math.round(delta * 100) / 100;
+
+            if (Math.abs(amount) < 0.01) {
+                notifications.info("Balance already at $1000");
+                return;
+            }
+
+            const client = api.getClientForMode(this.activeType);
+            if (!client) throw new Error("Session invalid");
+
             await topUpAccount(client, amount);
             notifications.success("Account reset to $1000");
             await this.init(this.activeType);

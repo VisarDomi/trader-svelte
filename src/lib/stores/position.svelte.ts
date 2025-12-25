@@ -1,3 +1,4 @@
+import { BaseStore } from '$lib/core/BaseStore.svelte.js';
 import { getPositions, createPosition, updatePosition, getConfirmation } from '$lib/services/trading.js';
 import { resolveInitialBalance } from '$lib/utils/position.js';
 import { session } from '$lib/services/session.js';
@@ -7,14 +8,9 @@ import { accountStore } from './account.svelte.js';
 import * as TRADING from '$lib/constants/trading.js';
 import type { PositionResponse } from '$lib/types/trading.js';
 
-export class PositionStore {
-    // The position specifically for the current epic (for drawing chart lines)
+export class PositionStore extends BaseStore {
     activePosition = $state<PositionResponse | null>(null);
-
-    // Any position on the account (for blocking new trades and showing global status)
     anyActivePosition = $state<PositionResponse | null>(null);
-
-    isLoading = $state(false);
     isClosing = $state(false);
 
     private epic = "";
@@ -25,15 +21,13 @@ export class PositionStore {
     }
 
     async refresh() {
-        this.isLoading = true;
-        const client = api.client;
+        const client = this.getClient();
         if (!client) return;
 
-        try {
+        // We use execute() but handle the result manually since we need to parse lists
+        await this.execute(async () => {
             const list = await getPositions(client);
 
-            // Client-side fix for Initial Balance (for PnL calcs)
-            // We iterate ALL positions to ensure data integrity
             if (accountStore.activeAccount) {
                 for (const p of list.positions) {
                     p.position.initialBalance = resolveInitialBalance(
@@ -43,25 +37,14 @@ export class PositionStore {
                 }
             }
 
-            // 1. Identify if ANY position exists (Global Lock)
             const globalPos = list.positions[0] || null;
-
-            // 2. Identify if LOCAL position exists (Chart Lines)
             const localPos = list.positions.find(p => p.market.epic === this.epic);
 
             this.anyActivePosition = globalPos;
             this.activePosition = localPos || null;
-
-        } catch (e) {
-            console.error("Failed to load positions", e);
-        } finally {
-            this.isLoading = false;
-        }
+        });
     }
 
-    /**
-     * Manually set position (e.g. after immediate execution)
-     */
     set(p: PositionResponse | null) {
         this.activePosition = p;
         this.anyActivePosition = p;
@@ -71,7 +54,7 @@ export class PositionStore {
         if (!this.anyActivePosition) return;
 
         this.isClosing = true;
-        const client = api.getOrThrow();
+        const client = api.getOrThrow(); // Or use this.getClient() but we want to throw here?
 
         try {
             const p = this.anyActivePosition.position;
@@ -95,7 +78,6 @@ export class PositionStore {
             this.activePosition = null;
             this.anyActivePosition = null;
 
-            // Trigger poll burst to catch balance update
             void this.pollBalanceUpdate();
 
         } catch (e) {
@@ -115,33 +97,24 @@ export class PositionStore {
 
         try {
             const p = this.anyActivePosition.position;
-
-            // IDEMPOTENCY:
-            // We must send the COMPLETE state of the protection orders.
-            // If we omit profitLevel, the broker might remove it.
             const payload = {
                 stopLevel: newLevel,
                 profitLevel: p.profitLevel,
                 guaranteedStop: p.guaranteedStop,
-                trailingStop: false // We don't support trailing stops in this logic yet
+                trailingStop: false
             };
 
             await updatePosition(mode, tokens, p.dealId, payload);
-
             notifications.success(`Stop Loss Auto-Corrected to ${newLevel}`);
-
-            // Refresh to confirm changes in UI
             await this.refresh();
 
         } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
             console.error("Failed to auto-correct SL", e);
             notifications.error("Risk Manager: Failed to update SL");
         }
     }
 
     private async pollBalanceUpdate() {
-        // Poll every 1s for 10 seconds to catch the balance update from broker
         for (let i = 0; i < 10; i++) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             await accountStore.refreshActive();
