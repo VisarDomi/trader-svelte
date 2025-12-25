@@ -10,6 +10,7 @@ import {
 import { getChartOptions, getBaseSeriesOptions } from "$lib/utils/chart.js";
 import { isIOS } from "$lib/utils/platform.js";
 import { viewport } from "$lib/services/viewport.svelte.js";
+import * as CHART_CONST from '$lib/constants/chart.js';
 
 // We store Center + Span to be resilient to aspect ratio changes
 export interface ViewState {
@@ -97,32 +98,6 @@ export class ChartController {
         this._ghostSeries.setData(data);
     }
 
-    /**
-     * Sets the visible range to end at the specific target time.
-     * Preserves the current zoom span (width of the view).
-     */
-    scrollToTimestamp(target: UTCTimestamp) {
-        if (!this._chart) return;
-
-        const timeScale = this._chart.timeScale();
-        const currentRange = timeScale.getVisibleRange();
-
-        // Default span (2 hours) if chart is not yet rendered
-        let span = 2 * 60 * 60;
-
-        if (currentRange) {
-            span = (currentRange.to as number) - (currentRange.from as number);
-        }
-
-        // Ensure we don't have a 0 or negative span
-        if (span <= 0) span = 2 * 60 * 60;
-
-        timeScale.setVisibleRange({
-            from: (target - span) as UTCTimestamp,
-            to: target as UTCTimestamp
-        });
-    }
-
     subscribeClick(handler: (param: MouseEventParams) => void) {
         this._chart?.subscribeClick(handler);
     }
@@ -189,10 +164,48 @@ export class ChartController {
     resetZoom() {
         if (!this._chart) return;
 
-        const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
-        this.scrollToTimestamp(now);
+        const timeScale = this._chart.timeScale();
+        const currentRange = timeScale.getVisibleRange();
 
-        // Reset Price to AutoScale
+        // 1. Determine Span (Zoom Level)
+        let span = 2 * 60 * 60; // Default 2 hours
+        if (currentRange) {
+            span = (currentRange.to as number) - (currentRange.from as number);
+        }
+        if (span <= 0) span = 2 * 60 * 60;
+
+        // 2. Set temporary range ending at NOW (right edge = now)
+        const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
+        timeScale.setVisibleRange({
+            from: (now - span) as UTCTimestamp,
+            to: now
+        });
+
+        // 3. Calculate Buffer based on Configured Pixel Offset
+        const chartWidth = this._chart.timeScale().width();
+        const offsetPixels = CHART_CONST.RESET_RIGHT_OFFSET_PIXELS;
+
+        // Calculate logical buffer (in seconds)
+        // Coordinate API is most accurate:
+        const tRight = timeScale.coordinateToTime(chartWidth);
+        const tOffset = timeScale.coordinateToTime(chartWidth - offsetPixels);
+
+        let bufferSeconds = 0;
+        if (tRight && tOffset) {
+            bufferSeconds = (tRight as number) - (tOffset as number);
+        } else {
+            // Fallback: Proportional calculation
+            bufferSeconds = offsetPixels * (span / chartWidth);
+        }
+
+        // 4. Apply Final Range
+        const finalTo = (now + bufferSeconds) as UTCTimestamp;
+        timeScale.setVisibleRange({
+            from: (finalTo - span) as UTCTimestamp,
+            to: finalTo
+        });
+
+        // 5. Reset Price Scale
         this._chart.priceScale('right').applyOptions({ autoScale: true });
     }
 

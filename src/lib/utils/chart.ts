@@ -57,7 +57,6 @@ export function getChartOptions(config: ChartLayoutConfig): DeepPartial<ChartOpt
         tickMarkFormatter: (time: Time) => {
             return formatTimestampToLocalTime(time as UTCTimestamp);
         },
-        rightOffset: CHART.RIGHT_OFFSET,
         barSpacing: isMobile ? CHART.MOBILE_BAR_SPACING : CHART.BAR_SPACING,
         minBarSpacing: CHART.MIN_BAR_SPACING,
         borderColor: CHART.BORDER_COLOR,
