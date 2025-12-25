@@ -4,6 +4,7 @@ import { authenticateAndStoreSession } from "$lib/services/auth.js";
 import { getMarketDetails } from "$lib/services/market.js";
 import { getPreferences } from "$lib/services/account.js";
 import { LeverageService } from '$lib/domain/account/LeverageService.js';
+import type { ApiClient } from '$lib/api/client.js';
 
 // Stores types
 import type { AccountStore } from '$lib/stores/account.svelte.js';
@@ -12,6 +13,7 @@ import type { MarketStore } from '$lib/stores/market.svelte.js';
 
 // Types
 import type { MarketDetailsResponse } from '$lib/types/market.js';
+import type { AccountPreferences } from '$lib/types/account.js';
 import type { ChartData } from "$lib/types/trading";
 import * as TRADING from '$lib/constants/trading.js';
 
@@ -20,6 +22,11 @@ export interface ChartContext {
     userLeverage: number;
     precision: number;
     epic: string;
+}
+
+interface ChartConfiguration {
+    marketDetails: MarketDetailsResponse;
+    preferences: AccountPreferences;
 }
 
 export class ChartDataLoader {
@@ -41,32 +48,14 @@ export class ChartDataLoader {
     }
 
     async loadContext(epic: string): Promise<ChartContext | null> {
-        // 1. Init Stores SEQUENTIALLY to avoid race conditions
-        // PositionStore requires AccountStore to be ready for PnL calcs
-        await this.accountStore.init();
-        await this.positionStore.init(epic);
+        await this.initializeStores(epic);
 
         const client = api.client;
         if (!client) return null;
 
         try {
-            // 2. Fetch Configuration (Parallel)
-            const [md, prefs] = await Promise.all([
-                getMarketDetails(client, epic),
-                getPreferences(client)
-            ]);
-
-            // 3. Resolve Domain Logic
-            const userLeverage = LeverageService.getEffectiveLeverage(md, prefs);
-            const precision = Math.pow(10, md.snapshot.decimalPlacesFactor);
-
-            return {
-                marketDetails: md,
-                userLeverage,
-                precision,
-                epic
-            };
-
+            const config = await this.fetchConfiguration(client, epic);
+            return this.deriveContext(epic, config);
         } catch (e) {
             console.error("Chart Context Load Failed", e);
             return null;
@@ -88,6 +77,33 @@ export class ChartDataLoader {
         if (authorized) {
             await this.marketStore.init(epic, this.marketStore.dataSource);
         }
+    }
+
+    private async initializeStores(epic: string) {
+        await this.accountStore.init();
+        await this.positionStore.init(epic);
+    }
+
+    private async fetchConfiguration(client: ApiClient, epic: string): Promise<ChartConfiguration> {
+        const [marketDetails, preferences] = await Promise.all([
+            getMarketDetails(client, epic),
+            getPreferences(client)
+        ]);
+        return { marketDetails, preferences };
+    }
+
+    private deriveContext(epic: string, config: ChartConfiguration): ChartContext {
+        const { marketDetails, preferences } = config;
+
+        const userLeverage = LeverageService.getEffectiveLeverage(marketDetails, preferences);
+        const precision = Math.pow(10, marketDetails.snapshot.decimalPlacesFactor);
+
+        return {
+            marketDetails,
+            userLeverage,
+            precision,
+            epic
+        };
     }
 
     private getDataSourceForDirection(direction: string | undefined): ChartData {
