@@ -6,11 +6,11 @@ import { ChartController, type ViewState } from './ChartController.js';
 import { ChartUI } from './ChartUI.svelte.js';
 import { ChartRenderer } from './ChartRenderer.svelte.js';
 import { ChartOverlay } from './ChartOverlay.svelte.js';
-import { ChartInputHandler, type ChartClickEvent } from './ChartInputHandler.svelte.js'; // Updated Import
-import { ChartDataLoader } from './ChartLoader.svelte.js';
+import { ChartInputHandler, type ChartClickEvent } from './ChartInputHandler.svelte.js';
+import { ChartDataLoader, type ChartContext as LoaderContext } from './ChartLoader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 import { RiskManager } from '$lib/domain/trade/RiskManager.js';
-import { TradingDomain } from '$lib/domain/trade/TradingDomain.js'; // New Import
+import { TradingDomain } from '$lib/domain/trade/TradingDomain.js';
 
 import { ChartContext } from '$lib/features/chart/ChartContext.svelte.js';
 
@@ -33,7 +33,7 @@ export class ChartLogic {
     private loader: ChartDataLoader;
     private watchdog: Watchdog;
     private riskManager = new RiskManager();
-    private tradingDomain = new TradingDomain(); // New Domain Service
+    private tradingDomain = new TradingDomain();
 
     private currentEpic = "";
     private userLeverage = 1;
@@ -58,7 +58,6 @@ export class ChartLogic {
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
         this.watchdog = new Watchdog(() => this.handleFreeze());
 
-        // Updated Handler Instantiation
         this.inputHandler = new ChartInputHandler(
             (event) => this.handleChartClick(event),
             () => this.isInteractionBlocked()
@@ -71,76 +70,25 @@ export class ChartLogic {
             }
         });
 
-        $effect(() => {
-            this.context.marketDetails = this.marketDetails;
-            this.context.currentPrice = this.marketStore.currentPrice;
-            this.context.lastCandle = this.marketStore.lastCandle;
-
-            if (this.tradeStore.isPlanning) {
-                this.context.activePosition = this.tradeStore.getMockPosition();
-                this.context.isPlanningTrade = true;
-            } else {
-                this.context.activePosition = this.positionStore.activePosition;
-                this.context.isPlanningTrade = false;
-            }
-
-            this.context.accountBalance = this.accountStore.balance;
-            this.context.activeSymbol = this.accountStore.activeSymbol;
-            this.context.viewportWidth = this.layout.isDataLoaded ? viewport.width : 0;
-            this.context.viewportHeight = this.layout.isDataLoaded ? viewport.height : 0;
-        });
+        $effect(() => this.syncContext());
     }
-
-    // ... (Init, Destroy, Zoom, Trade Confirmation, Limits, Heartbeat methods remain unchanged)
-    // ... Copy them exactly from the previous file to ensure no regression.
-    // ... For brevity in this diff, I am only showing the changed handler method below.
 
     async init(container: HTMLDivElement) {
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
-        if (typeof window !== 'undefined') {
-            window.addEventListener('beforeunload', this.saveZoom);
-        }
-
-        this.currentEpic = this.session.lastEpic;
-        this.watchdog.start();
-        this.startHeartbeat();
+        this.setupEventListeners();
+        this.startServices();
 
         this.controller.init(container);
+        this.configureLayout(container);
 
-        this.layout.init(this.controller.chart, container, {
-            onBeforeResize: () => {
-                this.preResizeState = this.controller.getViewState();
-            },
-            onAfterResize: () => {
-                if (this.preResizeState) {
-                    this.controller.restoreViewState(this.preResizeState);
-                    this.preResizeState = null;
-                }
-            }
-        });
-
-        const context = await this.loader.loadContext(this.currentEpic);
+        const context = await this.loader.loadContext(this.session.lastEpic);
         if (!context) return;
 
-        this.userLeverage = context.userLeverage;
-        this.marketDetails = context.marketDetails;
-        this.context.marketDetails = this.marketDetails;
-
-        this.controller.createMainSeries(context.precision);
-
-        if (this.marketDetails.instrument.overnightFee?.swapChargeTimestamp) {
-            const currentPrice = this.marketDetails.snapshot.bid;
-            if (currentPrice > 0) {
-                this.controller.extendTimeScale24H(currentPrice);
-            }
-        }
-
-        this.renderer.init(this.controller.chart, this.controller.series, this.context);
-
-        this.inputHandler.configure(this.controller.series);
-        this.controller.subscribeClick(this.inputHandler.handleChartClick);
+        this.applyContext(context);
+        this.initializeRenderer(context);
+        this.initializeInteractions();
 
         if (!this.restoreZoom()) {
             this.controller.resetZoom();
@@ -171,6 +119,98 @@ export class ChartLogic {
 
         this.controller.unsubscribeClick(this.inputHandler.handleChartClick);
         this.controller.destroy();
+    }
+
+    resetChartZoom() {
+        this.controller.resetZoom();
+        localStorage.removeItem(this.getStorageKey());
+    }
+
+    async confirmTrade() {
+        const result = await this.tradeStore.execute();
+        if (result) {
+            const source = result.position.direction === TRADING.SELL_DIRECTION
+                ? TRADING.CHART_DATA_SOURCE_OFR
+                : TRADING.CHART_DATA_SOURCE_BID;
+            this.marketStore.setDataSource(source);
+        }
+    }
+
+    cancelPlanning() {
+        this.tradeStore.cancel();
+        if (!this.positionStore.activePosition) {
+            this.marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
+        }
+    }
+
+    private setupEventListeners() {
+        if (typeof window !== 'undefined') {
+            window.addEventListener('beforeunload', this.saveZoom);
+        }
+    }
+
+    private startServices() {
+        this.currentEpic = this.session.lastEpic;
+        this.watchdog.start();
+        this.startHeartbeat();
+    }
+
+    private configureLayout(container: HTMLDivElement) {
+        this.layout.init(this.controller.chart, container, {
+            onBeforeResize: () => {
+                this.preResizeState = this.controller.getViewState();
+            },
+            onAfterResize: () => {
+                if (this.preResizeState) {
+                    this.controller.restoreViewState(this.preResizeState);
+                    this.preResizeState = null;
+                }
+            }
+        });
+    }
+
+    private applyContext(context: LoaderContext) {
+        this.userLeverage = context.userLeverage;
+        this.marketDetails = context.marketDetails;
+        this.context.marketDetails = this.marketDetails;
+
+        this.controller.createMainSeries(context.precision);
+
+        if (this.marketDetails.instrument.overnightFee?.swapChargeTimestamp) {
+            const currentPrice = this.marketDetails.snapshot.bid;
+            if (currentPrice > 0) {
+                this.controller.extendTimeScale24H(currentPrice);
+            }
+        }
+    }
+
+    private initializeRenderer(context: LoaderContext) {
+        // We pass the reactive context object, not the initial config
+        this.renderer.init(this.controller.chart, this.controller.series, this.context);
+    }
+
+    private initializeInteractions() {
+        this.inputHandler.configure(this.controller.series);
+        this.controller.subscribeClick(this.inputHandler.handleChartClick);
+    }
+
+    private syncContext() {
+        this.context.marketDetails = this.marketDetails;
+        this.context.currentPrice = this.marketStore.currentPrice;
+        this.context.lastCandle = this.marketStore.lastCandle;
+
+        if (this.tradeStore.isPlanning) {
+            this.context.activePosition = this.tradeStore.getMockPosition();
+            this.context.isPlanningTrade = true;
+        } else {
+            this.context.activePosition = this.positionStore.activePosition;
+            this.context.isPlanningTrade = false;
+        }
+
+        this.context.accountBalance = this.accountStore.balance;
+        this.context.activeSymbol = this.accountStore.activeSymbol;
+        this.context.viewportWidth = this.layout.isDataLoaded ? viewport.width : 0;
+        this.context.viewportHeight = this.layout.isDataLoaded ? viewport.height : 0;
     }
 
     private getStorageKey(): string {
@@ -207,39 +247,25 @@ export class ChartLogic {
         return false;
     }
 
-    resetChartZoom() {
-        this.controller.resetZoom();
-        localStorage.removeItem(this.getStorageKey());
-    }
-
-    async confirmTrade() {
-        const result = await this.tradeStore.execute();
-        if (result) {
-            const source = result.position.direction === TRADING.SELL_DIRECTION
-                ? TRADING.CHART_DATA_SOURCE_OFR
-                : TRADING.CHART_DATA_SOURCE_BID;
-            this.marketStore.setDataSource(source);
-        }
-    }
-
-    cancelPlanning() {
-        this.tradeStore.cancel();
-        if (!this.positionStore.activePosition) {
-            this.marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
-        }
-    }
-
     private checkLimits(currentPrice: number) {
         if (this.isBurstChecking) return;
+
         const pos = this.positionStore.activePosition?.position;
         if (!pos) return;
-        const isBuy = pos.direction === TRADING.BUY_DIRECTION;
-        let hitSL = false;
-        if (pos.stopLevel) hitSL = isBuy ? currentPrice <= pos.stopLevel : currentPrice >= pos.stopLevel;
-        let hitTP = false;
-        if (pos.profitLevel) hitTP = isBuy ? currentPrice >= pos.profitLevel : currentPrice <= pos.profitLevel;
 
-        if (hitSL || hitTP) void this.runBurstCheck();
+        const isBuy = pos.direction === TRADING.BUY_DIRECTION;
+
+        const hitSL = pos.stopLevel
+            ? (isBuy ? currentPrice <= pos.stopLevel : currentPrice >= pos.stopLevel)
+            : false;
+
+        const hitTP = pos.profitLevel
+            ? (isBuy ? currentPrice >= pos.profitLevel : currentPrice <= pos.profitLevel)
+            : false;
+
+        if (hitSL || hitTP) {
+            void this.runBurstCheck();
+        }
     }
 
     private async runBurstCheck() {
@@ -256,13 +282,16 @@ export class ChartLogic {
         this.heartbeatInterval = setInterval(async () => {
             const now = new Date();
             const sec = now.getSeconds();
+
             if (sec >= 30 && sec <= 32 && this.lastSyncMinute !== now.getMinutes()) {
                 this.lastSyncMinute = now.getMinutes();
                 void this.marketStore.syncHistory();
             }
+
             if (sec % 15 === 0 && !this.isBurstChecking) {
                 await this.positionStore.refresh();
             }
+
             if (sec < 2 && !this.isBurstChecking) {
                 await this.checkRiskCompliance();
             }
@@ -272,16 +301,18 @@ export class ChartLogic {
     private async checkRiskCompliance() {
         const position = this.positionStore.anyActivePosition;
         if (!position || !this.marketDetails) return;
+
         await this.accountStore.refreshActive();
-        const balance = this.accountStore.balance;
-        const newSL = this.riskManager.calculateCorrection(
+
+        const correction = this.riskManager.calculateCorrection(
             position.position,
             this.marketDetails,
-            balance
+            this.accountStore.balance
         );
-        if (newSL !== null) {
-            console.log(`[RiskManager] Correction Needed. Updating SL to ${newSL}`);
-            await this.positionStore.updateStopLoss(newSL);
+
+        if (correction !== null) {
+            console.log(`[RiskManager] Correction Needed. Updating SL to ${correction}`);
+            await this.positionStore.updateStopLoss(correction);
         }
     }
 
@@ -298,7 +329,6 @@ export class ChartLogic {
         return false;
     }
 
-    // NEW: Handle the click using the Domain Service
     private handleChartClick(event: ChartClickEvent) {
         if (!this.marketDetails) return;
 
