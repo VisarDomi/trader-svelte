@@ -4,7 +4,6 @@ import { getTimeScaleHeight } from "$lib/utils/chart.js";
 import * as CHART_CONST from '$lib/constants/chart.js';
 import type { ViewportService } from "$lib/services/viewport.svelte.js";
 
-// Optional callbacks for State Preservation during resize
 export interface ResizeCallbacks {
     onBeforeResize?: () => void;
     onAfterResize?: () => void;
@@ -16,8 +15,6 @@ export class ChartUI {
 
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
-
-    // Callbacks to freeze/restore state
     private callbacks: ResizeCallbacks | null = null;
 
     constructor(private readonly viewportService: ViewportService) {
@@ -30,17 +27,7 @@ export class ChartUI {
             const _h = this.viewportService.height;
 
             if (this.container && this.chart) {
-                // Capture state BEFORE dimensions change
-                if (this.callbacks?.onBeforeResize) {
-                    this.callbacks.onBeforeResize();
-                }
-
-                this.updateDimensions();
-
-                // Restore state AFTER dimensions change
-                if (this.callbacks?.onAfterResize) {
-                    this.callbacks.onAfterResize();
-                }
+                this.handleResizeCycle();
             }
         });
     }
@@ -51,12 +38,7 @@ export class ChartUI {
         if (callbacks) this.callbacks = callbacks;
 
         if (typeof window !== 'undefined' && this.isIosDevice) {
-            if (document.activeElement instanceof HTMLElement) {
-                document.activeElement.blur();
-            }
-            window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
-            setTimeout(() => this.viewportService.scan(), 100);
-            setTimeout(() => this.viewportService.scan(), 500);
+            this.setupIosHacks();
         }
 
         this.updateDimensions();
@@ -68,44 +50,67 @@ export class ChartUI {
         if (loaded) {
             setTimeout(() => {
                 this.updateDimensions();
-                // Enforce scroll ONLY once when data is ready
-                if (this.isIosDevice) {
-                    this.enforceScrollPosition();
-                }
+                this.enforceScrollPosition();
             }, 50);
         }
     }
 
     destroy() {
         if (typeof window === 'undefined') return;
-
         window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
+    }
+
+    private handleResizeCycle() {
+        if (this.callbacks?.onBeforeResize) {
+            this.callbacks.onBeforeResize();
+        }
+
+        this.updateDimensions();
+
+        if (this.callbacks?.onAfterResize) {
+            this.callbacks.onAfterResize();
+        }
+    }
+
+    private setupIosHacks() {
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+        window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
+        setTimeout(() => this.viewportService.scan(), 100);
+        setTimeout(() => this.viewportService.scan(), 500);
     }
 
     private handleZoomCheck = () => {
         if (!window.visualViewport) return;
-        // Keep listener for drift monitoring if needed
     };
 
-    private getScrollTarget(chartH: number, winH: number): number {
-        return CHART_CONST.TOPBAR_HEIGHT + (chartH - winH);
-    }
-
     private enforceScrollPosition = () => {
-        if (!this.isIosDevice || !this.isDataLoaded || !this.container) return;
+        if (!this.shouldEnforceScroll()) return;
 
-        // CRITICAL GUARD: Never programmatically scroll if zoomed in.
-        if (window.visualViewport && window.visualViewport.scale > 1.01) {
-            return;
-        }
+        const target = this.getScrollTarget();
 
-        const target = this.getScrollTarget(this.container.clientHeight, window.innerHeight);
-
-        // Only scroll if we are "above" the target (showing the spacer)
         if (window.scrollY < target) {
             window.scrollTo({ top: target, behavior: 'instant' });
         }
     };
+
+    private shouldEnforceScroll(): boolean {
+        if (!this.isIosDevice || !this.isDataLoaded || !this.container) return false;
+
+        if (this.isUserZoomedIn()) return false;
+
+        return true;
+    }
+
+    private isUserZoomedIn(): boolean {
+        return !!(window.visualViewport && window.visualViewport.scale > 1.01);
+    }
+
+    private getScrollTarget(): number {
+        if (!this.container) return 0;
+        return CHART_CONST.TOPBAR_HEIGHT + (this.container.clientHeight - window.innerHeight);
+    }
 
     private updateDimensions() {
         if (!this.container || !this.chart) return;
@@ -113,27 +118,35 @@ export class ChartUI {
         const width = this.viewportService.width;
         const height = this.viewportService.height;
 
+        this.updateContainerSize(width, height);
+        this.resizeChart(width, height);
+        this.updateTimeScaleOptions(width, height);
+
+        this.enforceScrollPosition();
+    }
+
+    private updateContainerSize(width: number, height: number) {
+        if (!this.container) return;
         this.container.style.width = `${width}px`;
         this.container.style.height = `${height}px`;
+    }
 
-        this.chart.resize(width, height);
-        this.chart.clearCrosshairPosition();
+    private resizeChart(width: number, height: number) {
+        this.chart?.resize(width, height);
+        this.chart?.clearCrosshairPosition();
+    }
 
+    private updateTimeScaleOptions(width: number, height: number) {
         const isMobile = width <= 768;
         const isLandscape = width > height;
         const isAppMode = this.isIosDevice;
 
-        this.chart.applyOptions({
+        this.chart?.applyOptions({
             timeScale: {
                 minimumHeight: getTimeScaleHeight(isAppMode, isLandscape),
                 barSpacing: isMobile ? CHART_CONST.MOBILE_BAR_SPACING : CHART_CONST.BAR_SPACING
             }
         });
-
-        // Trigger scroll logic on dimension update
-        if (this.isIosDevice && this.isDataLoaded) {
-            this.enforceScrollPosition();
-        }
     }
 
     private removeTradingViewLogo() {
