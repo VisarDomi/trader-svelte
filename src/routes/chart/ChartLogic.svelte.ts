@@ -6,12 +6,12 @@ import { ChartController, type ViewState } from './ChartController.js';
 import { ChartUI } from './ChartUI.svelte.js';
 import { ChartRenderer } from './ChartRenderer.svelte.js';
 import { ChartOverlay } from './ChartOverlay.svelte.js';
-import { ChartInputHandler, type TradeIntent } from './ChartInputHandler.svelte.js';
+import { ChartInputHandler, type ChartClickEvent } from './ChartInputHandler.svelte.js'; // Updated Import
 import { ChartDataLoader } from './ChartLoader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 import { RiskManager } from '$lib/domain/trade/RiskManager.js';
+import { TradingDomain } from '$lib/domain/trade/TradingDomain.js'; // New Import
 
-// Import New Infrastructure
 import { ChartContext } from '$lib/features/chart/ChartContext.svelte.js';
 
 import type { MarketStore } from '$lib/stores/market.svelte.js';
@@ -26,7 +26,6 @@ export class ChartLogic {
     overlay: ChartOverlay;
     controller = new ChartController();
 
-    // NEW: The Shared Context
     context = new ChartContext();
 
     private renderer: ChartRenderer;
@@ -34,22 +33,17 @@ export class ChartLogic {
     private loader: ChartDataLoader;
     private watchdog: Watchdog;
     private riskManager = new RiskManager();
+    private tradingDomain = new TradingDomain(); // New Domain Service
 
     private currentEpic = "";
     private userLeverage = 1;
 
-    // FIX: Make this reactive so the sync effect sees changes
     private marketDetails = $state<MarketDetailsResponse | null>(null);
 
-    // Polling & Sentinel State
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
     private isBurstChecking = false;
     private saveTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    // Feature: Mid-minute sync
     private lastSyncMinute = -1;
-
-    // Transient state for rotation
     private preResizeState: ViewState | null = null;
 
     constructor(
@@ -64,9 +58,9 @@ export class ChartLogic {
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
         this.watchdog = new Watchdog(() => this.handleFreeze());
 
+        // Updated Handler Instantiation
         this.inputHandler = new ChartInputHandler(
-            marketStore,
-            (intent) => this.handleTradeIntent(intent),
+            (event) => this.handleChartClick(event),
             () => this.isInteractionBlocked()
         );
 
@@ -77,15 +71,11 @@ export class ChartLogic {
             }
         });
 
-        // NEW: Sync Stores to ChartContext
-        // This decouples the plugins/renderer from specific store implementations
         $effect(() => {
-            // Market Data
-            this.context.marketDetails = this.marketDetails; // Set during init
+            this.context.marketDetails = this.marketDetails;
             this.context.currentPrice = this.marketStore.currentPrice;
             this.context.lastCandle = this.marketStore.lastCandle;
 
-            // Position & Trade
             if (this.tradeStore.isPlanning) {
                 this.context.activePosition = this.tradeStore.getMockPosition();
                 this.context.isPlanningTrade = true;
@@ -94,21 +84,21 @@ export class ChartLogic {
                 this.context.isPlanningTrade = false;
             }
 
-            // Account
             this.context.accountBalance = this.accountStore.balance;
             this.context.activeSymbol = this.accountStore.activeSymbol;
-
-            // Viewport
             this.context.viewportWidth = this.layout.isDataLoaded ? viewport.width : 0;
             this.context.viewportHeight = this.layout.isDataLoaded ? viewport.height : 0;
         });
     }
 
+    // ... (Init, Destroy, Zoom, Trade Confirmation, Limits, Heartbeat methods remain unchanged)
+    // ... Copy them exactly from the previous file to ensure no regression.
+    // ... For brevity in this diff, I am only showing the changed handler method below.
+
     async init(container: HTMLDivElement) {
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
-        // Register unload handler to save state immediately on refresh
         if (typeof window !== 'undefined') {
             window.addEventListener('beforeunload', this.saveZoom);
         }
@@ -119,7 +109,6 @@ export class ChartLogic {
 
         this.controller.init(container);
 
-        // Pass callbacks to ChartUI to handle immediate restoration during rotation/resize
         this.layout.init(this.controller.chart, container, {
             onBeforeResize: () => {
                 this.preResizeState = this.controller.getViewState();
@@ -137,35 +126,26 @@ export class ChartLogic {
 
         this.userLeverage = context.userLeverage;
         this.marketDetails = context.marketDetails;
-
-        // Initial Context Population
         this.context.marketDetails = this.marketDetails;
 
         this.controller.createMainSeries(context.precision);
 
-        // --- GHOST SERIES EXTENSION ---
         if (this.marketDetails.instrument.overnightFee?.swapChargeTimestamp) {
             const currentPrice = this.marketDetails.snapshot.bid;
             if (currentPrice > 0) {
                 this.controller.extendTimeScale24H(currentPrice);
             }
         }
-        // ------------------------------
 
-        // Pass Context to Renderer instead of stores (Implementation update in next file)
         this.renderer.init(this.controller.chart, this.controller.series, this.context);
 
         this.inputHandler.configure(this.controller.series);
         this.controller.subscribeClick(this.inputHandler.handleChartClick);
 
-        // Feature: Restore Zoom or Default to Now
-        // If restoration fails (no state), explicitly reset zoom.
         if (!this.restoreZoom()) {
             this.controller.resetZoom();
         }
 
-        // Listen for Zoom changes (Debounced save)
-        // Reduced debounce to 500ms to catch quicker interactions before refresh
         this.controller.subscribeCameraChange(() => this.scheduleSaveZoom());
 
         await this.loader.initStream(
@@ -193,8 +173,6 @@ export class ChartLogic {
         this.controller.destroy();
     }
 
-    // --- Feature: Zoom Persistence ---
-
     private getStorageKey(): string {
         return `${STORAGE.CHART_STATE_KEY}_${this.currentEpic}`;
     }
@@ -204,29 +182,23 @@ export class ChartLogic {
         this.saveTimeout = setTimeout(() => this.saveZoom(), 500);
     }
 
-    // Arrow function to bind context for event listeners
     private saveZoom = () => {
         if (typeof window === 'undefined') return;
-
         const state = this.controller.getViewState();
         if (state) {
             localStorage.setItem(this.getStorageKey(), JSON.stringify(state));
         }
     };
 
-    /**
-     * returns true if restore was attempted (state existed), false otherwise.
-     */
     private restoreZoom(): boolean {
         if (typeof window === 'undefined') return false;
         const raw = localStorage.getItem(this.getStorageKey());
         if (raw) {
             try {
-                // Restore using Center/Span logic
                 const state: ViewState = JSON.parse(raw);
                 setTimeout(() => {
                     this.controller.restoreViewState(state);
-                }, 100); // Slight delay to ensure chart geometry is settled
+                }, 100);
                 return true;
             } catch {
                 return false;
@@ -239,8 +211,6 @@ export class ChartLogic {
         this.controller.resetZoom();
         localStorage.removeItem(this.getStorageKey());
     }
-
-    // --- Trade Logic ---
 
     async confirmTrade() {
         const result = await this.tradeStore.execute();
@@ -259,11 +229,8 @@ export class ChartLogic {
         }
     }
 
-    // --- Sentinel & Heartbeat ---
-
     private checkLimits(currentPrice: number) {
         if (this.isBurstChecking) return;
-        // ... (existing limit logic)
         const pos = this.positionStore.activePosition?.position;
         if (!pos) return;
         const isBuy = pos.direction === TRADING.BUY_DIRECTION;
@@ -286,23 +253,16 @@ export class ChartLogic {
 
     private startHeartbeat() {
         this.stopHeartbeat();
-
         this.heartbeatInterval = setInterval(async () => {
             const now = new Date();
             const sec = now.getSeconds();
-
-            // Feature: Mid-Minute History Sync
             if (sec >= 30 && sec <= 32 && this.lastSyncMinute !== now.getMinutes()) {
                 this.lastSyncMinute = now.getMinutes();
                 void this.marketStore.syncHistory();
             }
-
-            // General background sync
             if (sec % 15 === 0 && !this.isBurstChecking) {
                 await this.positionStore.refresh();
             }
-
-            // Feature: Risk Management (Every 60s, checking at :00)
             if (sec < 2 && !this.isBurstChecking) {
                 await this.checkRiskCompliance();
             }
@@ -312,17 +272,13 @@ export class ChartLogic {
     private async checkRiskCompliance() {
         const position = this.positionStore.anyActivePosition;
         if (!position || !this.marketDetails) return;
-
-        // Ensure we have fresh balance info
         await this.accountStore.refreshActive();
         const balance = this.accountStore.balance;
-
         const newSL = this.riskManager.calculateCorrection(
             position.position,
             this.marketDetails,
             balance
         );
-
         if (newSL !== null) {
             console.log(`[RiskManager] Correction Needed. Updating SL to ${newSL}`);
             await this.positionStore.updateStopLoss(newSL);
@@ -342,10 +298,25 @@ export class ChartLogic {
         return false;
     }
 
-    private handleTradeIntent(intent: TradeIntent) {
+    // NEW: Handle the click using the Domain Service
+    private handleChartClick(event: ChartClickEvent) {
         if (!this.marketDetails) return;
-        this.marketStore.setDataSource(intent.source);
-        this.tradeStore.plan(intent.entryPrice, intent.targetPrice, intent.direction, this.marketDetails, this.userLeverage);
+
+        const bid = this.marketStore.bid;
+        const offer = this.marketStore.offer;
+
+        const intent = this.tradingDomain.determineIntent(event.price, bid, offer);
+
+        if (intent) {
+            this.marketStore.setDataSource(intent.source);
+            this.tradeStore.plan(
+                intent.entryPrice,
+                intent.targetPrice,
+                intent.direction,
+                this.marketDetails,
+                this.userLeverage
+            );
+        }
     }
 
     private async handleFreeze() {
