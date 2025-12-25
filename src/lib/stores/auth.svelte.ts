@@ -1,3 +1,4 @@
+import { BaseStore } from '$lib/core/BaseStore.svelte.js';
 import * as ENV from '$lib/env.js';
 import * as AUTH from '$lib/constants/auth.js';
 import { login } from '$lib/services/auth.js';
@@ -5,7 +6,7 @@ import { session } from '$lib/services/session.js';
 import type { SessionTokens, UserCredentials } from '$lib/types/auth.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 
-export class AuthStore {
+export class AuthStore extends BaseStore {
     // Form State
     apiKey = $state("");
     identifier = $state("");
@@ -15,19 +16,18 @@ export class AuthStore {
     demoStatus = $state("Not Logged In");
     realStatus = $state("Not Logged In");
 
-    // Tokens (for display/debug)
+    // Tokens
     demoTokens = $state<SessionTokens | null>(null);
     realTokens = $state<SessionTokens | null>(null);
 
     constructor() {
-        // Load Env defaults
+        super();
         this.apiKey = ENV.ENV_APIKEY;
         this.identifier = ENV.ENV_IDENTIFIER;
         this.password = ENV.ENV_PASSWORD;
     }
 
     init() {
-        // Hydrate from storage if available
         try {
             const c = session.getCredentials();
             this.identifier = c.identifier;
@@ -45,18 +45,24 @@ export class AuthStore {
     }
 
     async loginBoth() {
-        await Promise.all([
-            this.performLogin(AUTH.REAL_TYPE),
-            this.performLogin(AUTH.DEMO_TYPE)
-        ]);
+        await this.execute(async () => {
+            await Promise.all([
+                this.performLogin(AUTH.REAL_TYPE),
+                this.performLogin(AUTH.DEMO_TYPE)
+            ]);
+        });
     }
 
     async retryReal() {
-        await this.performLogin(AUTH.REAL_TYPE);
+        await this.execute(async () => {
+            await this.performLogin(AUTH.REAL_TYPE);
+        });
     }
 
     async retryDemo() {
-        await this.performLogin(AUTH.DEMO_TYPE);
+        await this.execute(async () => {
+            await this.performLogin(AUTH.DEMO_TYPE);
+        });
     }
 
     private saveInputs() {
@@ -81,10 +87,10 @@ export class AuthStore {
             else this.demoTokens = t;
         };
 
-        try {
-            setStatus("Logging in...");
-            const sessionTokens = await login(type);
+        setStatus("Logging in...");
 
+        try {
+            const sessionTokens = await login(type);
             session.saveTokens(type, sessionTokens);
             session.saveLoginTimestamp();
 
@@ -93,7 +99,8 @@ export class AuthStore {
         } catch (e) {
             const msg = `Error: ${e instanceof Error ? e.message : String(e)}`;
             setStatus(msg);
-            console.error(e);
+            // Re-throw so BaseStore.execute catches it and sets .error state
+            throw e;
         }
     }
 }

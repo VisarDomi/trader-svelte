@@ -1,3 +1,4 @@
+import { BaseStore } from '$lib/core/BaseStore.svelte.js';
 import { MarketRepository } from '../repositories/MarketRepository.ts';
 import { MarketFeed, type FeedUpdate } from '../services/market/MarketFeed.ts';
 import { api } from '$lib/services/api.svelte.js';
@@ -6,20 +7,15 @@ import * as TRADING from '$lib/constants/trading.js';
 import type { ChartData } from '$lib/types/trading.js';
 import type { ChartCandle } from '$lib/types/market.js';
 
-export class MarketStore {
+export class MarketStore extends BaseStore {
     // --- Public State (Runes) ---
     bid = $state(0);
     offer = $state(0);
-
-    // The active candle to be drawn by the chart
     lastCandle = $state.raw<ChartCandle | null>(null);
-
-    // A signal that increments on every feed update
     updateTrigger = $state(0);
-
-    // The active history to be loaded by the chart
     history = $state.raw<ChartCandle[]>([]);
 
+    // "isLoaded" implies data + stream ready, distinct from BaseStore "isLoading"
     isLoaded = $state(false);
 
     // --- Configuration ---
@@ -28,14 +24,13 @@ export class MarketStore {
 
     // --- Dependencies ---
     private feed: MarketFeed;
-
-    // Data Containers (Internal State)
     private bidHistory: ChartCandle[] = [];
     private askHistory: ChartCandle[] = [];
     private liveBidCandle: ChartCandle | null = null;
     private liveAskCandle: ChartCandle | null = null;
 
     constructor() {
+        super();
         this.feed = new MarketFeed((update) => this.handleFeedUpdate(update));
     }
 
@@ -48,12 +43,13 @@ export class MarketStore {
         this.epic = epic;
         this.dataSource = dataSource;
 
-        const client = api.client;
+        const client = this.getClient();
         const tokens = session.getTokens(session.mode);
 
         if (!client || !tokens) return;
 
-        try {
+        // Use BaseStore execute to handle loading/error state
+        await this.execute(async () => {
             const repo = new MarketRepository(client);
             const { bid, ask } = await repo.getHistory(epic);
 
@@ -73,30 +69,20 @@ export class MarketStore {
 
             this.syncViewToSource();
             this.isLoaded = true;
-
-        } catch (e) {
-            console.error("Failed to init market store", e);
-        }
+        });
     }
 
-    /**
-     * FEATURE: Mid-minute History Sync
-     * Fetches fresh history from API.
-     * 1. Updates historical (closed) minutes.
-     * 2. Merges the REST "last" candle (current minute) into the live aggregator
-     *    to ensure High/Low/Open accuracy.
-     */
     async syncHistory() {
         if (!this.epic || !this.isLoaded) return;
-
-        const client = api.client;
+        const client = this.getClient();
         if (!client) return;
 
+        // We do NOT use this.execute() here because this runs in the background (heartbeat).
+        // Triggering global isLoading (spinner) every minute would disturb the user.
         try {
             const repo = new MarketRepository(client);
             const { bid, ask } = await repo.getHistory(this.epic);
 
-            // Helper: Split array into [History, Current]
             const split = (arr: ChartCandle[]) => {
                 if (arr.length === 0) return { history: [], current: null };
                 const current = arr[arr.length - 1];
@@ -107,18 +93,11 @@ export class MarketStore {
             const bidData = split(bid);
             const askData = split(ask);
 
-            // 1. Update Historical Data (Closed minutes)
             this.bidHistory = bidData.history;
             this.askHistory = askData.history;
 
-            // 2. Update View (Triggers setData on Chart)
             this.syncViewToSource();
-
-            // 3. Merge Current Minute Data into Feed
-            // This updates liveBidCandle/liveAskCandle internally with proper Open/High/Low
             this.feed.mergeExternalData(bidData.current, askData.current);
-
-            // 4. Force trigger for Renderer to redraw the merged live candle
             this.updateTrigger++;
 
         } catch (e) {
@@ -164,15 +143,12 @@ export class MarketStore {
         this.bid = u.bid;
         this.offer = u.offer;
 
-        // Handle Completed Candles (Push to history)
         if (u.completedBid) this.bidHistory.push(u.completedBid);
         if (u.completedAsk) this.askHistory.push(u.completedAsk);
 
-        // Update Live Refs
         this.liveBidCandle = u.liveBid;
         this.liveAskCandle = u.liveAsk;
 
-        // Update View
         if (this.isLoaded) {
             this.lastCandle = this.dataSource === TRADING.CHART_DATA_SOURCE_OFR
                 ? this.liveAskCandle
