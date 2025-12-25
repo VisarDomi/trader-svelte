@@ -11,6 +11,9 @@ import { ChartDataLoader } from './ChartLoader.svelte.js';
 import { Watchdog } from '$lib/services/watchdog.svelte.js';
 import { RiskManager } from '$lib/domain/trade/RiskManager.js';
 
+// Import New Infrastructure
+import { ChartContext } from '$lib/features/chart/ChartContext.svelte.js';
+
 import type { MarketStore } from '$lib/stores/market.svelte.js';
 import type { AccountStore } from '$lib/stores/account.svelte.js';
 import type { PositionStore } from '$lib/stores/position.svelte.js';
@@ -23,6 +26,9 @@ export class ChartLogic {
     overlay: ChartOverlay;
     controller = new ChartController();
 
+    // NEW: The Shared Context
+    context = new ChartContext();
+
     private renderer: ChartRenderer;
     private inputHandler: ChartInputHandler;
     private loader: ChartDataLoader;
@@ -31,7 +37,9 @@ export class ChartLogic {
 
     private currentEpic = "";
     private userLeverage = 1;
-    private marketDetails: MarketDetailsResponse | null = null;
+
+    // FIX: Make this reactive so the sync effect sees changes
+    private marketDetails = $state<MarketDetailsResponse | null>(null);
 
     // Polling & Sentinel State
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
@@ -67,6 +75,32 @@ export class ChartLogic {
             if (price > 0 && this.positionStore.activePosition) {
                 this.checkLimits(price);
             }
+        });
+
+        // NEW: Sync Stores to ChartContext
+        // This decouples the plugins/renderer from specific store implementations
+        $effect(() => {
+            // Market Data
+            this.context.marketDetails = this.marketDetails; // Set during init
+            this.context.currentPrice = this.marketStore.currentPrice;
+            this.context.lastCandle = this.marketStore.lastCandle;
+
+            // Position & Trade
+            if (this.tradeStore.isPlanning) {
+                this.context.activePosition = this.tradeStore.getMockPosition();
+                this.context.isPlanningTrade = true;
+            } else {
+                this.context.activePosition = this.positionStore.activePosition;
+                this.context.isPlanningTrade = false;
+            }
+
+            // Account
+            this.context.accountBalance = this.accountStore.balance;
+            this.context.activeSymbol = this.accountStore.activeSymbol;
+
+            // Viewport
+            this.context.viewportWidth = this.layout.isDataLoaded ? viewport.width : 0;
+            this.context.viewportHeight = this.layout.isDataLoaded ? viewport.height : 0;
         });
     }
 
@@ -104,6 +138,9 @@ export class ChartLogic {
         this.userLeverage = context.userLeverage;
         this.marketDetails = context.marketDetails;
 
+        // Initial Context Population
+        this.context.marketDetails = this.marketDetails;
+
         this.controller.createMainSeries(context.precision);
 
         // --- GHOST SERIES EXTENSION ---
@@ -115,7 +152,9 @@ export class ChartLogic {
         }
         // ------------------------------
 
-        this.renderer.init(this.controller.series, this.marketDetails);
+        // Pass Context to Renderer instead of stores (Implementation update in next file)
+        this.renderer.init(this.controller.chart, this.controller.series, this.context);
+
         this.inputHandler.configure(this.controller.series);
         this.controller.subscribeClick(this.inputHandler.handleChartClick);
 
