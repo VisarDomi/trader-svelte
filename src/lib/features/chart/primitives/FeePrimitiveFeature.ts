@@ -4,6 +4,7 @@ import type { ChartFeature } from "$lib/core/ChartFeature.js";
 import { ChartContext } from "$lib/features/chart/ChartContext.svelte.js";
 import { FeeLinePrimitive } from '$lib/presentation/primitives/FeeLinePrimitive.js';
 import * as TRADING from "$lib/constants/trading.js";
+import type { MarketDetailsResponse } from "$lib/types/market.js";
 
 export class FeePrimitiveFeature implements ChartFeature {
     id = "fee_primitive";
@@ -21,29 +22,8 @@ export class FeePrimitiveFeature implements ChartFeature {
         const md = context.marketDetails;
         if (!md) return;
 
-        // 1. Initialize if needed
-        if (!this.primitive) {
-            const feeData = md.instrument.overnightFee;
-            const timestampMs = feeData?.swapChargeTimestamp;
-
-            if (timestampMs) {
-                const timestampSeconds = Math.floor(timestampMs / 1000);
-                const fmt = DateTime.fromMillis(timestampMs).toFormat("HH:mm");
-
-                this.primitive = new FeeLinePrimitive(timestampSeconds, fmt, "Fee: —");
-                this.series.attachPrimitive(this.primitive);
-            }
-        }
-
-        // 2. Update Label
-        if (this.primitive) {
-            const label = this.calculateFee(context);
-            this.primitive.update(
-                this.primitive.timestamp,
-                this.primitive.formattedTime,
-                label
-            );
-        }
+        this.ensurePrimitiveExists(md);
+        this.updatePrimitiveLabel(context);
     }
 
     destroy(): void {
@@ -52,6 +32,32 @@ export class FeePrimitiveFeature implements ChartFeature {
             this.primitive = null;
         }
         this.series = null;
+    }
+
+    private ensurePrimitiveExists(md: MarketDetailsResponse) {
+        if (this.primitive) return;
+
+        const feeData = md.instrument.overnightFee;
+        const timestampMs = feeData?.swapChargeTimestamp;
+
+        if (timestampMs) {
+            const timestampSeconds = Math.floor(timestampMs / 1000);
+            const fmt = DateTime.fromMillis(timestampMs).toFormat("HH:mm");
+
+            this.primitive = new FeeLinePrimitive(timestampSeconds, fmt, "Fee: —");
+            this.series!.attachPrimitive(this.primitive);
+        }
+    }
+
+    private updatePrimitiveLabel(context: ChartContext) {
+        if (!this.primitive) return;
+
+        const label = this.calculateFee(context);
+        this.primitive.update(
+            this.primitive.timestamp,
+            this.primitive.formattedTime,
+            label
+        );
     }
 
     private calculateFee(context: ChartContext): string {
