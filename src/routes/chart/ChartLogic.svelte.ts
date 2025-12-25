@@ -13,6 +13,7 @@ import { RiskManager } from '$lib/domain/trade/RiskManager.js';
 import { TradingDomain } from '$lib/domain/trade/TradingDomain.js';
 
 import { ChartContext } from '$lib/features/chart/ChartContext.svelte.js';
+import { bus } from '$lib/stores/bus.js';
 
 import type { MarketStore } from '$lib/stores/market.svelte.js';
 import type { AccountStore } from '$lib/stores/account.svelte.js';
@@ -58,10 +59,13 @@ export class ChartLogic {
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
         this.watchdog = new Watchdog(() => this.handleFreeze());
 
+        // FIX: Remove callback argument, only pass blocker
         this.inputHandler = new ChartInputHandler(
-            (event) => this.handleChartClick(event),
             () => this.isInteractionBlocked()
         );
+
+        // FIX: Listen to event bus
+        bus.on('input:chart_click', (event) => this.handleChartClick(event));
 
         $effect(() => {
             const price = this.marketStore.currentPrice;
@@ -185,7 +189,6 @@ export class ChartLogic {
     }
 
     private initializeRenderer(context: LoaderContext) {
-        // We pass the reactive context object, not the initial config
         this.renderer.init(this.controller.chart, this.controller.series, this.context);
     }
 

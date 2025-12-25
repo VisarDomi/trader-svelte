@@ -19,4 +19,7 @@ export interface AppEvents {
     // System Events
     "session:expired": void;
     "notification": { type: NotificationType, message: string };
+
+    // Input Events (New)
+    "input:chart_click": { price: number, time: number | null };
 }
