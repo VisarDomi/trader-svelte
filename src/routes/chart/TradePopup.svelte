@@ -1,6 +1,7 @@
 <script lang="ts">
     import * as TRADING from '$lib/constants/trading.js';
     import type {Direction, TradeConfirmation} from '$lib/types/trading.js';
+    import { shield } from '$lib/actions/shield.js';
 
     // Pure component: Data passed in via props, no store imports
     let {
@@ -37,6 +38,7 @@
         <div style="display: flex; gap: 1rem; justify-content: center;">
             <button
                     onclick={onCancel}
+                    use:shield
                     disabled={isExecuting}
                     style="
                     padding: 0.75rem 1.5rem;
@@ -51,6 +53,7 @@
             </button>
             <button
                     onclick={onConfirm}
+                    use:shield
                     disabled={isExecuting}
                     style="
                     padding: 0.75rem 1.5rem;

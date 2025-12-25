@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onDestroy } from 'svelte';
     import { ChartOverlay } from './ChartOverlay.svelte.js';
+    import { shield } from '$lib/actions/shield.js';
 
     let { overlay }: { overlay: ChartOverlay } = $props();
 
@@ -15,6 +16,7 @@
         <button
                 class="toggle-btn"
                 onclick={() => overlay.toggle()}
+                use:shield
                 style="
                 border-top-right-radius: {overlay.isOpen ? '0' : '8px'};
                 border-bottom-right-radius: {overlay.isOpen ? '0' : '8px'};
@@ -34,12 +36,13 @@
                             tabindex="0"
                             onclick={() => overlay.navToInstrument()}
                             onkeydown={(e) => e.key === 'Enter' && overlay.navToInstrument()}
+                            use:shield
                             class="clickable-area"
                     >
                         <div class="market-name">{overlay.marketName}</div>
                     </div>
 
-                    <button onclick={() => overlay.resetChart()} class="reset-btn">
+                    <button onclick={() => overlay.resetChart()} use:shield class="reset-btn">
                         Reset Chart
                     </button>
                 </div>
@@ -50,6 +53,7 @@
                         tabindex="0"
                         onclick={() => overlay.navToAccounts()}
                         onkeydown={(e) => e.key === 'Enter' && overlay.navToAccounts()}
+                        use:shield
                         class="section account-section clickable-area"
                 >
                     <div class="mode-label" style="color: {overlay.modeColor}">
@@ -66,6 +70,7 @@
                             tabindex="0"
                             onclick={() => overlay.navToPosition()}
                             onkeydown={(e) => e.key === 'Enter' && overlay.navToPosition()}
+                            use:shield
                             class="section position-section clickable-area"
                     >
                         <div class="pos-label">Position</div>
