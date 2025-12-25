@@ -117,6 +117,7 @@ export class ChartUI {
         this.container.style.height = `${height}px`;
 
         this.chart.resize(width, height);
+        this.chart.clearCrosshairPosition();
 
         const isMobile = width <= 768;
         const isLandscape = width > height;
