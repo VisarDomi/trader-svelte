@@ -4,9 +4,7 @@
     import type { URL_TYPE } from '$lib/types/url.js';
 
     let {
-        // New Prop
         id = undefined,
-
         account,
         mode,
         badgeText = undefined,
@@ -25,22 +23,11 @@
         onAction?: (e: Event) => void
     }>();
 
-    // Determine container tag
-    let tag = $derived(href ? 'a' : 'div');
-
-    // Theme colors
     let isReal = $derived(mode === AUTH.REAL_TYPE);
     let themeColor = $derived(isReal ? '#26a69a' : '#ef5350');
 </script>
 
-<svelte:element
-        this={tag}
-        id={id}
-        href={href}
-        class="card"
-        class:interactive={!!href}
-        style="--theme-color: {themeColor};"
->
+{#snippet cardContent()}
     <!-- Header Row -->
     <div class="header">
         <div class="title-group">
@@ -93,7 +80,27 @@
             </div>
         </div>
     </div>
-</svelte:element>
+{/snippet}
+
+<!-- Explicit Branching using Snippets: Guaranteed Valid HTML & Types -->
+{#if href}
+    <a
+            {id}
+            {href}
+            class="card interactive"
+            style="--theme-color: {themeColor};"
+    >
+        {@render cardContent()}
+    </a>
+{:else}
+    <div
+            {id}
+            class="card"
+            style="--theme-color: {themeColor};"
+    >
+        {@render cardContent()}
+    </div>
+{/if}
 
 <style>
     .card {
@@ -109,7 +116,6 @@
         box-sizing: border-box;
     }
 
-    /* Interactive State (Links) */
     .card.interactive {
         cursor: pointer;
         transition: border-color 0.2s;

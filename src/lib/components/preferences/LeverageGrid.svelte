@@ -1,6 +1,5 @@
 <script lang="ts">
-    import type { LeverageCategory } from '$lib/types/account.js';
-    import type { AccountPreferences } from '$lib/types/account.js';
+    import type { LeverageCategory, AccountPreferences, LeverageSetting } from '$lib/types/account.js';
 
     let {
         preferences,
@@ -11,14 +10,18 @@
         stagedLeverages: Partial<Record<LeverageCategory, number>>,
         onSelect: (category: LeverageCategory, value: number) => void
     }>();
+
+    // Use the proper shared type
+    let categories = $derived(
+        Object.entries(preferences.leverages) as [LeverageCategory, LeverageSetting][]
+    );
 </script>
 
 <div class="container">
     <h3 class="title">Leverages</h3>
 
     <div class="grid">
-        {#each Object.entries(preferences.leverages) as [key, info]}
-            {@const category = key}
+        {#each categories as [category, info]}
             {@const currentSelected = stagedLeverages[category]}
 
             <div class="category-block">

@@ -23,13 +23,16 @@ export interface Account {
     symbol: string;
 }
 
+// NEW: Named interface for leverage settings
+export interface LeverageSetting {
+    current: number;
+    available: number[];
+}
+
 export interface AccountPreferences {
     hedgingMode: boolean;
     leverages: {
-        [key in LeverageCategory]: {
-            current: number;
-            available: number[];
-        };
+        [key in LeverageCategory]: LeverageSetting;
     };
 }
 

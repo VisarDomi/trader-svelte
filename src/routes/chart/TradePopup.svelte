@@ -1,9 +1,8 @@
 <script lang="ts">
     import * as TRADING from '$lib/constants/trading.js';
-    import type {Direction, TradeConfirmation} from '$lib/types/trading.js';
+    import type { PlannedTrade } from '$lib/domain/trade/TradePlanner.js';
     import { shield } from '$lib/actions/shield.js';
 
-    // Pure component: Data passed in via props, no store imports
     let {
         isOpen,
         plannedTrade,
@@ -12,7 +11,7 @@
         onCancel
     } = $props<{
         isOpen: boolean;
-        plannedTrade: (TradeConfirmation & { direction: Direction, entryPrice: number }) | null;
+        plannedTrade: PlannedTrade | null;
         isExecuting: boolean;
         onConfirm: () => void;
         onCancel: () => void;
