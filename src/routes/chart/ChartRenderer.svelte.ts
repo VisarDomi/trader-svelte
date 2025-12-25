@@ -2,6 +2,7 @@ import { LineStyle, type ISeriesApi, type IPriceLine } from "lightweight-charts"
 import { viewport } from "$lib/services/viewport.svelte.js";
 import { DateTime } from 'luxon';
 import * as TRADING from "$lib/constants/trading.js";
+import { BASE_SERIES_TITLE } from "$lib/constants/chart.js";
 
 import { TradeCalculator } from '$lib/domain/trade/TradeCalculator.js';
 import { LineTitleFormatter } from '$lib/presentation/formatters/LineTitleFormatter.js';
@@ -28,16 +29,12 @@ const KEY_CURRENT = 'CURRENT';
 export class ChartRenderer {
     private series: ISeriesApi<"Candlestick"> | null = null;
 
-    // Primitives
     private feePrimitive: FeeLinePrimitive | null = null;
 
-    // State
     private marketDetails: MarketDetailsResponse | null = null;
 
-    // Retained Mode: Store line references mapped by ID
     private lines = new Map<string, IPriceLine>();
 
-    // Reusable Dependencies
     private calculator = new TradeCalculator();
     private formatter: LineTitleFormatter | null = null;
 
@@ -47,7 +44,6 @@ export class ChartRenderer {
         private readonly tradeStore: TradeStore,
         private readonly accountStore: AccountStore
     ) {
-        // Effect 1: History Loading
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
             const history = this.marketStore.history;
@@ -57,7 +53,6 @@ export class ChartRenderer {
             }
         });
 
-        // Effect 2: Live Candle Updates
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
             const lastCandle = this.marketStore.lastCandle;
@@ -68,7 +63,6 @@ export class ChartRenderer {
             }
         });
 
-        // Effect 3: Static Position Lines
         $effect(() => {
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
@@ -77,7 +71,6 @@ export class ChartRenderer {
             this.renderStatic();
         });
 
-        // Effect 4: Dynamic Price Line & Fees
         $effect(() => {
             const _pos = this.positionStore.activePosition;
             const _plan = this.tradeStore.isPlanning;
@@ -96,7 +89,6 @@ export class ChartRenderer {
 
         this.initPrimitives(marketDetails);
 
-        // Manual initial load
         if (this.marketStore.isLoaded && this.marketStore.history.length > 0) {
             this.series.setData(this.marketStore.history);
         }
@@ -113,7 +105,6 @@ export class ChartRenderer {
             this.feePrimitive = null;
         }
 
-        // 1. Future Fee Line
         const feeData = marketDetails?.instrument.overnightFee;
         const timestampMs = feeData?.swapChargeTimestamp;
 
@@ -121,7 +112,6 @@ export class ChartRenderer {
             const timestampSeconds = Math.floor(timestampMs / 1000);
             const fmt = DateTime.fromMillis(timestampMs).toFormat("HH:mm");
 
-            // ChartLogic has ensured the timescale extends far enough
             this.feePrimitive = new FeeLinePrimitive(timestampSeconds, fmt, "Fee: —");
             this.series.attachPrimitive(this.feePrimitive);
         }
@@ -143,16 +133,13 @@ export class ChartRenderer {
         const size = position.position.size;
         const isBuy = position.position.direction === TRADING.BUY_DIRECTION;
 
-        // Rate is in percentage (e.g., -0.021%)
         const rate = isBuy ? feeData.longRate : feeData.shortRate;
 
-        // Formula: Size * Price * (Rate / 100)
-        // Note: Exposure = Size * Price
         const rawFee = (size * price * rate) / 100;
 
         const symbol = this.accountStore.activeSymbol || "$";
         const formattedFee = Math.abs(rawFee).toFixed(2);
-        const sign = rawFee >= 0 ? "+" : "-"; // Fees are usually negative (you pay)
+        const sign = rawFee >= 0 ? "+" : "-";
 
         return `${sign}${symbol}${formattedFee}`;
     }
@@ -167,10 +154,8 @@ export class ChartRenderer {
 
         const target = this.getTargetPosition();
 
-        // 1. Update Price Line
         this.updateCurrentPriceLine(target, currentPrice);
 
-        // 2. Update Fee Primitives
         const feeLabel = this.calculateFee(currentPrice, target);
 
         if (this.feePrimitive) {
@@ -207,7 +192,10 @@ export class ChartRenderer {
         if (!this.series || !this.formatter) return;
 
         if (!response || currentPrice === 0) {
-            this.series.applyOptions({ priceLineVisible: false });
+            this.series.applyOptions({
+                priceLineVisible: false,
+                title: BASE_SERIES_TITLE
+            });
             this.removeLine(KEY_CURRENT);
             return;
         }
