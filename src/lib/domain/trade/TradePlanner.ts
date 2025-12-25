@@ -30,59 +30,79 @@ export class TradePlanner {
             return null;
         }
 
-        // 1. Extract Rules
+        const size = this.calculatePositionSize(
+            market,
+            accountBalance,
+            userLeverage,
+            entryPrice
+        );
+
+        if (!size) return null;
+
         const lotSize = market.instrument.lotSize || 1;
-        const minSizeIncrement = market.dealingRules.minSizeIncrement.value;
-        const minDealSize = market.dealingRules.minDealSize.value;
-        const maxDealSize = market.dealingRules.maxDealSize.value;
         const decimalPlaces = market.snapshot.decimalPlacesFactor;
 
-        // 2. Calculate Position Size
-        // Formula: (Balance * Leverage) / (LotSize * Price)
-        const rawSize = (accountBalance * userLeverage) / (lotSize * entryPrice);
-        let size = roundDownToStep(rawSize, minSizeIncrement);
+        const stopLevel = this.calculateRiskBasedStopLevel(
+            entryPrice,
+            direction,
+            size,
+            lotSize,
+            accountBalance,
+            decimalPlaces
+        );
 
-        if (size > maxDealSize) {
-            size = maxDealSize;
-        }
-
-        if (size < minDealSize) {
-            return null;
-        }
-
-        // 3. Calculate Stop Loss distance based on Risk Ratio (Constants)
-        // We strictly adhere to a Stop Loss Ratio defined in constants
-        const stopLossRatio = TRADING.STOP_LOSS_RATIO;
-
-        // Margin Required for this size
-        const marginRequired = (size * lotSize * entryPrice) / userLeverage;
-
-        // Allowed Loss Amount
-        const lossAmount = accountBalance * stopLossRatio;
-
-        // Price Distance = LossAmount / (Size * LotSize)
-        const priceDiff = lossAmount / (size * lotSize);
-
-        let unroundedStopPrice: number;
-        if (direction === TRADING.BUY_DIRECTION) {
-            unroundedStopPrice = entryPrice - priceDiff;
-        } else {
-            unroundedStopPrice = entryPrice + priceDiff;
-        }
-
-        const stopLevel = roundPrice(unroundedStopPrice, decimalPlaces);
-
-        // 4. Set Profit Level to the User's Target Price (Click location)
         const profitLevel = roundPrice(targetPrice, decimalPlaces);
+
+        const marginRequired = (size * lotSize * entryPrice) / userLeverage;
+        const potentialLoss = accountBalance * TRADING.STOP_LOSS_RATIO;
 
         return {
             size,
             stopLevel,
             profitLevel,
             marginRequired,
-            potentialLoss: lossAmount,
+            potentialLoss,
             direction,
             entryPrice
         };
+    }
+
+    private calculatePositionSize(
+        market: MarketDetailsResponse,
+        balance: number,
+        leverage: number,
+        price: number
+    ): number | null {
+        const lotSize = market.instrument.lotSize || 1;
+        const rules = market.dealingRules;
+
+        const rawSize = (balance * leverage) / (lotSize * price);
+        const steppedSize = roundDownToStep(rawSize, rules.minSizeIncrement.value);
+
+        const cappedSize = Math.min(steppedSize, rules.maxDealSize.value);
+
+        if (cappedSize < rules.minDealSize.value) {
+            return null;
+        }
+
+        return cappedSize;
+    }
+
+    private calculateRiskBasedStopLevel(
+        entryPrice: number,
+        direction: Direction,
+        size: number,
+        lotSize: number,
+        balance: number,
+        decimalPlaces: number
+    ): number {
+        const allowedLossAmount = balance * TRADING.STOP_LOSS_RATIO;
+        const priceDistance = allowedLossAmount / (size * lotSize);
+
+        const unroundedStopPrice = direction === TRADING.BUY_DIRECTION
+            ? entryPrice - priceDistance
+            : entryPrice + priceDistance;
+
+        return roundPrice(unroundedStopPrice, decimalPlaces);
     }
 }
