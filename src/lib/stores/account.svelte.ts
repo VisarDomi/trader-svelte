@@ -3,15 +3,13 @@ import { getSyncedAccounts, switchAccount } from '$lib/services/account.js';
 import { api } from '$lib/services/api.svelte.js';
 import { session } from '$lib/services/session.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
+import { bus } from '$lib/stores/bus.js'; // NEW
 import * as AUTH from '$lib/constants/auth.js';
 import type { Account } from '$lib/types/account.js';
 import type { URL_TYPE } from '$lib/types/url.js';
 
 export class AccountStore extends BaseStore {
-    // Active Context (Used by Chart)
     activeAccount = $state<Account | null>(null);
-
-    // Management Data (Used by Accounts Page)
     realAccounts = $state<Account[]>([]);
     demoAccounts = $state<Account[]>([]);
 
@@ -23,13 +21,28 @@ export class AccountStore extends BaseStore {
         return this.activeAccount?.balance.deposit || 0;
     }
 
+    constructor() {
+        super();
+        // Listen for trade execution to update balance instantly (optimistic)
+        // or trigger a refresh.
+        bus.on('trade:executed', () => {
+            // Note: The trade itself might reduce "available" immediately,
+            // but "deposit" changes only on close.
+            // We refresh just in case.
+            void this.refreshActive();
+        });
+
+        // Listen for position close to update realized PnL/Deposit
+        bus.on('position:closed', () => {
+            void this.pollBalanceUpdate();
+        });
+    }
+
     async init() {
         await this.refreshActive();
     }
 
     async loadAll() {
-        // Manually managing loading here because this is a complex multi-client operation
-        // that doesn't fit the simple execute() pattern of BaseStore perfectly (needs 2 clients).
         this.isLoading = true;
         this.error = "";
 
@@ -69,7 +82,6 @@ export class AccountStore extends BaseStore {
 
         if (!tokens || !client) return;
 
-        // Lightweight update, generally doesn't need full loading spinner
         try {
             const list = await getSyncedAccounts(mode, tokens, client);
             if (mode === AUTH.REAL_TYPE) this.realAccounts = list;
@@ -109,6 +121,14 @@ export class AccountStore extends BaseStore {
     updateBalance(amount: number) {
         if (this.activeAccount) {
             this.activeAccount.balance.deposit = amount;
+        }
+    }
+
+    // Moved polling logic here from PositionStore where it semantically belongs
+    private async pollBalanceUpdate() {
+        for (let i = 0; i < 5; i++) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await this.refreshActive();
         }
     }
 }

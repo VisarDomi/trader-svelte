@@ -5,6 +5,7 @@ import { session } from '$lib/services/session.js';
 import { api } from '$lib/services/api.svelte.js';
 import { notifications } from '$lib/services/notifications.svelte.js';
 import { accountStore } from './account.svelte.js';
+import { bus } from '$lib/stores/bus.js'; // NEW: Event Bus
 import * as TRADING from '$lib/constants/trading.js';
 import type { PositionResponse } from '$lib/types/trading.js';
 
@@ -15,6 +16,14 @@ export class PositionStore extends BaseStore {
 
     private epic = "";
 
+    constructor() {
+        super();
+        // NEW: Listen for trades to update state immediately without a fetch
+        bus.on('trade:executed', (pos) => {
+            this.set(pos);
+        });
+    }
+
     async init(epic: string) {
         this.epic = epic;
         await this.refresh();
@@ -24,7 +33,6 @@ export class PositionStore extends BaseStore {
         const client = this.getClient();
         if (!client) return;
 
-        // We use execute() but handle the result manually since we need to parse lists
         await this.execute(async () => {
             const list = await getPositions(client);
 
@@ -54,7 +62,7 @@ export class PositionStore extends BaseStore {
         if (!this.anyActivePosition) return;
 
         this.isClosing = true;
-        const client = api.getOrThrow(); // Or use this.getClient() but we want to throw here?
+        const client = api.getOrThrow();
 
         try {
             const p = this.anyActivePosition.position;
@@ -78,7 +86,8 @@ export class PositionStore extends BaseStore {
             this.activePosition = null;
             this.anyActivePosition = null;
 
-            void this.pollBalanceUpdate();
+            // Emit close event so AccountStore can update balance
+            bus.emit('position:closed', { dealId: p.dealId, pnl: 0 }); // PnL 0 placeholder, account refresh handles true value
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -111,13 +120,6 @@ export class PositionStore extends BaseStore {
         } catch (e) {
             console.error("Failed to auto-correct SL", e);
             notifications.error("Risk Manager: Failed to update SL");
-        }
-    }
-
-    private async pollBalanceUpdate() {
-        for (let i = 0; i < 10; i++) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await accountStore.refreshActive();
         }
     }
 }

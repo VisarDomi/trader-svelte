@@ -3,14 +3,15 @@ import { api } from '$lib/services/api.svelte.js';
 import { TradePlanner, type PlannedTrade } from '$lib/domain/trade/TradePlanner.js';
 import { TradeExecutor } from '$lib/domain/trade/TradeExecutor.js';
 import { MarketMapper } from '$lib/domain/market/MarketMapper.js';
+import { bus } from '$lib/stores/bus.js'; // NEW: Event Bus
 
 import * as TRADING from '$lib/constants/trading.js';
 import type { Direction, PositionResponse, PositionBody } from '$lib/types/trading.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
 
 import { accountStore } from './account.svelte.js';
-import { positionStore } from './position.svelte.js';
 import { marketStore } from './market.svelte.js';
+// REMOVED: import { positionStore } from './position.svelte.js';
 
 interface TradeDraft {
     direction: Direction;
@@ -135,13 +136,15 @@ export class TradeStore {
 
             this.cancel();
 
-            positionStore.set(result);
-            accountStore.updateBalance(snapshotBalance);
+            // NEW: Emit event instead of modifying other stores directly
+            bus.emit('trade:executed', result);
 
             return result;
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
+            // NEW: Emit failure event
+            bus.emit('trade:failed', { reason: msg });
             notifications.error(msg);
             return null;
         } finally {
