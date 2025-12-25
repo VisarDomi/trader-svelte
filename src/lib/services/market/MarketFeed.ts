@@ -4,7 +4,6 @@ import type { SessionTokens } from '$lib/types/auth.js';
 import type { QuoteMessage, ChartCandle } from '$lib/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
 
-// Interface carries the mutable live references and the immutable completed copies
 export interface FeedUpdate {
     bid: number;
     offer: number;
@@ -43,35 +42,20 @@ export class MarketFeed {
         }
     }
 
-    /**
-     * Merges authoritative external data (REST) into the live aggregators.
-     */
     mergeExternalData(bidCandle: ChartCandle | null, askCandle: ChartCandle | null) {
         if (bidCandle) this.bidAgg.merge(bidCandle);
         if (askCandle) this.askAgg.merge(askCandle);
 
-        // Immediately emit an update to reflect the merge on the chart
-        this.onUpdate({
-            bid: bidCandle?.close || 0, // Fallback if no ticks yet
-            offer: askCandle?.close || 0,
-            completedBid: null,
-            completedAsk: null,
-            liveBid: this.bidAgg.getLiveCandle(),
-            liveAsk: this.askAgg.getLiveCandle()
-        });
+        this.emitSnapshot();
     }
 
     private processMessage(msg: QuoteMessage) {
         const p = msg.payload;
+        const time = this.calculateMinuteTimestamp(p.timestamp);
 
-        // Round timestamp to minute floor
-        const time = (Math.floor(p.timestamp / 1000 / 60) * 60) as UTCTimestamp;
-
-        // 1. Process Aggregation (Mutates internal state, returns copy only if closed)
         const completedBid = this.bidAgg.processTick(p.bid, time);
         const completedAsk = this.askAgg.processTick(p.ofr, time);
 
-        // 2. Emit result
         this.onUpdate({
             bid: p.bid,
             offer: p.ofr,
@@ -80,5 +64,23 @@ export class MarketFeed {
             liveBid: this.bidAgg.getLiveCandle(),
             liveAsk: this.askAgg.getLiveCandle()
         });
+    }
+
+    private emitSnapshot() {
+        const liveBid = this.bidAgg.getLiveCandle();
+        const liveAsk = this.askAgg.getLiveCandle();
+
+        this.onUpdate({
+            bid: liveBid?.close || 0,
+            offer: liveAsk?.close || 0,
+            completedBid: null,
+            completedAsk: null,
+            liveBid,
+            liveAsk
+        });
+    }
+
+    private calculateMinuteTimestamp(ms: number): UTCTimestamp {
+        return (Math.floor(ms / 1000 / 60) * 60) as UTCTimestamp;
     }
 }
