@@ -126,9 +126,9 @@ class FeeLinePaneView implements IPrimitivePaneView {
     }
 }
 
-export class FeeLinePrimitive implements ISeriesPrimitive<Time> {
+export class FeeLinePrimitive implements ISeriesPrimitive {
     public chart: SeriesAttachedParameter['chart'] | null = null;
-    private _paneViews: FeeLinePaneView[] = [];
+    private readonly _paneViews: FeeLinePaneView[] = [];
 
     constructor(
         public timestamp: number | null,
@@ -146,7 +146,7 @@ export class FeeLinePrimitive implements ISeriesPrimitive<Time> {
 
     // --- ISeriesPrimitive Implementation ---
 
-    attached(param: SeriesAttachedParameter<Time>): void {
+    attached(param: SeriesAttachedParameter): void {
         this.chart = param.chart;
     }
 

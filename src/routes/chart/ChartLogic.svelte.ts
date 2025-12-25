@@ -1,7 +1,6 @@
 import { viewport } from '$lib/services/viewport.svelte.js';
 import * as TRADING from '$lib/constants/trading.js';
 import * as STORAGE from '$lib/constants/storage.js';
-import { notifications } from '$lib/services/notifications.svelte.js';
 
 import { ChartController, type ViewState } from './ChartController.js';
 import { ChartUI } from './ChartUI.svelte.js';
@@ -18,7 +17,6 @@ import type { PositionStore } from '$lib/stores/position.svelte.js';
 import type { TradeStore } from '$lib/stores/trade.svelte.js';
 import type { SessionManager } from '$lib/services/session.js';
 import type { MarketDetailsResponse } from '$lib/types/market.js';
-import type { UTCTimestamp } from 'lightweight-charts';
 
 export class ChartLogic {
     layout = new ChartUI(viewport);
@@ -158,6 +156,10 @@ export class ChartLogic {
 
     // --- Feature: Zoom Persistence ---
 
+    private getStorageKey(): string {
+        return `${STORAGE.CHART_STATE_KEY}_${this.currentEpic}`;
+    }
+
     private scheduleSaveZoom() {
         if (this.saveTimeout) clearTimeout(this.saveTimeout);
         this.saveTimeout = setTimeout(() => this.saveZoom(), 500);
@@ -169,7 +171,7 @@ export class ChartLogic {
 
         const state = this.controller.getViewState();
         if (state) {
-            localStorage.setItem(STORAGE.CHART_STATE_KEY, JSON.stringify(state));
+            localStorage.setItem(this.getStorageKey(), JSON.stringify(state));
         }
     };
 
@@ -178,7 +180,7 @@ export class ChartLogic {
      */
     private restoreZoom(): boolean {
         if (typeof window === 'undefined') return false;
-        const raw = localStorage.getItem(STORAGE.CHART_STATE_KEY);
+        const raw = localStorage.getItem(this.getStorageKey());
         if (raw) {
             try {
                 // Restore using Center/Span logic
@@ -196,7 +198,7 @@ export class ChartLogic {
 
     resetChartZoom() {
         this.controller.resetZoom();
-        localStorage.removeItem(STORAGE.CHART_STATE_KEY);
+        localStorage.removeItem(this.getStorageKey());
     }
 
     // --- Trade Logic ---
@@ -231,7 +233,7 @@ export class ChartLogic {
         let hitTP = false;
         if (pos.profitLevel) hitTP = isBuy ? currentPrice >= pos.profitLevel : currentPrice <= pos.profitLevel;
 
-        if (hitSL || hitTP) this.runBurstCheck();
+        if (hitSL || hitTP) void this.runBurstCheck();
     }
 
     private async runBurstCheck() {
@@ -253,7 +255,7 @@ export class ChartLogic {
             // Feature: Mid-Minute History Sync
             if (sec >= 30 && sec <= 32 && this.lastSyncMinute !== now.getMinutes()) {
                 this.lastSyncMinute = now.getMinutes();
-                this.marketStore.syncHistory();
+                void this.marketStore.syncHistory();
             }
 
             // General background sync

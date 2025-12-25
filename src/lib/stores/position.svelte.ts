@@ -96,7 +96,7 @@ export class PositionStore {
             this.anyActivePosition = null;
 
             // Trigger poll burst to catch balance update
-            this.pollBalanceUpdate();
+            void this.pollBalanceUpdate();
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
