@@ -89,8 +89,18 @@ export class InstrumentFormatter {
         zone: string,
         buckets: BucketMap
     ) {
-        let startDt = DateTime.fromFormat(`${refDateStr} ${startStr}`, 'yyyy-MM-dd HH:mm', { zone });
-        let endDt = DateTime.fromFormat(`${refDateStr} ${endStr}`, 'yyyy-MM-dd HH:mm', { zone });
+        // Fix: Truncate seconds if present (e.g. "06:00:03" -> "06:00") to satisfy Luxon format
+        const cleanStart = startStr.length > 5 ? startStr.substring(0, 5) : startStr;
+        const cleanEnd = endStr.length > 5 ? endStr.substring(0, 5) : endStr;
+
+        const fullStartStr = `${refDateStr} ${cleanStart}`;
+        const fullEndStr = `${refDateStr} ${cleanEnd}`;
+        const format = 'yyyy-MM-dd HH:mm';
+
+        let startDt = DateTime.fromFormat(fullStartStr, format, { zone });
+        let endDt = DateTime.fromFormat(fullEndStr, format, { zone });
+
+        if (!startDt.isValid || !endDt.isValid) return;
 
         if (endDt <= startDt) endDt = endDt.plus({ days: 1 });
 
