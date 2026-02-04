@@ -29,22 +29,34 @@ export class CurrentPrice implements Types {
         const position = context.activePosition;
         const currentPrice = context.currentPrice;
 
-        // If no position or invalid price, hide line/reset title
+        // --- MODE 1: DEFAULT (No Position) ---
+        // Restore standard chart behavior: Native line ON, Custom line OFF
         if (!position || currentPrice === 0) {
-            this.clear();
-            // Reset series title to default
+            this.clearCustomLine();
+
             this.series.applyOptions({
-                priceLineVisible: false,
-                title: BASE_SERIES_TITLE
+                priceLineVisible: true,
+                lastValueVisible: true,
+                title: BASE_SERIES_TITLE // Show "Current Price"
             });
             return;
         }
+
+        // --- MODE 2: ACTIVE TRADING ---
+        // Hide standard chart behavior: Native line OFF, Custom line ON
+
+        // 1. Hide Native Line & Label
+        this.series.applyOptions({
+            priceLineVisible: false,
+            lastValueVisible: false,
+            title: "" // Clear title so it doesn't overlap or show in legend
+        });
 
         const body = position.position;
         const initialBalance = body.initialBalance || 0;
         const isLandscape = context.viewportWidth > context.viewportHeight;
 
-        // Calculate Data
+        // 2. Calculate Custom Data
         const data = calculateCurrentPriceLine(
             body,
             currentPrice,
@@ -54,14 +66,7 @@ export class CurrentPrice implements Types {
             isLandscape
         );
 
-        // Update Series Options
-        this.series.applyOptions({
-            priceLineVisible: true,
-            priceLineColor: data.color,
-            title: data.title
-        });
-
-        // Draw the line
+        // 3. Draw Custom Line
         if (this.line) {
             this.line.applyOptions({
                 price: data.price,
@@ -81,11 +86,11 @@ export class CurrentPrice implements Types {
     }
 
     destroy(): void {
-        this.clear();
+        this.clearCustomLine();
         this.series = null;
     }
 
-    private clear() {
+    private clearCustomLine() {
         if (this.series && this.line) {
             this.series.removePriceLine(this.line);
             this.line = null;
