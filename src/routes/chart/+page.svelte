@@ -1,16 +1,16 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { ChartLogic } from './ChartLogic.svelte.js';
-    import TopBar from './TopBar.svelte';
-    import Overlay from './Overlay.svelte';
-    import TradePopup from './TradePopup.svelte';
-    import * as CHART_CONST from '$lib/constants/chart.js';
+    import { ChartLogic } from '$lib/modules/chart/core/ChartLogic.svelte.js';
+    import TopBar from '$lib/modules/chart/components/TopBar.svelte';
+    import ChartOverlay from '$lib/modules/chart/components/ChartOverlay.svelte';
+    import TradePopup from '$lib/modules/trading/components/TradePopup.svelte';
+    import * as CHART_CONST from '$lib/shared/constants/chart.js';
 
-    import { tradeManager } from '$lib/stores/trade.svelte.js';
-    import { marketStore } from '$lib/stores/market.svelte.js';
-    import { accountStore } from '$lib/stores/account.svelte.js';
-    import { positionStore } from '$lib/stores/position.svelte.js';
-    import { session } from '$lib/services/session.js';
+    import { tradeManager } from '$lib/modules/trading/stores/TradeStore.svelte.js';
+    import { marketStore } from '$lib/modules/market/stores/MarketStore.svelte.js';
+    import { accountStore } from '$lib/modules/trading/stores/AccountStore.svelte.js';
+    import { positionStore } from '$lib/modules/trading/stores/PositionStore.svelte.js';
+    import { session } from '$lib/modules/core/services/SessionManager.js';
 
     let chartContainer: HTMLDivElement;
 
@@ -32,7 +32,7 @@
 </script>
 
 <TopBar layout={logic.layout} />
-<Overlay overlay={logic.overlay} />
+<ChartOverlay overlay={logic.overlay} />
 
 <TradePopup
         isOpen={tradeManager.isPlanning}

@@ -1,8 +1,8 @@
 <script lang="ts">
     import '$lib/styles.css';
-    import { viewport } from '$lib/services/viewport.svelte.js';
-    import { startRestHeartbeat } from '$lib/services/auth.js';
-    import ToastContainer from '$lib/components/ToastContainer.svelte';
+    import { viewport } from '$lib/modules/core/services/ViewportService.svelte.js';
+    import { startRestHeartbeat } from '$lib/modules/auth/services/AuthService.js';
+    import ToastContainer from '$lib/ui/ToastContainer.svelte';
     import { onMount, onDestroy } from 'svelte';
 
     let { children } = $props();

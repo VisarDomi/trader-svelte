@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import * as API from '$lib/constants/api.js';
+import * as API from '$lib/shared/constants/api.js';
 
 export const PUT: RequestHandler = async ({ request }) => {
     const body = await request.json();

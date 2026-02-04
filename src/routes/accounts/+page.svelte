@@ -1,12 +1,12 @@
 <script lang="ts">
     import { onMount, tick } from 'svelte';
     import { page } from '$app/state';
-    import { accountStore } from '$lib/stores/account.svelte.js';
-    import { session } from '$lib/services/session.js';
-    import * as AUTH from '$lib/constants/auth.js';
+    import { accountStore } from '$lib/modules/trading/stores/AccountStore.svelte.js';
+    import { session } from '$lib/modules/core/services/SessionManager.js';
+    import * as AUTH from '$lib/shared/constants/auth.js';
 
-    import AccountCard from '$lib/components/AccountCard.svelte';
-    import type { Account } from '$lib/types/account.js';
+    import AccountCard from '$lib/modules/trading/components/AccountCard.svelte';
+    import type { Account } from '$lib/shared/types/account.js';
 
     onMount(async () => {
         await accountStore.loadAll();

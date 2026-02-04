@@ -1,0 +1,107 @@
+import { goto } from '$app/navigation';
+import { getMarketDetails } from '$lib/modules/market/services/MarketApiService.js';
+import { api } from '$lib/modules/core/services/ApiService.svelte.js';
+import * as AUTH from '$lib/shared/constants/auth.js';
+import * as TRADING from '$lib/shared/constants/trading.js';
+
+import type { AccountStore } from '$lib/modules/trading/stores/AccountStore.svelte.js';
+import type { PositionStore } from '$lib/modules/trading/stores/PositionStore.svelte.js';
+import type { SessionManager } from '$lib/modules/core/services/SessionManager.js';
+import type { ChartLogic } from '$lib/modules/chart/core/ChartLogic.svelte.js';
+
+export class ChartOverlay {
+    isOpen = $state(false);
+    marketName = $state('');
+
+    constructor(
+        private readonly accountStore: AccountStore,
+        private readonly positionStore: PositionStore,
+        private readonly session: SessionManager,
+        private readonly chartLogic: ChartLogic
+    ) {}
+
+    // --- Derived View State ---
+
+    // 1. Theme / Border Color based on Mode
+    get modeColor() {
+        return this.session.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350';
+    }
+
+    // 2. Account Information
+    get hasActiveAccount() {
+        return !!this.accountStore.activeAccount;
+    }
+
+    get accountName() {
+        return this.accountStore.activeAccount?.accountName ?? '—';
+    }
+
+    get accountBalanceDisplay() {
+        const a = this.accountStore.activeAccount;
+        if (!a) return '—';
+        return `${a.symbol}${a.balance.deposit.toFixed(2)}`;
+    }
+
+    get currentMode() {
+        return this.session.mode;
+    }
+
+    // 3. Position Information
+    get hasPosition() {
+        return !!this.positionStore.anyActivePosition;
+    }
+
+    get positionDirection() {
+        return this.positionStore.anyActivePosition?.position.direction ?? '';
+    }
+
+    get positionSize() {
+        return this.positionStore.anyActivePosition?.position.size ?? 0;
+    }
+
+    get positionColor() {
+        const dir = this.positionStore.anyActivePosition?.position.direction;
+        return dir === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350';
+    }
+
+    // --- Actions ---
+
+    async init(epic: string) {
+        const client = api.client;
+        if (client) {
+            try {
+                const md = await getMarketDetails(client, epic);
+                this.marketName = md.instrument.name;
+            } catch {
+                this.marketName = epic;
+            }
+        }
+    }
+
+    toggle() {
+        this.isOpen = !this.isOpen;
+    }
+
+    resetChart() {
+        this.chartLogic.resetChartZoom();
+    }
+
+    // Navigation Actions
+    navToInstrument() {
+        void goto('/instrument');
+    }
+
+    navToAccounts() {
+        const activeId = this.accountStore.activeAccount?.accountId;
+        const url = activeId ? `/accounts#${activeId}` : '/accounts';
+        void goto(url);
+    }
+
+    navToPosition() {
+        void goto('/position');
+    }
+
+    destroy() {
+        // No explicit cleanup needed
+    }
+}

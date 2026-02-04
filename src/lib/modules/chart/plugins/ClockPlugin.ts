@@ -1,0 +1,1 @@
+// show seconds on the bottom right

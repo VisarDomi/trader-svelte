@@ -1,11 +1,11 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { session } from '$lib/services/session.js';
-    import { positionStore } from '$lib/stores/position.svelte.js';
-    import { accountStore } from '$lib/stores/account.svelte.js';
+    import { session } from '$lib/modules/core/services/SessionManager.js';
+    import { positionStore } from '$lib/modules/trading/stores/PositionStore.svelte.js';
+    import { accountStore } from '$lib/modules/trading/stores/AccountStore.svelte.js';
 
-    import AccountCard from '$lib/components/AccountCard.svelte';
-    import PositionCard from '$lib/components/position/PositionCard.svelte';
+    import AccountCard from '$lib/modules/trading/components/AccountCard.svelte';
+    import PositionCard from '$lib/modules/trading/components/PositionCard.svelte';
 
     let pollInterval: ReturnType<typeof setInterval>;
 
