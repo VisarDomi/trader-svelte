@@ -24,7 +24,8 @@ export type AppStatus =
     | 'READY'        // App is interactive
     | 'BACKGROUND'   // Tab hidden / Phone locked
     | 'RECONNECTING' // Recovering from freeze/network drop
-    | 'OFFLINE';     // No internet
+    | 'OFFLINE'      // No internet
+    | 'UNAUTHENTICATED'; // User needs to login
 
 class AppEngine {
     // Reactive State
@@ -65,6 +66,10 @@ class AppEngine {
             await authStore.validateSession();
         } catch (e) {
             console.warn('[AppEngine] Auth failed, redirecting to login', e);
+
+            // Mark as unauthenticated so HydrationGate lifts the curtain
+            this.status = 'UNAUTHENTICATED';
+
             await goto('/login');
             return;
         }
@@ -98,6 +103,9 @@ class AppEngine {
         } catch (e) {
             console.error('[AppEngine] Data load failed', e);
             notifications.error('Failed to load account data');
+            // Even if data load fails, we are technically authenticated, just broken state.
+            // We set READY so UI renders (showing errors) instead of sticking on Loading.
+            this.status = 'READY';
         }
     }
 
@@ -135,6 +143,8 @@ class AppEngine {
         } catch (e) {
             console.error('[AppEngine] Reconnect failed', e);
             notifications.error('Reconnection failed. Please reload.');
+            // If reconnect fails hard (e.g. session dead), maybe redirect?
+            // For now, we leave it in RECONNECTING or user hits refresh.
         }
     }
 
