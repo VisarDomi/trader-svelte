@@ -1,8 +1,8 @@
 <script lang="ts">
     import '$lib/styles.css';
     import { onMount, onDestroy } from 'svelte';
-    import { appEngine } from '$lib/modules/core/AppEngine.svelte.js';
-    import ToastContainer from '$lib/ui/ToastContainer.svelte';
+    import { appEngine } from '$lib/core/AppEngine.svelte.js';
+    import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
 
     let { children } = $props();
 

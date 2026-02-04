@@ -1,12 +1,12 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { page } from '$app/state';
-    import { preferencesStore } from '$lib/modules/trading/stores/PreferencesStore.svelte.js';
+    import { preferencesStore } from '$lib/domains/trading/stores/PreferencesStore.svelte.js';
     import * as AUTH from '$lib/shared/constants/auth.js';
     import type { URL_TYPE } from '$lib/shared/types/url.js';
 
-    import AccountCard from '$lib/modules/trading/components/AccountCard.svelte';
-    import LeverageGrid from '$lib/modules/trading/components/LeverageGrid.svelte';
+    import AccountCard from '$lib/domains/trading/components/AccountCard.svelte';
+    import LeverageGrid from '$lib/domains/trading/components/LeverageGrid.svelte';
 
     onMount(() => {
         const type = page.url.searchParams.get('type') as URL_TYPE | null;

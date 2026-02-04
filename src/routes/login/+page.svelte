@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
-    import { authStore } from '$lib/modules/auth/stores/AuthStore.svelte.js';
+    import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 
     onMount(() => {
         authStore.init();

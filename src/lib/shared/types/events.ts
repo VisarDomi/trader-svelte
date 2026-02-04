@@ -1,5 +1,5 @@
 import type { PositionResponse } from "$lib/shared/types/trading.js";
-import type { NotificationType } from "$lib/modules/core/services/NotificationService.svelte.js";
+import type { NotificationType } from "$lib/core/services/NotificationService.svelte.js";
 
 /**
  * Central definition of all Application Events.

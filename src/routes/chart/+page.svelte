@@ -1,13 +1,13 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { ChartLogic } from '$lib/modules/chart/core/ChartLogic.svelte.js';
-    import TopBar from '$lib/modules/chart/components/TopBar.svelte';
-    import Overlay from '$lib/modules/chart/components/ChartOverlay.svelte';
-    import TradePopup from '$lib/modules/trading/components/TradePopup.svelte';
+    import { ChartLogic } from '$lib/features/chart-orchestration/ChartLogic.svelte.js';
+    import TopBar from '$lib/components/chart-engine/TopBar.svelte';
+    import ChartHud from '$lib/features/chart-hud/ChartHud.svelte';
+    import TradePopup from '$lib/features/trade-execution/TradePopup.svelte';
     import * as CHART_CONST from '$lib/shared/constants/chart.js';
 
     // Singletons for template binding
-    import { tradeManager } from '$lib/modules/trading/stores/TradeStore.svelte.js';
+    import { tradeManager } from '$lib/domains/trading/stores/TradeStore.svelte.js';
 
     // We instantiate logic without args now
     const logic = new ChartLogic();
@@ -24,7 +24,7 @@
 </script>
 
 <TopBar layout={logic.layout} />
-<Overlay overlay={logic.overlay} />
+<ChartHud overlay={logic.overlay} />
 
 <TradePopup
         isOpen={tradeManager.isPlanning}

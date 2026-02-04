@@ -1,8 +1,8 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
-    import { instrumentStore } from '$lib/modules/market/stores/InstrumentStore.svelte.js';
-    import InstrumentCard from '$lib/modules/market/components/InstrumentCard.svelte';
+    import { instrumentStore } from '$lib/domains/market/stores/InstrumentStore.svelte.js';
+    import InstrumentCard from '$lib/domains/market/components/InstrumentCard.svelte';
 
     onMount(() => {
         instrumentStore.load();

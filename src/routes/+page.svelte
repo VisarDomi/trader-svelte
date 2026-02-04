@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
-    import { authenticateAndStoreSession } from "$lib/modules/auth/services/AuthService.js";
+    import { authenticateAndStoreSession } from "$lib/domains/auth/services/AuthService.js";
     onMount(async () => {
         try {
             await authenticateAndStoreSession();

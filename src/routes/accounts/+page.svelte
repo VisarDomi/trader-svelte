@@ -1,11 +1,11 @@
 <script lang="ts">
     import { onMount, tick } from 'svelte';
     import { page } from '$app/state';
-    import { accountStore } from '$lib/modules/trading/stores/AccountStore.svelte.js';
-    import { session } from '$lib/modules/core/services/SessionManager.js';
+    import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
+    import { session } from '$lib/core/services/SessionManager.js';
     import * as AUTH from '$lib/shared/constants/auth.js';
 
-    import AccountCard from '$lib/modules/trading/components/AccountCard.svelte';
+    import AccountCard from '$lib/domains/trading/components/AccountCard.svelte';
     import type { Account } from '$lib/shared/types/account.js';
 
     onMount(async () => {
