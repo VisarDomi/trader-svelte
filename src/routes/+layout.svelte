@@ -3,6 +3,7 @@
     import { onMount, onDestroy } from 'svelte';
     import { appEngine } from '$lib/core/AppEngine.svelte.js';
     import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
+    import HydrationGate from '$lib/components/ui/HydrationGate.svelte';
 
     let { children } = $props();
 
@@ -31,8 +32,8 @@
     <title>Moon Tendies</title>
 </svelte:head>
 
-<!-- We could add a global loading spinner here if appEngine.status === 'BOOTING' -->
-
-{@render children()}
+<HydrationGate>
+    {@render children()}
+</HydrationGate>
 
 <ToastContainer />
