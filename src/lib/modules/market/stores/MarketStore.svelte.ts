@@ -1,7 +1,6 @@
 import { BaseStore } from '$lib/modules/core/stores/BaseStore.svelte.js';
 import { MarketRepository } from '../repositories/MarketRepository.ts';
 import { MarketFeed, type FeedUpdate } from '../services/MarketFeed.ts';
-import { api } from '$lib/modules/core/services/ApiService.svelte.js';
 import { session } from '$lib/modules/core/services/SessionManager.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { ChartData } from '$lib/shared/types/trading.js';
