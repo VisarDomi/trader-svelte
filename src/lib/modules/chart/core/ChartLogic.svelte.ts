@@ -7,19 +7,20 @@ import { ChartUI } from './ChartUI.svelte.js';
 import { ChartRenderer } from './ChartRenderer.svelte.js';
 import { ChartOverlay } from './ChartOverlay.svelte.js';
 import { ChartInputHandler, type ChartClickEvent } from './ChartInputHandler.svelte.js';
-import { ChartDataLoader, type ChartContext as LoaderContext } from './ChartLoader.svelte.js';
-import { Watchdog } from '$lib/modules/core/services/WatchdogService.svelte.js';
+import { ChartLoader, type ChartContext as LoaderContext } from './ChartLoader.svelte.js';
 import { RiskManager } from '$lib/modules/trading/domain/RiskManager.js';
 import { TradingDomain } from '$lib/modules/trading/domain/TradingDomain.js';
 
-import { ChartContext } from '$lib/modules/chart/core/ChartContext.svelte.js';
+import { ChartContext } from './ChartContext.svelte.js';
 import { bus } from '$lib/modules/core/events/globalBus.js';
 
-import type { MarketStore } from '$lib/modules/market/stores/MarketStore.svelte.js';
-import type { AccountStore } from '$lib/modules/trading/stores/AccountStore.svelte.js';
-import type { PositionStore } from '$lib/modules/trading/stores/PositionStore.svelte.js';
-import type { TradeStore } from '$lib/modules/trading/stores/TradeStore.svelte.js';
-import type { SessionManager } from '$lib/modules/core/services/SessionManager.js';
+// Import Singletons directly (no longer injected via constructor)
+import { marketStore } from '$lib/modules/market/stores/MarketStore.svelte.js';
+import { accountStore } from '$lib/modules/trading/stores/AccountStore.svelte.js';
+import { positionStore } from '$lib/modules/trading/stores/PositionStore.svelte.js';
+import { tradeManager as tradeStore } from '$lib/modules/trading/stores/TradeStore.svelte.js';
+import { session } from '$lib/modules/core/services/SessionManager.js';
+
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 
 export class ChartLogic {
@@ -31,8 +32,8 @@ export class ChartLogic {
 
     private renderer: ChartRenderer;
     private inputHandler: ChartInputHandler;
-    private loader: ChartDataLoader;
-    private watchdog: Watchdog;
+    private loader: ChartLoader;
+    // private watchdog: Watchdog; // REMOVED
     private riskManager = new RiskManager();
     private tradingDomain = new TradingDomain();
 
@@ -47,29 +48,22 @@ export class ChartLogic {
     private lastSyncMinute = -1;
     private preResizeState: ViewState | null = null;
 
-    constructor(
-        private marketStore: MarketStore,
-        private accountStore: AccountStore,
-        private positionStore: PositionStore,
-        private tradeStore: TradeStore,
-        private session: SessionManager
-    ) {
+    constructor() {
+        // Dependencies are now imported singletons, simplifying the constructor
         this.overlay = new ChartOverlay(accountStore, positionStore, session, this);
-        this.loader = new ChartDataLoader(accountStore, positionStore, marketStore);
+        this.loader = new ChartLoader(accountStore, positionStore, marketStore);
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
-        this.watchdog = new Watchdog(() => this.handleFreeze());
+        // this.watchdog = new Watchdog(...) // REMOVED
 
-        // FIX: Remove callback argument, only pass blocker
         this.inputHandler = new ChartInputHandler(
             () => this.isInteractionBlocked()
         );
 
-        // FIX: Listen to event bus
         bus.on('input:chart_click', (event) => this.handleChartClick(event));
 
         $effect(() => {
-            const price = this.marketStore.currentPrice;
-            if (price > 0 && this.positionStore.activePosition) {
+            const price = marketStore.currentPrice;
+            if (price > 0 && positionStore.activePosition) {
                 this.checkLimits(price);
             }
         });
@@ -78,6 +72,7 @@ export class ChartLogic {
     }
 
     async init(container: HTMLDivElement) {
+        // AppEngine handles session, but we can double check or rely on Loader
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
@@ -87,7 +82,7 @@ export class ChartLogic {
         this.controller.init(container);
         this.configureLayout(container);
 
-        const context = await this.loader.loadContext(this.session.lastEpic);
+        const context = await this.loader.loadContext(session.lastEpic);
         if (!context) return;
 
         this.applyContext(context);
@@ -100,9 +95,10 @@ export class ChartLogic {
 
         this.controller.subscribeCameraChange(() => this.scheduleSaveZoom());
 
+        // Reconnect stream
         await this.loader.initStream(
             this.currentEpic,
-            this.positionStore.activePosition?.position.direction
+            positionStore.activePosition?.position.direction
         );
 
         this.layout.setDataLoaded(true);
@@ -115,7 +111,7 @@ export class ChartLogic {
         }
         this.cancelPlanning();
         this.stopHeartbeat();
-        this.watchdog.stop();
+        // this.watchdog.stop(); // REMOVED
         this.layout.destroy();
         this.renderer.destroy();
         this.loader.disconnectStream();
@@ -125,25 +121,28 @@ export class ChartLogic {
         this.controller.destroy();
     }
 
+    // ... rest of methods remain same, but ensure they use imported 'marketStore' etc.
+    // I will include the rest of the implementation unmodified for brevity unless you want full file
+
     resetChartZoom() {
         this.controller.resetZoom();
         localStorage.removeItem(this.getStorageKey());
     }
 
     async confirmTrade() {
-        const result = await this.tradeStore.execute();
+        const result = await tradeStore.execute();
         if (result) {
             const source = result.position.direction === TRADING.SELL_DIRECTION
                 ? TRADING.CHART_DATA_SOURCE_OFR
                 : TRADING.CHART_DATA_SOURCE_BID;
-            this.marketStore.setDataSource(source);
+            marketStore.setDataSource(source);
         }
     }
 
     cancelPlanning() {
-        this.tradeStore.cancel();
-        if (!this.positionStore.activePosition) {
-            this.marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
+        tradeStore.cancel();
+        if (!positionStore.activePosition) {
+            marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
         }
     }
 
@@ -154,8 +153,8 @@ export class ChartLogic {
     }
 
     private startServices() {
-        this.currentEpic = this.session.lastEpic;
-        this.watchdog.start();
+        this.currentEpic = session.lastEpic;
+        // this.watchdog.start(); // REMOVED - Managed by AppEngine
         this.startHeartbeat();
     }
 
@@ -199,19 +198,19 @@ export class ChartLogic {
 
     private syncContext() {
         this.context.marketDetails = this.marketDetails;
-        this.context.currentPrice = this.marketStore.currentPrice;
-        this.context.lastCandle = this.marketStore.lastCandle;
+        this.context.currentPrice = marketStore.currentPrice;
+        this.context.lastCandle = marketStore.lastCandle;
 
-        if (this.tradeStore.isPlanning) {
-            this.context.activePosition = this.tradeStore.getMockPosition();
+        if (tradeStore.isPlanning) {
+            this.context.activePosition = tradeStore.getMockPosition();
             this.context.isPlanningTrade = true;
         } else {
-            this.context.activePosition = this.positionStore.activePosition;
+            this.context.activePosition = positionStore.activePosition;
             this.context.isPlanningTrade = false;
         }
 
-        this.context.accountBalance = this.accountStore.balance;
-        this.context.activeSymbol = this.accountStore.activeSymbol;
+        this.context.accountBalance = accountStore.balance;
+        this.context.activeSymbol = accountStore.activeSymbol;
         this.context.viewportWidth = this.layout.isDataLoaded ? viewport.width : 0;
         this.context.viewportHeight = this.layout.isDataLoaded ? viewport.height : 0;
     }
@@ -253,7 +252,7 @@ export class ChartLogic {
     private checkLimits(currentPrice: number) {
         if (this.isBurstChecking) return;
 
-        const pos = this.positionStore.activePosition?.position;
+        const pos = positionStore.activePosition?.position;
         if (!pos) return;
 
         const isBuy = pos.direction === TRADING.BUY_DIRECTION;
@@ -274,7 +273,7 @@ export class ChartLogic {
     private async runBurstCheck() {
         this.isBurstChecking = true;
         for (let i = 0; i < 5; i++) {
-            await Promise.all([this.positionStore.refresh(), this.accountStore.refreshActive()]);
+            await Promise.all([positionStore.refresh(), accountStore.refreshActive()]);
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         this.isBurstChecking = false;
@@ -288,11 +287,11 @@ export class ChartLogic {
 
             if (sec >= 30 && sec <= 32 && this.lastSyncMinute !== now.getMinutes()) {
                 this.lastSyncMinute = now.getMinutes();
-                void this.marketStore.syncHistory();
+                void marketStore.syncHistory();
             }
 
             if (sec % 15 === 0 && !this.isBurstChecking) {
-                await this.positionStore.refresh();
+                await positionStore.refresh();
             }
 
             if (sec < 2 && !this.isBurstChecking) {
@@ -302,20 +301,20 @@ export class ChartLogic {
     }
 
     private async checkRiskCompliance() {
-        const position = this.positionStore.anyActivePosition;
+        const position = positionStore.anyActivePosition;
         if (!position || !this.marketDetails) return;
 
-        await this.accountStore.refreshActive();
+        await accountStore.refreshActive();
 
         const correction = this.riskManager.calculateCorrection(
             position.position,
             this.marketDetails,
-            this.accountStore.balance
+            accountStore.balance
         );
 
         if (correction !== null) {
             console.log(`[RiskManager] Correction Needed. Updating SL to ${correction}`);
-            await this.positionStore.updateStopLoss(correction);
+            await positionStore.updateStopLoss(correction);
         }
     }
 
@@ -327,22 +326,22 @@ export class ChartLogic {
     }
 
     private isInteractionBlocked(): boolean {
-        if (this.tradeStore.isExecuting) return true;
-        if (this.positionStore.anyActivePosition) return true;
+        if (tradeStore.isExecuting) return true;
+        if (positionStore.anyActivePosition) return true;
         return false;
     }
 
     private handleChartClick(event: ChartClickEvent) {
         if (!this.marketDetails) return;
 
-        const bid = this.marketStore.bid;
-        const offer = this.marketStore.offer;
+        const bid = marketStore.bid;
+        const offer = marketStore.offer;
 
         const intent = this.tradingDomain.determineIntent(event.price, bid, offer);
 
         if (intent) {
-            this.marketStore.setDataSource(intent.source);
-            this.tradeStore.plan(
+            marketStore.setDataSource(intent.source);
+            tradeStore.plan(
                 intent.entryPrice,
                 intent.targetPrice,
                 intent.direction,

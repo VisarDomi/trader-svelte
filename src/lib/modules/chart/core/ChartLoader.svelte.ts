@@ -29,7 +29,7 @@ interface ChartConfiguration {
     preferences: AccountPreferences;
 }
 
-export class ChartDataLoader {
+export class ChartLoader {
 
     constructor(
         private readonly accountStore: AccountStore,
