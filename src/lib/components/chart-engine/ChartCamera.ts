@@ -11,44 +11,81 @@ export interface ViewState {
 export class ChartCamera {
     private chart: IChartApi | null = null;
 
-    // Configurable offset for "Live" view (how much empty space to the right)
-    // We calculate this in seconds roughly equivalent to pixels,
-    // or we simply use a time buffer.
-    private readonly RIGHT_OFFSET_SECONDS = 15 * 60; // 15 minutes of empty space by default
+    // Constants for "Sane" Defaults
+    private readonly DEFAULT_SPAN_SECONDS = 2 * 60 * 60; // 2 Hours
+    private readonly RIGHT_OFFSET_PERCENTAGE = 0.15; // 15% empty space on right
 
     init(chart: IChartApi) {
         this.chart = chart;
     }
 
     /**
-     * Pans the chart to the specific timestamp, keeping it near the right edge.
-     * Crucially, this IGNORES the Ghost Series data that might exist in the future.
+     * Determines if the user has scrolled significantly back into history,
+     * ignoring the Ghost Series that might exist in the future.
+     *
+     * @param anchorTime - The timestamp of the last REAL candle
      */
-    panToLive(lastCandleTime: number) {
+    isUserBrowsingHistory(anchorTime: number): boolean {
+        if (!this.chart) return false;
+
+        const range = this.chart.timeScale().getVisibleRange();
+        if (!range) return false;
+
+        // If the rightmost visible moment is older than the anchor time (minus a small buffer),
+        // the user is explicitly looking at the past.
+        // We use a 2-minute buffer to allow for slight "wiggles" at the edge.
+        const buffer = 120; // 2 minutes
+        return (range.to as number) < (anchorTime - buffer);
+    }
+
+    /**
+     * Pans the chart to the anchor time.
+     * PRESERVES current zoom level (time span), but shifts the view
+     * so the anchor is near the right edge.
+     */
+    panToLive(anchorTime: number) {
         if (!this.chart) return;
 
         const timeScale = this.chart.timeScale();
-
-        // 1. Get current zoom span (how many seconds are visible?)
         const range = timeScale.getVisibleRange();
+
+        // If range is invalid (e.g. initialization), fall back to default
         const span = range
             ? (range.to as number) - (range.from as number)
-            : 2 * 60 * 60; // Default 2 hours if unknown
+            : this.DEFAULT_SPAN_SECONDS;
 
-        // 2. Calculate target range
-        // We want 'to' to be slightly in the future relative to the candle
-        // to leave whitespace, but NOT all the way to the Ghost Series end.
-        const targetTo = lastCandleTime + this.calculateRightBuffer(span);
-        const targetFrom = targetTo - span;
+        // Calculate geometry
+        const { from, to } = this.calculateLiveRange(anchorTime, span);
 
         timeScale.setVisibleRange({
-            from: targetFrom as UTCTimestamp,
-            to: targetTo as UTCTimestamp
+            from: from as UTCTimestamp,
+            to: to as UTCTimestamp
         });
     }
 
     /**
-     * captures the current geometric state of the chart
+     * HARD RESET.
+     * Ignores current zoom/pan state.
+     * Enforces a standard 2-hour window ending at the Anchor.
+     * Fixes "Broken Reset" issue where chart stuck to 24h Ghost span.
+     */
+    resetZoom(anchorTime: number) {
+        if (!this.chart) return;
+
+        // 1. Force Time Scale to sane default
+        const { from, to } = this.calculateLiveRange(anchorTime, this.DEFAULT_SPAN_SECONDS);
+
+        this.chart.timeScale().setVisibleRange({
+            from: from as UTCTimestamp,
+            to: to as UTCTimestamp
+        });
+
+        // 2. Reset Price Scale to auto-fit the new time range
+        this.chart.priceScale('right').applyOptions({ autoScale: true });
+    }
+
+    /**
+     * Captures geometric state
      */
     getViewState(): ViewState | null {
         if (!this.chart) return null;
@@ -87,22 +124,21 @@ export class ChartCamera {
         });
     }
 
-    resetZoom(lastCandleTime: number) {
-        // Default reset behavior: just snap to live
-        this.panToLive(lastCandleTime);
-        this.chart?.priceScale('right').applyOptions({ autoScale: true });
-    }
-
     destroy() {
         this.chart = null;
     }
 
     // --- Helpers ---
 
-    private calculateRightBuffer(currentSpan: number): number {
-        // We want the whitespace to be proportional to the zoom level.
-        // e.g. 5% of the screen width.
-        return currentSpan * 0.05;
+    private calculateLiveRange(anchorTime: number, span: number) {
+        // We want empty space on the right (Ghost area) to be a percentage of the total view
+        const rightBuffer = span * this.RIGHT_OFFSET_PERCENTAGE;
+
+        // The 'to' is in the future relative to the anchor
+        const targetTo = anchorTime + rightBuffer;
+        const targetFrom = targetTo - span;
+
+        return { from: targetFrom, to: targetTo };
     }
 
     private calculateTimeState(range: IRange<Time>) {

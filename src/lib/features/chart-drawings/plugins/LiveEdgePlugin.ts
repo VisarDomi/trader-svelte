@@ -7,13 +7,19 @@ import type { ChartContext } from "$lib/features/chart-orchestration/ChartContex
 /**
  * Ensures the chart "sticks" to the live edge when new candles appear,
  * unless the user has intentionally scrolled back into history.
+ *
+ * Refactored to delegate "History Detection" to the Camera,
+ * correctly ignoring Ghost Series.
  */
 export class LiveEdgePlugin implements Types {
     id = "live_edge_sticker";
 
     private chart: IChartApi | null = null;
-    private isUserBrowsingHistory = false;
+    private isUserBrowsing = false;
     private lastTotalBars = 0;
+
+    // We need to track this locally for the event listener
+    private lastKnownAnchorTime = 0;
 
     constructor(private readonly camera: ChartCamera) {}
 
@@ -25,18 +31,24 @@ export class LiveEdgePlugin implements Types {
     update(context: ChartContext): void {
         if (!this.chart || !context.lastCandle) return;
 
+        const anchorTime = Number(context.lastCandle.time);
+        this.lastKnownAnchorTime = anchorTime;
+
         const currentTotal = marketStore.history.length;
         const hasNewData = currentTotal > this.lastTotalBars;
 
-        // If new data arrived (and it wasn't a history prepend, handled by HistoryLoader)
-        // We only care about append here (Live Data)
+        // If new data arrived (Live Tick or History Append)
         if (hasNewData) {
-            // If user is NOT browsing history, force the camera to the right
-            if (!this.isUserBrowsingHistory) {
-                // BUG FIX: Use Camera Manager to ignore Ghost Series
-                // We pan strictly to the time of the last real candle
-                this.camera.panToLive(Number(context.lastCandle.time));
+
+            // Check Camera: Is user looking at the past?
+            // This is safer than the old "distToRight" which broke with Ghost Series.
+            this.isUserBrowsing = this.camera.isUserBrowsingHistory(anchorTime);
+
+            // If NOT browsing history, snap to live.
+            if (!this.isUserBrowsing) {
+                this.camera.panToLive(anchorTime);
             }
+
             this.lastTotalBars = currentTotal;
         }
     }
@@ -49,21 +61,10 @@ export class LiveEdgePlugin implements Types {
     }
 
     private checkUserScroll = () => {
-        if (!this.chart) return;
-
-        const range = this.chart.timeScale().getVisibleLogicalRange();
-        if (!range) return;
-
-        const distToRight = (this.lastTotalBars - 1) - range.to;
-
-        // Logic:
-        // If the user is viewing the latest bar (within small tolerance), they are "Live".
-        // If they scroll back (> 2 bars), they enter "Browsing Mode".
-        if (distToRight > 2) {
-            this.isUserBrowsingHistory = true;
-        } else {
-            // Snap back to live mode if they drag to the right edge
-            this.isUserBrowsingHistory = false;
+        // We only update our local flag here. The actual "Snap" happens in update().
+        // This ensures that manual scrolling immediately flags "Browsing".
+        if (this.lastKnownAnchorTime > 0) {
+            this.isUserBrowsing = this.camera.isUserBrowsingHistory(this.lastKnownAnchorTime);
         }
     };
 }
