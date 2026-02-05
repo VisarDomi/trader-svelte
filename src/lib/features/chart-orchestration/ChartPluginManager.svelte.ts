@@ -1,6 +1,7 @@
 import type { ISeriesApi, IChartApi } from "lightweight-charts";
 import type { Types } from "$lib/components/chart-engine/types.js";
 import type { ChartContext } from "$lib/features/chart-orchestration/ChartContext.svelte.js";
+import type { ChartCamera } from "$lib/components/chart-engine/ChartCamera.js";
 
 // Stores
 import type { MarketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
@@ -26,6 +27,7 @@ export class ChartRenderer {
     private features: Types[] = [];
 
     constructor(
+        private readonly camera: ChartCamera,
         private readonly marketStore: MarketStore,
         private readonly positionStore: PositionStore,
         private readonly tradeStore: TradeStore,
@@ -36,7 +38,7 @@ export class ChartRenderer {
         this.features.push(new CurrentPrice());
         this.features.push(new Fee());
         this.features.push(new HistoryLoaderPlugin());
-        this.features.push(new LiveEdgePlugin());
+        this.features.push(new LiveEdgePlugin(this.camera)); // Pass Camera Here
         this.features.push(new ClockPlugin());
 
         // The Main Render Loop
@@ -44,7 +46,6 @@ export class ChartRenderer {
             if (!this.context || !this.series) return;
 
             // 1. Update Candles (Core Data)
-            // TODO: In Phase 3, move this to MarketCandlesFeature
             const loaded = this.context.isMarketLoaded;
             const lastCandle = this.context.lastCandle;
 
@@ -55,10 +56,6 @@ export class ChartRenderer {
                 // Live update (tick)
                 this.series.update(lastCandle);
             }
-
-            // Note: Full history set/prepend is handled via direct setData calls
-            // inside the Effect below or manually triggered logic,
-            // but normally we need an Effect watching history specifically if we want it reactive.
 
             // 2. Update Features
             for (const feature of this.features) {

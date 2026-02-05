@@ -1,6 +1,6 @@
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 
-import { ChartController, type ViewState } from '$lib/components/chart-engine/ChartController.js';
+import { ChartController, type ViewState } from '$lib/components/chart-engine/ChartController.js'; // Keep ViewState here or move import to Camera if strictly needed, but Controller doesn't export it anymore?
 import { ChartUI } from '$lib/components/chart-engine/ChartResizer.svelte.js';
 import { ChartRenderer } from '$lib/features/chart-orchestration/ChartPluginManager.svelte.js';
 import { ChartOverlay } from '$lib/features/chart-hud/ChartHudState.svelte.js';
@@ -42,13 +42,22 @@ export class ChartLogic {
 
     // Local State
     private marketDetails = $state<MarketDetailsResponse | null>(null);
-    private preResizeState: ViewState | null = null;
+    // Note: ViewState type is now likely defined in Camera, but we treat it as opaque here
+    private preResizeState: any | null = null;
     private cleanupEvents: (() => void)[] = [];
 
     constructor() {
         this.overlay = new ChartOverlay(accountStore, positionStore, session, this);
         this.loader = new ChartLoader(accountStore, positionStore, marketStore);
-        this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
+
+        // Pass the Camera to the Renderer
+        this.renderer = new ChartRenderer(
+            this.controller.camera,
+            marketStore,
+            positionStore,
+            tradeStore,
+            accountStore
+        );
 
         // Initialize Managers
         this.stateManager = new ChartStateManager(this.controller, this.layout);
@@ -168,11 +177,13 @@ export class ChartLogic {
     private configureLayout(container: HTMLDivElement) {
         this.layout.init(this.controller.chart, container, {
             onBeforeResize: () => {
-                this.preResizeState = this.controller.getViewState();
+                // Use Camera for state capture
+                this.preResizeState = this.controller.camera.getViewState();
             },
             onAfterResize: () => {
                 if (this.preResizeState) {
-                    this.controller.restoreViewState(this.preResizeState);
+                    // Use Camera for state restore
+                    this.controller.camera.restoreViewState(this.preResizeState);
                     this.preResizeState = null;
                 }
             }

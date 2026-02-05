@@ -1,6 +1,8 @@
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import type { Types } from "$lib/components/chart-engine/types.js";
+import type { ChartCamera } from "$lib/components/chart-engine/ChartCamera.js";
 import { marketStore } from "$lib/domains/market/stores/MarketStore.svelte.js";
+import type { ChartContext } from "$lib/features/chart-orchestration/ChartContext.svelte.js";
 
 /**
  * Ensures the chart "sticks" to the live edge when new candles appear,
@@ -13,13 +15,15 @@ export class LiveEdgePlugin implements Types {
     private isUserBrowsingHistory = false;
     private lastTotalBars = 0;
 
+    constructor(private readonly camera: ChartCamera) {}
+
     mount(chart: IChartApi, series: ISeriesApi<"Candlestick">): void {
         this.chart = chart;
         chart.timeScale().subscribeVisibleLogicalRangeChange(this.checkUserScroll);
     }
 
-    update(context: any): void {
-        if (!this.chart) return;
+    update(context: ChartContext): void {
+        if (!this.chart || !context.lastCandle) return;
 
         const currentTotal = marketStore.history.length;
         const hasNewData = currentTotal > this.lastTotalBars;
@@ -29,7 +33,9 @@ export class LiveEdgePlugin implements Types {
         if (hasNewData) {
             // If user is NOT browsing history, force the camera to the right
             if (!this.isUserBrowsingHistory) {
-                this.chart.timeScale().scrollToRealTime();
+                // BUG FIX: Use Camera Manager to ignore Ghost Series
+                // We pan strictly to the time of the last real candle
+                this.camera.panToLive(Number(context.lastCandle.time));
             }
             this.lastTotalBars = currentTotal;
         }

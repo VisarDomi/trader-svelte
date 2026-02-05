@@ -1,5 +1,6 @@
 import * as STORAGE from '$lib/shared/constants/storage.js';
-import type { ChartController, ViewState } from '$lib/components/chart-engine/ChartController.js';
+import type { ChartController } from '$lib/components/chart-engine/ChartController.js';
+import type { ViewState } from '$lib/components/chart-engine/ChartCamera.js'; // Updated Import
 import type { ChartUI } from '$lib/components/chart-engine/ChartResizer.svelte.js';
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 
@@ -20,16 +21,16 @@ export class ChartStateManager {
         $effect(() => {
             const hasHistory = marketStore.history.length > 0;
             const isLayoutReady = this.layout.isDataLoaded;
-
-            // Re-run if epic changes
             const epic = this.currentEpic;
 
             if (!this.isZoomRestored && hasHistory && isLayoutReady && epic) {
-                // Determine the CURRENT live time for calculation
                 const currentLastCandle = marketStore.lastCandle?.time as number | undefined;
 
                 if (!this.restoreZoom(currentLastCandle)) {
-                    this.controller.resetZoom();
+                    // Use Camera to reset
+                    if (currentLastCandle) {
+                        this.controller.camera.resetZoom(currentLastCandle);
+                    }
                 }
 
                 this.isZoomRestored = true;
@@ -46,7 +47,10 @@ export class ChartStateManager {
     }
 
     reset() {
-        this.controller.resetZoom();
+        const lastCandle = marketStore.lastCandle?.time as number | undefined;
+        if (lastCandle) {
+            this.controller.camera.resetZoom(lastCandle);
+        }
         localStorage.removeItem(this.getStorageKey());
     }
 
@@ -81,7 +85,8 @@ export class ChartStateManager {
         if (typeof window === 'undefined' || !this.currentEpic) return;
         if (!this.isZoomRestored) return;
 
-        const state = this.controller.getViewState();
+        // Use Camera for State
+        const state = this.controller.camera.getViewState();
         const lastCandle = marketStore.lastCandle;
 
         if (state && lastCandle) {
@@ -103,25 +108,20 @@ export class ChartStateManager {
             const saved: EnhancedViewState = JSON.parse(raw);
 
             // LOGIC: The "Smart Snap" Pattern
-            // If the user's center view was >= the last known data time,
-            // they were looking at the "Future" or "Live Edge".
             const wasLookingAtFuture = saved.centerTime >= saved.lastDataTimeAtSave;
 
             let targetState: ViewState = saved;
 
-            // If they were looking at the future, shift the view to the NEW Present
-            // but keep their Zoom Level (timeSpan)
             if (wasLookingAtFuture && currentLastCandleTime) {
                 targetState = {
                     ...saved,
                     centerTime: currentLastCandleTime,
-                    // We effectively slide the window to center on the new data
-                    // while preserving price scale and zoom level
                 };
             }
 
             setTimeout(() => {
-                this.controller.restoreViewState(targetState);
+                // Use Camera for Restore
+                this.controller.camera.restoreViewState(targetState);
             }, 50);
 
             return true;

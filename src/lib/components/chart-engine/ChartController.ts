@@ -5,26 +5,20 @@ import {
     type IChartApi,
     type ISeriesApi,
     type MouseEventParams,
-    type UTCTimestamp,
-    type IRange,
-    type Time
+    type UTCTimestamp
 } from 'lightweight-charts';
 import { getChartOptions, getBaseSeriesOptions } from "$lib/components/chart-engine/config.js";
 import { isIOS } from "$lib/core/utils/platform.js";
 import { viewport } from "$lib/core/services/ViewportService.svelte.js";
-import * as CHART_CONST from '$lib/shared/constants/chart.js';
-
-export interface ViewState {
-    centerTime: number;
-    timeSpan: number;
-    centerPrice: number;
-    priceSpan: number;
-}
+import { ChartCamera } from "$lib/components/chart-engine/ChartCamera.js";
 
 export class ChartController {
     private _chart: IChartApi | null = null;
     private _series: ISeriesApi<"Candlestick"> | null = null;
     private _ghostSeries: ISeriesApi<"Line"> | null = null;
+
+    // Publicly expose the Camera for Orchestrators to use
+    public readonly camera = new ChartCamera();
 
     get chart() {
         if (!this._chart) throw new Error("Chart not initialized");
@@ -50,6 +44,9 @@ export class ChartController {
         };
 
         this._chart = createChart(container, getChartOptions(config));
+
+        // Hand over the instance to the Camera
+        this.camera.init(this._chart);
     }
 
     createMainSeries(precision: number) {
@@ -80,70 +77,14 @@ export class ChartController {
         this._chart?.unsubscribeClick(handler);
     }
 
-    getViewState(): ViewState | null {
-        if (!this._chart) return null;
-
-        const timeRange = this._chart.timeScale().getVisibleRange();
-        const priceScale = this._chart.priceScale('right');
-        const priceRange = priceScale.getVisibleRange();
-
-        if (!timeRange || !priceRange) return null;
-
-        return {
-            ...this.calculateTimeState(timeRange),
-            ...this.calculatePriceState(priceRange)
-        };
-    }
-
-    restoreViewState(state: ViewState) {
-        if (!this._chart) return;
-
-        this._chart.priceScale('right').applyOptions({ autoScale: false });
-
-        const pHalf = state.priceSpan / 2;
-        this._chart.priceScale('right').setVisibleRange({
-            from: state.centerPrice - pHalf,
-            to: state.centerPrice + pHalf
-        });
-
-        const tHalf = state.timeSpan / 2;
-        this._chart.timeScale().setVisibleRange({
-            from: (state.centerTime - tHalf) as UTCTimestamp,
-            to: (state.centerTime + tHalf) as UTCTimestamp
-        });
-    }
-
-    resetZoom() {
-        if (!this._chart) return;
-
-        const timeScale = this._chart.timeScale();
-        const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
-
-        const span = this.determineZoomSpan(timeScale.getVisibleRange());
-
-        // Temporarily set range to 'now' to calculate pixel accuracy
-        timeScale.setVisibleRange({
-            from: (now - span) as UTCTimestamp,
-            to: now
-        });
-
-        const bufferSeconds = this.calculateRightEdgeBuffer(timeScale, span);
-        const finalTo = (now + bufferSeconds) as UTCTimestamp;
-
-        timeScale.setVisibleRange({
-            from: (finalTo - span) as UTCTimestamp,
-            to: finalTo
-        });
-
-        this._chart.priceScale('right').applyOptions({ autoScale: true });
-    }
-
     subscribeCameraChange(handler: () => void) {
         if (!this._chart) return;
         this._chart.timeScale().subscribeVisibleLogicalRangeChange(handler);
     }
 
     destroy() {
+        this.camera.destroy();
+
         if (this._chart) {
             this._chart.remove();
             this._chart = null;
@@ -185,43 +126,5 @@ export class ChartController {
             });
         }
         return data;
-    }
-
-    private calculateTimeState(range: IRange<Time>) {
-        const tFrom = range.from as number;
-        const tTo = range.to as number;
-        const timeSpan = tTo - tFrom;
-        const centerTime = tFrom + (timeSpan / 2);
-        return { centerTime, timeSpan };
-    }
-
-    private calculatePriceState(range: IRange<number>) {
-        const pMin = range.from;
-        const pMax = range.to;
-        const priceSpan = pMax - pMin;
-        const centerPrice = pMin + (priceSpan / 2);
-        return { centerPrice, priceSpan };
-    }
-
-    private determineZoomSpan(currentRange: IRange<Time> | null): number {
-        const defaultSpan = 2 * 60 * 60; // 2 hours
-        if (!currentRange) return defaultSpan;
-
-        const span = (currentRange.to as number) - (currentRange.from as number);
-        return span > 0 ? span : defaultSpan;
-    }
-
-    private calculateRightEdgeBuffer(timeScale: any, span: number): number {
-        const chartWidth = timeScale.width();
-        const offsetPixels = CHART_CONST.RESET_RIGHT_OFFSET_PIXELS;
-
-        const tRight = timeScale.coordinateToTime(chartWidth);
-        const tOffset = timeScale.coordinateToTime(chartWidth - offsetPixels);
-
-        if (tRight && tOffset) {
-            return (tRight as number) - (tOffset as number);
-        }
-
-        return offsetPixels * (span / chartWidth);
     }
 }
