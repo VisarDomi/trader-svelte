@@ -40,6 +40,9 @@ export class PositionStore extends BaseStore {
         if (!this.anyActivePosition) return;
 
         this.isClosing = true;
+        // Notify user immediately that the process has started
+        notifications.info("Request sent. Waiting for confirmation...");
+
         const client = api.getOrThrow();
 
         try {
