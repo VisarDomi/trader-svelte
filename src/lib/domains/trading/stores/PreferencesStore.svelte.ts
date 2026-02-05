@@ -1,5 +1,5 @@
 import { BaseStore } from '$lib/core/stores/BaseStore.svelte.js';
-import { getPreferences, updatePreferences, getSyncedAccounts, topUpAccount } from '$lib/domains/trading/services/AccountApiService.js';
+import { getPreferences, updatePreferences, getAccounts, topUpAccount } from '$lib/domains/trading/services/AccountApiService.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import { session } from '$lib/core/services/SessionManager.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
@@ -31,7 +31,7 @@ export class PreferencesStore extends BaseStore {
         await this.execute(async () => {
             const [prefs, accounts] = await Promise.all([
                 getPreferences(client),
-                getSyncedAccounts(type, tokens, client)
+                getAccounts(client)
             ]);
 
             this.data = prefs;
