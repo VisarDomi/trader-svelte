@@ -16,10 +16,25 @@
         onConfirm: () => void;
         onCancel: () => void;
     }>();
+
+    // Block all interactions from reaching the chart underneath
+    function block(e: Event) {
+        e.stopPropagation();
+    }
 </script>
 
 {#if isOpen && plannedTrade}
-    <div style="
+    <!--
+        Added handlers to block interaction bleed-through to LWC.
+        Added role and tabindex for a11y, though simplistic.
+    -->
+    <div
+            role="dialog"
+            tabindex="-1"
+            onmousedown={block}
+            onclick={block}
+            onkeydown={block}
+            style="
         position: fixed;
         top: 5rem;
         left: 50%;
@@ -35,37 +50,49 @@
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     ">
         <div style="display: flex; gap: 1rem; justify-content: center;">
-            <button
-                    onclick={onCancel}
-                    use:shield
-                    disabled={isExecuting}
-                    style="
+            {#if isExecuting}
+                <div style="
                     padding: 0.75rem 1.5rem;
-                    background: transparent;
-                    border: 1px solid #666;
-                    color: #ccc;
-                    border-radius: 4px;
-                    cursor: pointer;
-                "
-            >
-                Cancel
-            </button>
-            <button
-                    onclick={onConfirm}
-                    use:shield
-                    disabled={isExecuting}
-                    style="
-                    padding: 0.75rem 1.5rem;
-                    background: {plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'};
-                    border: none;
                     color: white;
-                    border-radius: 4px;
-                    cursor: pointer;
                     font-weight: bold;
-                "
-            >
-                {isExecuting ? '...' : 'OPEN'}
-            </button>
+                    font-size: 0.9rem;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                ">
+                    <span>WAITING FOR CONFIRMATION...</span>
+                </div>
+            {:else}
+                <button
+                        onclick={onCancel}
+                        use:shield
+                        style="
+                        padding: 0.75rem 1.5rem;
+                        background: transparent;
+                        border: 1px solid #666;
+                        color: #ccc;
+                        border-radius: 4px;
+                        cursor: pointer;
+                    "
+                >
+                    Cancel
+                </button>
+                <button
+                        onclick={onConfirm}
+                        use:shield
+                        style="
+                        padding: 0.75rem 1.5rem;
+                        background: {plannedTrade.direction === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350'};
+                        border: none;
+                        color: white;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-weight: bold;
+                    "
+                >
+                    OPEN
+                </button>
+            {/if}
         </div>
     </div>
 {/if}

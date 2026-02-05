@@ -4,12 +4,23 @@ import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { getMarketDetails } from '$lib/domains/market/services/MarketApiService.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
+import { bus } from '$lib/core/events/globalBus.js'; // Import Bus
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 
 export class RiskService {
     private manager = new RiskManager();
     private interval: ReturnType<typeof setInterval> | null = null;
     private marketDetailsCache = new Map<string, MarketDetailsResponse>();
+
+    constructor() {
+        // Immediate check upon trade execution
+        bus.on('trade:executed', () => {
+            console.log('[RiskService] Trade executed event received. Running immediate risk check.');
+            // Small delay to ensure stores are settled if necessary, though
+            // the event usually implies the position store is updated.
+            setTimeout(() => void this.checkRisk(), 100);
+        });
+    }
 
     /**
      * Starts the global risk monitor.
@@ -40,10 +51,8 @@ export class RiskService {
         let details: MarketDetailsResponse | null = null;
 
         if (marketStore.epic === position.market.epic && marketStore.isLoaded) {
-            // Best case: User is looking at the chart
-            // We can't easily access 'marketDetails' from store as it's not public there currently
-            // so we might need to fetch it or rely on a cache.
-            // For robustness, let's fetch if we don't have it cached.
+            // If we are looking at the chart, we might want to grab details,
+            // but for now we rely on the cache or fetch to be safe/consistent.
         }
 
         if (!this.marketDetailsCache.has(position.market.epic)) {
