@@ -16,6 +16,9 @@ import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js'
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 
+// Errors
+import { AuthError, NetworkError } from '$lib/core/api/ApiClient.js';
+
 export type AppStatus =
     | 'BOOTING'      // Initial page load
     | 'AUTH_CHECK'   // Validating session tokens
@@ -56,27 +59,31 @@ class AppEngine {
             authStore.init();
             await authStore.validateSession();
         } catch (e) {
-            console.warn('[AppEngine] Auth failed', e);
-            this.status = 'UNAUTHENTICATED';
-            await goto('/login');
-            return;
+            // Strict Error Handling
+            if (e instanceof AuthError) {
+                console.warn('[AppEngine] Boot Auth failed:', e.message);
+                this.status = 'UNAUTHENTICATED';
+                await goto('/login');
+                return;
+            }
+
+            // If Network/Unknown error during boot, we might be offline or flaking
+            console.warn('[AppEngine] Boot Network/Unknown error:', e);
+            // We continue to LOADING. accountStore.loadAll() will likely fail
+            // and we will handle it in the catch block below.
         }
 
         this.status = 'LOADING';
         try {
-            // Load accounts.
-            // Note: accountStore.loadAll() now handles internal reconciliation
-            // of LocalStorage preferences vs Server preferences.
             await accountStore.loadAll();
-
             this.transitionTo('READY');
             console.log('[AppEngine] Ready');
 
         } catch (e) {
             const errString = String(e);
 
-            // Check for Session Invalid/401 errors
-            if (errString.includes('invalid.session') || errString.includes('401')) {
+            // Double check for Auth errors that might have bubbled from account loading
+            if (e instanceof AuthError || errString.includes('401')) {
                 console.warn('[AppEngine] Session expired during load');
                 this.status = 'UNAUTHENTICATED';
                 await goto('/login');
@@ -84,8 +91,8 @@ class AppEngine {
             }
 
             console.error('[AppEngine] Data load failed', e);
-            notifications.error('Failed to load account data');
-            this.transitionTo('READY'); // Proceed anyway, allows manual retry
+            notifications.error('Failed to load account data. Retrying in background...');
+            this.transitionTo('READY'); // Allow UI to render partial state
         }
     }
 
@@ -116,8 +123,10 @@ class AppEngine {
         notifications.info('Connection disrupted. Reconnecting...');
 
         try {
+            // 1. Verify Session
             await authStore.validateSession();
 
+            // 2. Refresh Data
             await Promise.all([
                 accountStore.refreshActive(),
                 positionPoller.refresh()
@@ -126,8 +135,21 @@ class AppEngine {
             this.transitionTo('READY');
             notifications.success('Reconnected');
         } catch (e) {
-            console.error('[AppEngine] Reconnect failed', e);
-            notifications.error('Reconnection failed. Retrying...');
+
+            if (e instanceof AuthError) {
+                // Hard Failure: Session is definitely dead.
+                console.error('[AppEngine] Reconnect failed: Auth Error');
+                this.status = 'UNAUTHENTICATED';
+                await goto('/login');
+                return;
+            }
+
+            // Soft Failure: Network / Timeout
+            console.warn('[AppEngine] Reconnect failed: Network/Api Error. Retrying...', e);
+
+            // Exponential backoff or simple retry could go here.
+            // For now, simple retry in 3s.
+            // IMPORTANT: We do NOT logout.
             setTimeout(() => this.handleFreeze(), 3000);
         }
     }
@@ -139,10 +161,7 @@ class AppEngine {
             }
         } else {
             if (this.status === 'BACKGROUND') {
-                // Determine if we need a full reconnect or just a resume
                 this.transitionTo('READY');
-
-                // Immediately refresh vital data visually via the Poller
                 void positionPoller.refresh();
             }
         }

@@ -7,6 +7,7 @@ import type { SessionTokens, UserCredentials } from '$lib/shared/types/auth.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import * as API from '$lib/shared/constants/api.js';
+import { AuthError } from '$lib/core/api/ApiClient.js';
 
 export class AuthStore extends BaseStore {
     // Form State
@@ -52,11 +53,14 @@ export class AuthStore extends BaseStore {
     /**
      * Checks if current tokens are actually valid on the server.
      * Called by AppEngine on boot and reconnect.
+     *
+     * Throws AuthError if session is dead.
+     * Throws NetworkError if internet is dead.
      */
     async validateSession(): Promise<void> {
         // If we have no tokens at all, we can't validate.
         if (!this.realTokens && !this.demoTokens) {
-            throw new Error("No session tokens available");
+            throw new AuthError("No session tokens available");
         }
 
         // We ping the 'Active' mode to ensure connectivity
@@ -64,21 +68,29 @@ export class AuthStore extends BaseStore {
         const tokens = session.getTokens(mode);
 
         if (!tokens) {
-            throw new Error(`No tokens for active mode: ${mode}`);
+            throw new AuthError(`No tokens for active mode: ${mode}`);
         }
 
-        // Simple Ping to check if CST/SecurityToken are valid
-        // Ideally this logic moves to AuthService, but we keep it here for now to minimize file touches
         const client = api.getClientForMode(mode);
-        if (!client) throw new Error("Client initialization failed");
+        if (!client) throw new AuthError("Client initialization failed");
 
         try {
-            // The API Client throws if the response is 401
+            // The API Client throws specialized errors now
             await client.get(API.PING_ENDPOINT);
         } catch (e) {
-            // If ping fails, try to silent re-login
-            console.log("Ping failed, attempting silent refresh...");
-            await this.performLogin(mode);
+            if (e instanceof AuthError) {
+                console.log("Ping returned 401, attempting silent refresh...");
+                // Attempt silent re-login
+                try {
+                    await this.performLogin(mode);
+                    return; // Recovered successfully
+                } catch (loginErr) {
+                    // If refresh fails, bubble up the AuthError
+                    throw loginErr instanceof AuthError ? loginErr : new AuthError("Refresh failed");
+                }
+            }
+            // Bubble up NetworkError / ApiError
+            throw e;
         }
     }
 

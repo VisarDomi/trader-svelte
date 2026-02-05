@@ -4,6 +4,31 @@ import { DEFAULT_ERROR } from '$lib/shared/constants/error.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
 
+// --- Error Classes ---
+
+export class NetworkError extends Error {
+    constructor(message: string = "Network request failed") {
+        super(message);
+        this.name = "NetworkError";
+    }
+}
+
+export class AuthError extends Error {
+    constructor(message: string = "Session invalid or expired") {
+        super(message);
+        this.name = "AuthError";
+    }
+}
+
+export class ApiError extends Error {
+    constructor(public code: string, message?: string) {
+        super(message || code);
+        this.name = "ApiError";
+    }
+}
+
+// --- Client ---
+
 export class ApiClient {
     private readonly baseUrl: string;
 
@@ -31,15 +56,28 @@ export class ApiClient {
             headers[API.CONTENT_TYPE_KEY] = API.APPLICATION_JSON_CONTENT_TYPE;
         }
 
-        const response = await fetch(url, {
-            method,
-            headers,
-            body: body ? JSON.stringify(body) : undefined
-        });
+        let response: Response;
+
+        try {
+            response = await fetch(url, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : undefined
+            });
+        } catch (e) {
+            // Fetch only throws on network failure (DNS, Offline, etc), not 4xx/5xx
+            throw new NetworkError(e instanceof Error ? e.message : "Connection failed");
+        }
 
         if (!response.ok) {
+            // Handle Authentication Errors Specifically
+            if (response.status === 401 || response.status === 403) {
+                throw new AuthError();
+            }
+
+            // Handle API Logic Errors
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.errorCode || DEFAULT_ERROR);
+            throw new ApiError(errorData.errorCode || DEFAULT_ERROR);
         }
 
         return await response.json() as T;
