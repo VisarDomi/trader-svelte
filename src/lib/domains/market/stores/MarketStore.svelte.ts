@@ -2,6 +2,7 @@ import { BaseStore } from '$lib/core/stores/BaseStore.svelte.js';
 import { MarketRepository } from '$lib/domains/market/repositories/MarketRepository.js';
 import { MarketFeed, type FeedUpdate } from '$lib/domains/market/services/MarketFeed.js';
 import { session } from '$lib/core/services/SessionManager.js';
+import { appEngine } from '$lib/core/AppEngine.svelte.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { ChartData } from '$lib/shared/types/trading.js';
 import type { ChartCandle } from '$lib/shared/types/market.js';
@@ -14,7 +15,7 @@ export class MarketStore extends BaseStore {
     updateTrigger = $state(0);
     history = $state.raw<ChartCandle[]>([]);
 
-    // "isLoaded" implies data + stream ready, distinct from BaseStore "isLoading"
+    // "isLoaded" implies data + stream ready
     isLoaded = $state(false);
 
     // --- Configuration ---
@@ -33,21 +34,48 @@ export class MarketStore extends BaseStore {
         this.feed = new MarketFeed((update) => this.handleFeedUpdate(update));
     }
 
+    /**
+     * Initializes the reactive chain for connection management.
+     * MUST be called from a Component Context (e.g. ChartLogic constructor).
+     */
+    autoConnect() {
+        $effect(() => {
+            const status = appEngine.status;
+            const currentEpic = this.epic;
+            const isOnline = appEngine.isOnline;
+
+            // Explicit extraction of dependencies for Svelte 5 strictness
+            if (!currentEpic) return;
+
+            if (status === 'READY' && isOnline) {
+                // Determine if we need to connect
+                this.ensureConnection(currentEpic);
+            } else {
+                // Offline, Background, or Booting -> Cut the feed
+                this.disconnect();
+            }
+        });
+    }
+
     get currentPrice() {
         return this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.offer : this.bid;
     }
 
-    async init(epic: string, dataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID) {
-        this.resetState();
-        this.epic = epic;
+    /**
+     * Sets the target epic and loads initial history.
+     */
+    async load(epic: string, dataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID) {
+        // If switching epics, reset first
+        if (this.epic !== epic) {
+            this.resetState();
+            this.epic = epic;
+        }
+
         this.dataSource = dataSource;
 
         const client = this.getClient();
-        const tokens = session.getTokens(session.mode);
+        if (!client) return;
 
-        if (!client || !tokens) return;
-
-        // Use BaseStore execute to handle loading/error state
         await this.execute(async () => {
             const repo = new MarketRepository(client);
             const { bid, ask } = await repo.getHistory(epic);
@@ -62,13 +90,19 @@ export class MarketStore extends BaseStore {
             if (this.liveBidCandle) this.bid = this.liveBidCandle.close;
             if (this.liveAskCandle) this.offer = this.liveAskCandle.close;
 
-            // Init Feed
-            this.feed.initialize(this.liveBidCandle, this.liveAskCandle);
-            this.feed.connect(tokens, epic);
-
             this.syncViewToSource();
+
             this.isLoaded = true;
         });
+    }
+
+    private ensureConnection(epic: string) {
+        const tokens = session.getTokens(session.mode);
+        if (!tokens) return;
+
+        // Feed handles its own duplicate connection checks
+        this.feed.initialize(this.liveBidCandle, this.liveAskCandle);
+        this.feed.connect(tokens, epic);
     }
 
     async syncHistory() {
@@ -76,8 +110,6 @@ export class MarketStore extends BaseStore {
         const client = this.getClient();
         if (!client) return;
 
-        // We do NOT use this.execute() here because this runs in the background (heartbeat).
-        // Triggering global isLoading (spinner) every minute would disturb the user.
         try {
             const repo = new MarketRepository(client);
             const { bid, ask } = await repo.getHistory(this.epic);
@@ -112,7 +144,6 @@ export class MarketStore extends BaseStore {
 
     disconnect() {
         this.feed.disconnect();
-        this.isLoaded = false;
     }
 
     private resetState() {

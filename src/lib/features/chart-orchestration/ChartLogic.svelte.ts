@@ -14,7 +14,7 @@ import { TradingDomain } from '$lib/domains/trading/domain/TradingDomain.js';
 import { ChartContext } from '$lib/features/chart-orchestration/ChartContext.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 
-// Import Singletons directly (no longer injected via constructor)
+// Import Singletons directly
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
@@ -33,7 +33,6 @@ export class ChartLogic {
     private renderer: ChartRenderer;
     private inputHandler: ChartInputHandler;
     private loader: ChartLoader;
-    // private watchdog: Watchdog; // REMOVED
     private riskManager = new RiskManager();
     private tradingDomain = new TradingDomain();
 
@@ -49,15 +48,17 @@ export class ChartLogic {
     private preResizeState: ViewState | null = null;
 
     constructor() {
-        // Dependencies are now imported singletons, simplifying the constructor
         this.overlay = new ChartOverlay(accountStore, positionStore, session, this);
         this.loader = new ChartLoader(accountStore, positionStore, marketStore);
         this.renderer = new ChartRenderer(marketStore, positionStore, tradeStore, accountStore);
-        // this.watchdog = new Watchdog(...) // REMOVED
 
         this.inputHandler = new ChartInputHandler(
             () => this.isInteractionBlocked()
         );
+
+        // ACTIVATE AUTONOMOUS MARKET STORE
+        // This is valid here because ChartLogic is instantiated inside a component's script block
+        marketStore.autoConnect();
 
         bus.on('input:chart_click', (event) => this.handleChartClick(event));
 
@@ -72,7 +73,6 @@ export class ChartLogic {
     }
 
     async init(container: HTMLDivElement) {
-        // AppEngine handles session, but we can double check or rely on Loader
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
@@ -95,12 +95,6 @@ export class ChartLogic {
 
         this.controller.subscribeCameraChange(() => this.scheduleSaveZoom());
 
-        // Reconnect stream
-        await this.loader.initStream(
-            this.currentEpic,
-            positionStore.activePosition?.position.direction
-        );
-
         this.layout.setDataLoaded(true);
         void this.overlay.init(this.currentEpic);
     }
@@ -111,18 +105,13 @@ export class ChartLogic {
         }
         this.cancelPlanning();
         this.stopHeartbeat();
-        // this.watchdog.stop(); // REMOVED
         this.layout.destroy();
         this.renderer.destroy();
-        this.loader.disconnectStream();
         this.overlay.destroy();
 
         this.controller.unsubscribeClick(this.inputHandler.handleChartClick);
         this.controller.destroy();
     }
-
-    // ... rest of methods remain same, but ensure they use imported 'marketStore' etc.
-    // I will include the rest of the implementation unmodified for brevity unless you want full file
 
     resetChartZoom() {
         this.controller.resetZoom();
@@ -154,7 +143,6 @@ export class ChartLogic {
 
     private startServices() {
         this.currentEpic = session.lastEpic;
-        // this.watchdog.start(); // REMOVED - Managed by AppEngine
         this.startHeartbeat();
     }
 
@@ -349,10 +337,5 @@ export class ChartLogic {
                 this.userLeverage
             );
         }
-    }
-
-    private async handleFreeze() {
-        console.warn("Freeze detected, reloading stream...");
-        await this.loader.reconnectStream(this.currentEpic);
     }
 }

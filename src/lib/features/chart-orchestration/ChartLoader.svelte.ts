@@ -55,6 +55,17 @@ export class ChartLoader {
 
         try {
             const config = await this.fetchConfiguration(client, epic);
+
+            // Determine initial data source based on position direction
+            const activePos = this.positionStore.activePosition;
+            const direction = activePos?.position.direction;
+            const source = this.getDataSourceForDirection(direction);
+
+            // Initialize MarketStore state.
+            // Note: We do NOT connect stream here. MarketStore watches 'epic' change
+            // and AppEngine 'READY' status to connect itself.
+            await this.marketStore.load(epic, source);
+
             return this.deriveContext(epic, config);
         } catch (e) {
             console.error("Chart Context Load Failed", e);
@@ -62,22 +73,8 @@ export class ChartLoader {
         }
     }
 
-    async initStream(epic: string, activeDirection: string | undefined) {
-        const source = this.getDataSourceForDirection(activeDirection);
-        await this.marketStore.init(epic, source);
-    }
-
-    disconnectStream() {
-        this.marketStore.disconnect();
-    }
-
-    async reconnectStream(epic: string) {
-        this.disconnectStream();
-        const authorized = await this.ensureSession();
-        if (authorized) {
-            await this.marketStore.init(epic, this.marketStore.dataSource);
-        }
-    }
+    // Removed: initStream(), disconnectStream(), reconnectStream()
+    // These are no longer needed as MarketStore is autonomous.
 
     private async initializeStores(epic: string) {
         await this.accountStore.init();
