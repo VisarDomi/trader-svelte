@@ -31,7 +31,44 @@ export class ChartCamera {
     }
 
     /**
-     * Called by the system whenever new market data arrives.
+     * ATOMIC INITIALIZATION:
+     * Called strictly after MainSeries.setData() to fix the viewport immediately.
+     * Prevents the chart from jumping to the GhostSeries end.
+     */
+    initializeView(savedState: ViewState | null, liveTime: number) {
+        if (!this.chart) return;
+
+        this.lastAnchorTime = liveTime;
+
+        if (savedState) {
+            // Attempt to restore user's previous position
+            this.restoreState(savedState, liveTime);
+        } else {
+            // Default: Snap to live with default span
+            this.resetZoom(liveTime);
+        }
+    }
+
+    /**
+     * Called whenever history is prepended to the chart.
+     * Shifts the logical range so the user sees the same candles they were looking at.
+     */
+    maintainScrollPosition(barsAdded: number) {
+        if (!this.chart || barsAdded <= 0) return;
+
+        const timeScale = this.chart.timeScale();
+        const currentRange = timeScale.getVisibleLogicalRange();
+
+        if (currentRange) {
+            timeScale.setVisibleLogicalRange({
+                from: currentRange.from + barsAdded,
+                to: currentRange.to + barsAdded
+            });
+        }
+    }
+
+    /**
+     * Called by the system whenever new market data arrives (Live Tick).
      * If we are in 'Tracking Mode', we force the view to the new anchor.
      */
     updateAnchor(anchorTime: number) {
@@ -67,31 +104,6 @@ export class ChartCamera {
         this.chart.priceScale('right').applyOptions({ autoScale: true });
     }
 
-    /**
-     * Restores a saved state (e.g. from LocalStorage).
-     * Smartly decides whether to resume Tracking based on the saved position.
-     */
-    restoreState(state: ViewState, currentLiveTime: number) {
-        if (!this.chart) return;
-
-        // 1. Apply geometric state
-        this.restoreGeometry(state);
-
-        // 2. Determine Intent
-        // If the saved view was looking at the future/live-edge, resume tracking.
-        const distToLive = currentLiveTime - state.centerTime;
-        const threshold = state.timeSpan / 2;
-
-        if (distToLive < threshold) {
-            this.isTracking = true;
-            this.lastAnchorTime = currentLiveTime;
-            // Snap to exact live to fix any drift
-            this.enforceLivePosition(currentLiveTime, state.timeSpan);
-        } else {
-            this.isTracking = false;
-        }
-    }
-
     getViewState(): ViewState | null {
         if (!this.chart) return null;
 
@@ -112,6 +124,31 @@ export class ChartCamera {
     }
 
     // --- Internal Logic ---
+
+    /**
+     * Restores a saved state.
+     * Smartly decides whether to resume Tracking based on the saved position.
+     */
+    private restoreState(state: ViewState, currentLiveTime: number) {
+        if (!this.chart) return;
+
+        // 1. Apply geometric state
+        this.restoreGeometry(state);
+
+        // 2. Determine Intent
+        // If the saved view was looking at the future/live-edge, resume tracking.
+        const distToLive = currentLiveTime - state.centerTime;
+        const threshold = state.timeSpan / 2;
+
+        if (distToLive < threshold) {
+            this.isTracking = true;
+            this.lastAnchorTime = currentLiveTime;
+            // Snap to exact live to fix any drift
+            this.enforceLivePosition(currentLiveTime, state.timeSpan);
+        } else {
+            this.isTracking = false;
+        }
+    }
 
     private handleUserInteraction() {
         if (!this.chart || !this.lastAnchorTime) return;

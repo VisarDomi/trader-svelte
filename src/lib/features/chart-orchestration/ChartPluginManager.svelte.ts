@@ -8,6 +8,7 @@ import type { MarketStore } from '$lib/domains/market/stores/MarketStore.svelte.
 import type { AccountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import type { PositionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
 import type { TradeStore } from '$lib/domains/trading/stores/TradeStore.svelte.js';
+import type { ChartStateManager } from "$lib/features/chart-orchestration/ChartStateManager.svelte.js";
 
 // Features
 import { PositionLines } from "$lib/features/chart-drawings/plugins/PositionLines.js";
@@ -23,11 +24,17 @@ export class ChartRenderer {
     private series = $state<ISeriesApi<"Candlestick"> | null>(null);
     private context = $state<ChartContext | null>(null);
 
+    // Track initialization to distinguish between Initial Load and History Prepend
+    private currentEpic = "";
+    private hasInitializedView = false;
+    private lastHistoryLength = 0;
+
     // Feature Registry
     private features: Types[] = [];
 
     constructor(
         private readonly camera: ChartCamera,
+        private readonly stateManager: ChartStateManager,
         private readonly marketStore: MarketStore,
         private readonly positionStore: PositionStore,
         private readonly tradeStore: TradeStore,
@@ -38,14 +45,14 @@ export class ChartRenderer {
         this.features.push(new CurrentPrice());
         this.features.push(new Fee());
         this.features.push(new HistoryLoaderPlugin());
-        this.features.push(new LiveEdgePlugin(this.camera)); // Pass Camera Here
+        this.features.push(new LiveEdgePlugin(this.camera));
         this.features.push(new ClockPlugin());
 
-        // The Main Render Loop
+        // The Main Render Loop (Fast)
         $effect(() => {
             if (!this.context || !this.series) return;
 
-            // 1. Update Candles (Core Data)
+            // 1. Update Candles (Core Data) - Tick Updates
             const loaded = this.context.isMarketLoaded;
             const lastCandle = this.context.lastCandle;
 
@@ -53,7 +60,6 @@ export class ChartRenderer {
             const _trigger = this.marketStore.updateTrigger;
 
             if (loaded && lastCandle) {
-                // Live update (tick)
                 this.series.update(lastCandle);
             }
 
@@ -63,15 +69,46 @@ export class ChartRenderer {
             }
         });
 
-        // History Load / Prepend Effect
+        // The History Injection Loop (Heavy)
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
             // Reactive dependency on history array reference change
             const history = this.marketStore.history;
+            const epic = this.marketStore.epic;
+
+            // Context Switch Detection
+            if (epic !== this.currentEpic) {
+                this.currentEpic = epic;
+                this.hasInitializedView = false;
+                this.lastHistoryLength = 0;
+            }
 
             if (this.series && loaded && history.length > 0) {
-                // LWC efficient update is 'update', but for full history change/prepend we use setData
+                // 1. Apply Data
                 this.series.setData(history);
+
+                // 2. Handle Viewport Synchronization ATOMICALLY
+                if (!this.hasInitializedView) {
+                    // Scenario A: First Load.
+                    // Snap to saved state or live edge immediately to prevent "Jump to Ghost Future".
+                    const savedState = this.stateManager.loadState();
+                    const lastTime = Number(history[history.length - 1].time);
+
+                    this.camera.initializeView(savedState, lastTime);
+                    this.hasInitializedView = true;
+
+                } else if (history.length > this.lastHistoryLength) {
+                    // Scenario B: History Prepend (Infinite Scroll).
+                    // Maintain visual position relative to candles.
+                    const addedCount = history.length - this.lastHistoryLength;
+
+                    // Only adjust if we actually added data and it wasn't a full reset
+                    if (addedCount > 0 && this.lastHistoryLength > 0) {
+                        this.camera.maintainScrollPosition(addedCount);
+                    }
+                }
+
+                this.lastHistoryLength = history.length;
             }
         });
     }

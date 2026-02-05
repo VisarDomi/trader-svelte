@@ -8,42 +8,41 @@ interface EnhancedViewState extends ViewState {
     lastDataTimeAtSave: number;
 }
 
+/**
+ * REFACTORED: Now a passive data access object.
+ * Logic for "When to restore" has moved to the Renderer/Orchestrator to avoid race conditions.
+ */
 export class ChartStateManager {
-    private isZoomRestored = $state(false);
     private currentEpic = $state("");
     private saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
     constructor(
         private readonly controller: ChartController,
         private readonly layout: ChartUI
-    ) {
-        $effect(() => {
-            const hasHistory = marketStore.history.length > 0;
-            const isLayoutReady = this.layout.isDataLoaded;
-            const epic = this.currentEpic;
-
-            // Wait for data and layout before attempting restore
-            if (!this.isZoomRestored && hasHistory && isLayoutReady && epic) {
-
-                const currentLastCandle = marketStore.lastCandle?.time as number | undefined;
-
-                if (!this.restoreZoom(currentLastCandle)) {
-                    // Fallback: If no saved state, hard reset to a sane default
-                    if (currentLastCandle) {
-                        this.controller.camera.resetZoom(currentLastCandle);
-                    }
-                }
-
-                this.isZoomRestored = true;
-            }
-        });
-    }
+    ) {}
 
     setEpic(epic: string) {
         if (this.currentEpic !== epic) {
             this.saveZoom();
             this.currentEpic = epic;
-            this.isZoomRestored = false;
+        }
+    }
+
+    /**
+     * Called by the Renderer immediately after data load.
+     * Returns the state if it exists, otherwise null.
+     */
+    loadState(): ViewState | null {
+        if (typeof window === 'undefined' || !this.currentEpic) return null;
+
+        const raw = localStorage.getItem(this.getStorageKey());
+        if (!raw) return null;
+
+        try {
+            const saved: EnhancedViewState = JSON.parse(raw);
+            return saved;
+        } catch {
+            return null;
         }
     }
 
@@ -82,7 +81,9 @@ export class ChartStateManager {
 
     private saveZoom() {
         if (typeof window === 'undefined' || !this.currentEpic) return;
-        if (!this.isZoomRestored) return;
+
+        // Only save if data is loaded to prevent saving an empty state during transition
+        if (!marketStore.isLoaded) return;
 
         const state = this.controller.camera.getViewState();
         const lastCandle = marketStore.lastCandle;
@@ -93,28 +94,6 @@ export class ChartStateManager {
                 lastDataTimeAtSave: Number(lastCandle.time)
             };
             localStorage.setItem(this.getStorageKey(), JSON.stringify(enhanced));
-        }
-    }
-
-    private restoreZoom(currentLastCandleTime?: number): boolean {
-        if (typeof window === 'undefined' || !currentLastCandleTime) return false;
-
-        const raw = localStorage.getItem(this.getStorageKey());
-        if (!raw) return false;
-
-        try {
-            const saved: EnhancedViewState = JSON.parse(raw);
-
-            // REFACTORED: Delegate the decision making to the Camera
-            // We pass the saved state AND the current reality (currentLastCandleTime)
-            // The Camera decides if it should snap to live or stay in history.
-            setTimeout(() => {
-                this.controller.camera.restoreState(saved, currentLastCandleTime);
-            }, 50);
-
-            return true;
-        } catch {
-            return false;
         }
     }
 }
