@@ -14,6 +14,7 @@ import { CurrentPrice } from "$lib/features/chart-drawings/plugins/CurrentPrice.
 import { Fee } from "$lib/features/chart-drawings/plugins/Fee.js";
 import { HistoryLoaderPlugin } from "$lib/features/chart-drawings/plugins/HistoryLoaderPlugin.js";
 import { LiveEdgePlugin } from "$lib/features/chart-drawings/plugins/LiveEdgePlugin.js";
+import { ClockPlugin } from "$lib/features/chart-drawings/plugins/ClockPlugin.js";
 
 export class ChartRenderer {
     // Reactive references for the effect
@@ -36,6 +37,7 @@ export class ChartRenderer {
         this.features.push(new Fee());
         this.features.push(new HistoryLoaderPlugin());
         this.features.push(new LiveEdgePlugin());
+        this.features.push(new ClockPlugin());
 
         // The Main Render Loop
         $effect(() => {
