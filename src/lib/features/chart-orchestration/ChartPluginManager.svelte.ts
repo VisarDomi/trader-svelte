@@ -27,7 +27,9 @@ export class ChartRenderer {
     // Track initialization to distinguish between Initial Load and History Prepend
     private currentEpic = "";
     private hasInitializedView = false;
-    private lastHistoryLength = 0;
+
+    // Use Timestamps for robust Prepend detection (instead of just length)
+    private lastFirstTime = 0;
 
     // Feature Registry
     private features: Types[] = [];
@@ -80,10 +82,12 @@ export class ChartRenderer {
             if (epic !== this.currentEpic) {
                 this.currentEpic = epic;
                 this.hasInitializedView = false;
-                this.lastHistoryLength = 0;
+                this.lastFirstTime = 0;
             }
 
             if (this.series && loaded && history.length > 0) {
+                const currentFirstTime = Number(history[0].time);
+
                 // 1. Apply Data
                 this.series.setData(history);
 
@@ -97,18 +101,24 @@ export class ChartRenderer {
                     this.camera.initializeView(savedState, lastTime);
                     this.hasInitializedView = true;
 
-                } else if (history.length > this.lastHistoryLength) {
+                } else if (currentFirstTime < this.lastFirstTime) {
                     // Scenario B: History Prepend (Infinite Scroll).
-                    // Maintain visual position relative to candles.
-                    const addedCount = history.length - this.lastHistoryLength;
+                    // We detect prepend by checking if the first candle is older than before.
 
-                    // Only adjust if we actually added data and it wasn't a full reset
-                    if (addedCount > 0 && this.lastHistoryLength > 0) {
-                        this.camera.maintainScrollPosition(addedCount);
+                    // Calculate how many bars were added to the LEFT.
+                    // We find the index of the old first candle in the new array.
+                    const offset = history.findIndex(c => Number(c.time) === this.lastFirstTime);
+
+                    if (offset > 0) {
+                        this.camera.maintainScrollPosition(offset);
                     }
                 }
 
-                this.lastHistoryLength = history.length;
+                // Scenario C: Append (Live Update/Sync)
+                // If currentFirstTime >= lastFirstTime, we assume data was added to the end or updated in place.
+                // We do NOT shift the scroll in this case.
+
+                this.lastFirstTime = currentFirstTime;
             }
         });
     }
