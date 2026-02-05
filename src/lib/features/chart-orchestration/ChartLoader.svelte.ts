@@ -6,6 +6,7 @@ import { getPreferences } from "$lib/domains/trading/services/AccountApiService.
 import { LeverageService } from '$lib/domains/trading/domain/LeverageService.js';
 import type { ApiClient } from '$lib/core/api/ApiClient.js';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
+import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js';
 
 // Stores types
 import type { AccountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
@@ -62,8 +63,9 @@ export class ChartLoader {
             const direction = activePos?.position.direction;
             const source = this.getDataSourceForDirection(direction);
 
-            // Initialize MarketStore state.
-            await this.marketStore.load(epic, source);
+            // Initialize Market Data via Pump
+            // Pump handles fetching history and populating the store
+            await marketDataPump.load(epic, source);
 
             return this.deriveContext(epic, config);
         } catch (e) {
@@ -75,7 +77,7 @@ export class ChartLoader {
     private async initializeStores(epic: string) {
         await this.accountStore.init();
 
-        // Update Poller Context and trigger refresh manually to sync store
+        // Sync Position Store via Poller
         positionPoller.setEpic(epic);
         await positionPoller.refresh();
     }

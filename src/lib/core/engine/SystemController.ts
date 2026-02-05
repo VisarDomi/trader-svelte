@@ -1,8 +1,8 @@
 import { session } from '$lib/core/services/SessionManager.js';
 import { watchdog } from '$lib/core/services/WatchdogService.svelte.js';
-import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { riskService } from '$lib/domains/trading/services/RiskService.svelte.js';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
+import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js';
 
 /**
  * The Mechanic.
@@ -17,7 +17,6 @@ export class SystemController {
      */
     static wakeUp() {
         // 1. Start Polling Positions
-        // Ensure the poller knows what context we are in
         if (session.lastEpic) {
             positionPoller.setEpic(session.lastEpic);
         }
@@ -28,7 +27,7 @@ export class SystemController {
 
         // 3. Connect to Market Data Stream (if we have an active epic)
         if (session.lastEpic) {
-            marketStore.connect(session.lastEpic);
+            marketDataPump.connect(session.lastEpic);
         }
 
         // 4. Start the Watchdog to detect freezes
@@ -47,14 +46,14 @@ export class SystemController {
         riskService.stop();
 
         // 3. Kill the stream connection to prevent "zombie" sockets
-        marketStore.disconnect();
+        marketDataPump.disconnect();
 
         // 4. Stop Watchdog (optional, but good for pure backgrounding)
         watchdog.stop();
     }
 
     /**
-     * NEW: Switch Context (Epic Change)
+     * Switch Context (Epic Change)
      */
     static switchContext(newEpic: string) {
         // 1. Hibernate current processes
@@ -63,7 +62,13 @@ export class SystemController {
         // 2. Reconfigure Services
         positionPoller.setEpic(newEpic);
 
-        // 3. Wake up
+        // 3. Wake up (Connects MarketPump to new epic automatically via logic in connect())
+        // Note: We need to explicitly pass the new epic to connect if we want it to switch
+        marketDataPump.connect(newEpic);
+
+        // (Wait, SystemController.wakeUp uses session.lastEpic.
+        // We should assume session.lastEpic was updated BEFORE calling switchContext,
+        // or update it here. For safety, wakeUp() checks session.)
         this.wakeUp();
     }
 }

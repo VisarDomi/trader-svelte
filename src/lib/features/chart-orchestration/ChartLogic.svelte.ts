@@ -51,9 +51,7 @@ export class ChartLogic {
             () => this.isInteractionBlocked()
         );
 
-        // REMOVED: marketStore.autoConnect();
-        // RATIONALE: Connection lifecycle is now managed by AppEngine -> SystemController.
-        // ChartLogic only consumes the data stream, it does not start it.
+        // NOTE: Connection is managed by SystemController, not ChartLogic.
 
         bus.on('input:chart_click', (event) => this.handleChartClick(event));
 
@@ -85,6 +83,13 @@ export class ChartLogic {
 
         this.layout.setDataLoaded(true);
         void this.overlay.init(this.currentEpic);
+
+        // Signal that the Chart is Ready.
+        // AppEngine might already be 'READY', but we can ensure SystemController wakes up
+        // if we are doing a client-side navigation.
+        import('$lib/core/engine/SystemController.js').then(({ SystemController }) => {
+            SystemController.wakeUp();
+        });
     }
 
     destroy() {
@@ -111,6 +116,8 @@ export class ChartLogic {
             const source = result.position.direction === TRADING.SELL_DIRECTION
                 ? TRADING.CHART_DATA_SOURCE_OFR
                 : TRADING.CHART_DATA_SOURCE_BID;
+
+            // This is a UI preference, valid to set on Store directly
             marketStore.setDataSource(source);
         }
     }
