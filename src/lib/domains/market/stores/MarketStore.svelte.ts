@@ -84,6 +84,42 @@ export class MarketStore extends BaseStore {
         this.updateTrigger++;
     }
 
+    /**
+     * Merges a fresh batch of recent history (e.g. from Sync) into the existing history.
+     * Preserves older data that isn't in the new batch.
+     */
+    mergeLatestHistory(newBid: ChartCandle[], newAsk: ChartCandle[]) {
+        if (newBid.length === 0) return;
+
+        // Helper to merge:
+        // 1. Find where the new batch starts in the old array.
+        // 2. Keep everything before that.
+        // 3. Append new batch.
+
+        const merge = (oldArr: ChartCandle[], newArr: ChartCandle[]) => {
+            if (oldArr.length === 0) return newArr;
+            const firstNewTime = newArr[0].time;
+
+            // Find index of first candle in oldArr that is >= firstNewTime
+            const cutOffIndex = oldArr.findIndex(c => c.time >= firstNewTime);
+
+            if (cutOffIndex === -1) {
+                // All old data is older than new data -> Append
+                return [...oldArr, ...newArr];
+            }
+
+            // Keep old data before the overlap, append new data
+            return [...oldArr.slice(0, cutOffIndex), ...newArr];
+        };
+
+        this.bidHistory = merge(this.bidHistory, newBid);
+        this.askHistory = merge(this.askHistory, newAsk);
+
+        this.recalcLiveState();
+        this.syncViewToSource();
+        this.updateTrigger++;
+    }
+
     updateLive(u: FeedUpdate) {
         this.bid = u.bid;
         this.offer = u.offer;

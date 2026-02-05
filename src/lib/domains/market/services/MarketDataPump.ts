@@ -154,6 +154,7 @@ export class MarketDataPump {
         this.syncInterval = setInterval(() => {
             const now = new Date();
             const sec = now.getSeconds();
+            // Sync roughly every minute at the 30s mark
             if (sec >= 30 && sec <= 35 && this.lastSyncMinute !== now.getMinutes()) {
                 this.lastSyncMinute = now.getMinutes();
                 void this.syncHistory();
@@ -184,6 +185,7 @@ export class MarketDataPump {
 
         try {
             const repo = new MarketRepository(client);
+            // This returns the LATEST 1000 candles
             const { bid, ask } = await repo.getHistory(this.epic);
 
             const split = (arr: ChartCandle[]) => {
@@ -196,7 +198,9 @@ export class MarketDataPump {
             const bidData = split(bid);
             const askData = split(ask);
 
-            marketStore.setHistory(bidData.history, askData.history);
+            // CHANGED: Use mergeLatestHistory instead of setHistory to preserve older infinite-scroll data
+            marketStore.mergeLatestHistory(bidData.history, askData.history);
+
             this.feed.mergeExternalData(bidData.current, askData.current);
 
         } catch (e) {
