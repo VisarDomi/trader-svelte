@@ -42,16 +42,45 @@ export class RiskManager {
         market: MarketDetailsResponse,
         balance: number
     ): number {
-        const targetRiskAmount = balance * TRADING.STOP_LOSS_RATIO;
+        const targetLoss = balance * TRADING.STOP_LOSS_RATIO;
         const lotSize = market.instrument.lotSize;
-
-        const safePriceDistance = targetRiskAmount / (position.size * lotSize);
-
-        const newStopPrice = position.direction === TRADING.BUY_DIRECTION
-            ? position.level - safePriceDistance
-            : position.level + safePriceDistance;
-
         const decimalPlaces = market.snapshot.decimalPlacesFactor;
-        return roundPrice(newStopPrice, decimalPlaces);
+        const tickSize = 1 / Math.pow(10, decimalPlaces);
+        const isBuy = position.direction === TRADING.BUY_DIRECTION;
+        const entryPrice = position.level;
+
+        // 1. Calculate theoretical limit
+        const exactDist = targetLoss / (position.size * lotSize);
+        const limitPrice = isBuy
+            ? entryPrice - exactDist
+            : entryPrice + exactDist;
+
+        // 2. Identify candidates
+        const floorTick = Math.floor(limitPrice / tickSize) * tickSize;
+        const ceilTick = Math.ceil(limitPrice / tickSize) * tickSize;
+
+        const candidates = [floorTick, ceilTick];
+
+        // 3. Pick optimal safe tick
+        // We want loss <= targetLoss, maximized
+
+        let bestPrice = floorTick;
+        let bestLossVal = -1;
+        const EPSILON = 0.01;
+
+        for (const cand of candidates) {
+            const p = roundPrice(cand, decimalPlaces);
+            const dist = Math.abs(p - entryPrice);
+            const loss = dist * position.size * lotSize;
+
+            if (loss <= (targetLoss + EPSILON)) {
+                if (loss > bestLossVal) {
+                    bestLossVal = loss;
+                    bestPrice = p;
+                }
+            }
+        }
+
+        return bestPrice;
     }
 }

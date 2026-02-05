@@ -96,13 +96,53 @@ export class TradePlanner {
         balance: number,
         decimalPlaces: number
     ): number {
-        const allowedLossAmount = balance * TRADING.STOP_LOSS_RATIO;
-        const priceDistance = allowedLossAmount / (size * lotSize);
+        // Target: strictly <= 50%
+        const targetLoss = balance * TRADING.STOP_LOSS_RATIO;
+        const tickSize = 1 / Math.pow(10, decimalPlaces);
+        const isBuy = direction === TRADING.BUY_DIRECTION;
 
-        const unroundedStopPrice = direction === TRADING.BUY_DIRECTION
-            ? entryPrice - priceDistance
-            : entryPrice + priceDistance;
+        // 1. Calculate the exact price distance allowed
+        const exactDist = targetLoss / (size * lotSize);
 
-        return roundPrice(unroundedStopPrice, decimalPlaces);
+        // 2. Calculate the theoretical limit price
+        const limitPrice = isBuy
+            ? entryPrice - exactDist
+            : entryPrice + exactDist;
+
+        // 3. Find the two surrounding ticks
+        const floorTick = Math.floor(limitPrice / tickSize) * tickSize;
+        const ceilTick = Math.ceil(limitPrice / tickSize) * tickSize;
+
+        const candidates = [floorTick, ceilTick];
+
+        // 4. Select the best tick
+        // Criteria: Must result in loss <= targetLoss (plus tiny epsilon)
+        // AND be closest to targetLoss
+
+        let bestPrice = floorTick;
+        let bestLossVal = -1;
+
+        // Epsilon for float comparison safety
+        const EPSILON = 0.01; // 1 cent tolerance
+
+        for (const cand of candidates) {
+            // Normalize float artifacts
+            const p = roundPrice(cand, decimalPlaces);
+
+            // Calc loss for this candidate
+            const dist = Math.abs(p - entryPrice);
+            const loss = dist * size * lotSize;
+
+            // Check safety
+            if (loss <= (targetLoss + EPSILON)) {
+                // Check if this is closer to max allowed loss (highest loss is best, as long as it's safe)
+                if (loss > bestLossVal) {
+                    bestLossVal = loss;
+                    bestPrice = p;
+                }
+            }
+        }
+
+        return bestPrice;
     }
 }
