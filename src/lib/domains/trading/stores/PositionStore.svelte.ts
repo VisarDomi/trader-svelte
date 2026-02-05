@@ -8,7 +8,6 @@ import { accountStore } from './AccountStore.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { PositionResponse } from '$lib/shared/types/trading.js';
-import { appEngine } from '$lib/core/AppEngine.svelte.js'; // Import AppEngine
 
 export class PositionStore extends BaseStore {
     activePosition = $state<PositionResponse | null>(null);
@@ -16,28 +15,40 @@ export class PositionStore extends BaseStore {
     isClosing = $state(false);
 
     private epic = "";
+    private pollInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor() {
         super();
         bus.on('trade:executed', (pos) => {
             this.set(pos);
         });
+        // NOTE: Auto-refresh $effect removed. We now rely on startPolling()/stopPolling().
     }
 
     /**
-     * Starts the global auto-refresh loop for positions.
-     * Called by AppEngine.
+     * COMMAND: Start polling for position updates.
+     * Called explicitly by SystemController.
      */
-    startAutoRefresh() {
-        $effect(() => {
-            if (appEngine.status === 'READY' && appEngine.isOnline) {
-                const interval = setInterval(() => {
-                    void this.refresh();
-                }, 15000); // 15 seconds
+    startPolling() {
+        this.stopPolling();
 
-                return () => clearInterval(interval);
-            }
-        });
+        // Immediate check
+        void this.refresh();
+
+        this.pollInterval = setInterval(() => {
+            void this.refresh();
+        }, 15000); // 15 seconds
+    }
+
+    /**
+     * COMMAND: Stop polling.
+     * Called explicitly by SystemController.
+     */
+    stopPolling() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
     }
 
     async init(epic: string) {

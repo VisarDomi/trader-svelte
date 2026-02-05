@@ -1,7 +1,7 @@
 <script lang="ts">
     import '$lib/styles.css';
     import { onMount, onDestroy } from 'svelte';
-    import { appEngine } from '$lib/core/AppEngine.svelte.js';
+    import { appEngine } from '$lib/core/engine/AppEngine.svelte.js'; // Updated import path
     import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
     import HydrationGate from '$lib/components/ui/HydrationGate.svelte';
 

@@ -2,11 +2,11 @@ import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import * as STORAGE from '$lib/shared/constants/storage.js';
 
-import { ChartController, type ViewState } from '$lib/components/chart-engine/ChartController';
-import { ChartUI } from '$lib/components/chart-engine/ChartResizer.svelte';
+import { ChartController, type ViewState } from '$lib/components/chart-engine/ChartController.js';
+import { ChartUI } from '$lib/components/chart-engine/ChartResizer.svelte.js';
 import { ChartRenderer } from '$lib/features/chart-orchestration/ChartPluginManager.svelte.js';
 import { ChartOverlay } from '$lib/features/chart-hud/ChartHudState.svelte.js';
-import { ChartInputHandler, type ChartClickEvent } from '$lib/components/chart-engine/ChartEvents.svelte';
+import { ChartInputHandler, type ChartClickEvent } from '$lib/components/chart-engine/ChartEvents.svelte.js';
 import { ChartLoader, type ChartContext as LoaderContext } from '$lib/features/chart-orchestration/ChartLoader.svelte.js';
 import { TradingDomain } from '$lib/domains/trading/domain/TradingDomain.js';
 
@@ -32,7 +32,6 @@ export class ChartLogic {
     private renderer: ChartRenderer;
     private inputHandler: ChartInputHandler;
     private loader: ChartLoader;
-    // Removed: RiskManager
     private tradingDomain = new TradingDomain();
 
     private currentEpic = "";
@@ -40,7 +39,6 @@ export class ChartLogic {
 
     private marketDetails = $state<MarketDetailsResponse | null>(null);
 
-    // Removed: heartbeatInterval, isBurstChecking, lastSyncMinute
     private saveTimeout: ReturnType<typeof setTimeout> | null = null;
     private preResizeState: ViewState | null = null;
 
@@ -53,8 +51,9 @@ export class ChartLogic {
             () => this.isInteractionBlocked()
         );
 
-        // ACTIVATE AUTONOMOUS MARKET STORE
-        marketStore.autoConnect();
+        // REMOVED: marketStore.autoConnect();
+        // RATIONALE: Connection lifecycle is now managed by AppEngine -> SystemController.
+        // ChartLogic only consumes the data stream, it does not start it.
 
         bus.on('input:chart_click', (event) => this.handleChartClick(event));
 
@@ -93,7 +92,6 @@ export class ChartLogic {
             window.removeEventListener('beforeunload', this.saveZoom);
         }
         this.cancelPlanning();
-        // Removed: this.stopHeartbeat()
         this.layout.destroy();
         this.renderer.destroy();
         this.overlay.destroy();
@@ -132,7 +130,6 @@ export class ChartLogic {
 
     private startServices() {
         this.currentEpic = session.lastEpic;
-        // Removed: this.startHeartbeat()
     }
 
     private configureLayout(container: HTMLDivElement) {
@@ -225,9 +222,6 @@ export class ChartLogic {
         }
         return false;
     }
-
-    // Removed: checkLimits, runBurstCheck, startHeartbeat, checkRiskCompliance, stopHeartbeat
-    // These are now handled by RiskService
 
     private isInteractionBlocked(): boolean {
         if (tradeStore.isExecuting) return true;

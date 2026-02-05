@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { appEngine } from '$lib/core/AppEngine.svelte.js';
+    import { appEngine } from '$lib/core/engine/AppEngine.svelte.js';
 
     let { children } = $props();
 </script>

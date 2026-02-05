@@ -2,7 +2,6 @@ import { BaseStore } from '$lib/core/stores/BaseStore.svelte.js';
 import { MarketRepository } from '$lib/domains/market/repositories/MarketRepository.js';
 import { MarketFeed, type FeedUpdate } from '$lib/domains/market/services/MarketFeed.js';
 import { session } from '$lib/core/services/SessionManager.js';
-import { appEngine } from '$lib/core/AppEngine.svelte.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { ChartData } from '$lib/shared/types/trading.js';
 import type { ChartCandle } from '$lib/shared/types/market.js';
@@ -26,43 +25,56 @@ export class MarketStore extends BaseStore {
 
     // Track sync state
     private lastSyncMinute = -1;
+    private syncInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor() {
         super();
         this.feed = new MarketFeed((update) => this.handleFeedUpdate(update));
+        // NOTE: Auto-connect $effect removed. We now rely on explicit connect() calls.
     }
 
-    autoConnect() {
-        $effect(() => {
-            const status = appEngine.status;
-            const currentEpic = this.epic;
-            const isOnline = appEngine.isOnline;
+    /**
+     * COMMAND: Connect to the stream.
+     * Called explicitly by SystemController.
+     */
+    connect(targetEpic?: string) {
+        if (targetEpic) this.epic = targetEpic;
+        if (!this.epic) return;
 
-            if (!currentEpic) return;
+        // 1. Ensure any previous connection is cleaned up
+        this.disconnect();
 
-            if (status === 'READY' && isOnline) {
-                this.ensureConnection(currentEpic);
+        // 2. Connect Feed
+        const tokens = session.getTokens(session.mode);
+        if (tokens) {
+            // Re-seed feed to ensure continuity
+            this.feed.initialize(this.liveBidCandle, this.liveAskCandle);
+            this.feed.connect(tokens, this.epic);
+        }
 
-                // --- NEW: Internal History Sync Heartbeat ---
-                const interval = setInterval(() => {
-                    const now = new Date();
-                    const sec = now.getSeconds();
+        // 3. Start History Sync Heartbeat
+        // Sync roughly at the 30s mark of a minute, once per minute
+        this.syncInterval = setInterval(() => {
+            const now = new Date();
+            const sec = now.getSeconds();
 
-                    // Sync roughly at the 30s mark of a minute, once per minute
-                    if (sec >= 30 && sec <= 35 && this.lastSyncMinute !== now.getMinutes()) {
-                        this.lastSyncMinute = now.getMinutes();
-                        void this.syncHistory();
-                    }
-                }, 1000);
-
-                return () => {
-                    clearInterval(interval);
-                    this.disconnect();
-                };
-            } else {
-                this.disconnect();
+            if (sec >= 30 && sec <= 35 && this.lastSyncMinute !== now.getMinutes()) {
+                this.lastSyncMinute = now.getMinutes();
+                void this.syncHistory();
             }
-        });
+        }, 1000);
+    }
+
+    /**
+     * COMMAND: Disconnect from the stream.
+     * Called explicitly by SystemController.
+     */
+    disconnect() {
+        this.feed.disconnect();
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+            this.syncInterval = null;
+        }
     }
 
     get currentPrice() {
@@ -96,13 +108,15 @@ export class MarketStore extends BaseStore {
             this.syncViewToSource();
             this.isLoaded = true;
         });
-    }
 
-    private ensureConnection(epic: string) {
-        const tokens = session.getTokens(session.mode);
-        if (!tokens) return;
-        this.feed.initialize(this.liveBidCandle, this.liveAskCandle);
-        this.feed.connect(tokens, epic);
+        // Handoff to AppEngine/SystemController to decide if we should connect immediately
+        // In a "Command" architecture, we can inspect global state or wait for a specific call.
+        // For robustness, we check if we are *likely* in a tradeable state:
+        import('$lib/core/engine/AppEngine.svelte.js').then(({ appEngine }) => {
+            if (appEngine.status === 'READY') {
+                this.connect();
+            }
+        });
     }
 
     async syncHistory() {
@@ -141,11 +155,8 @@ export class MarketStore extends BaseStore {
         this.syncViewToSource();
     }
 
-    disconnect() {
-        this.feed.disconnect();
-    }
-
     private resetState() {
+        this.disconnect();
         this.isLoaded = false;
         this.bid = 0;
         this.offer = 0;

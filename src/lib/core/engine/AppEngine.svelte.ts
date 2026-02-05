@@ -1,18 +1,19 @@
 import { goto } from '$app/navigation';
 import { browser } from '$app/environment';
 
+// Engine Delegate
+import { SystemController } from '$lib/core/engine/SystemController.js';
+
 // Core Services
 import { watchdog } from '$lib/core/services/WatchdogService.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 import { session } from '$lib/core/services/SessionManager.js';
 
-// Domain Stores & Services
+// Domain Stores
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
-import { riskService } from '$lib/domains/trading/services/RiskService.svelte.js';
-
 import * as AUTH from '$lib/shared/constants/auth.js';
 
 export type AppStatus =
@@ -33,23 +34,15 @@ class AppEngine {
         if (browser) {
             this.setupListeners();
             watchdog.setOnFreeze(() => this.handleFreeze());
-            // REMOVED: positionStore.startAutoRefresh() - Cannot be called here
         }
     }
 
     /**
      * Called from +layout.svelte onMount.
-     * This is safe for creating effects.
+     * Initializes the application.
      */
     async boot() {
         console.log('[AppEngine] Booting...');
-
-        // ACTIVATE REACTIVE SERVICES HERE (Inside Component Context)
-        positionStore.startAutoRefresh();
-
-        // RiskService uses setInterval, not $effect, so it's safe anywhere,
-        // but let's keep it close to boot for logic consistency.
-        riskService.start();
 
         viewport.init();
         this.status = 'AUTH_CHECK';
@@ -72,29 +65,50 @@ class AppEngine {
         this.status = 'LOADING';
         try {
             await accountStore.loadAll();
+            await this.restoreLastAccount();
 
-            const savedMode = session.mode;
-            const savedAccountId = session.getLastAccountId(savedMode);
-
-            if (savedAccountId) {
-                const account = (savedMode === AUTH.REAL_TYPE
-                        ? accountStore.realAccounts
-                        : accountStore.demoAccounts
-                ).find(a => a.accountId === savedAccountId);
-
-                if (account) {
-                    await accountStore.switchTo(account, savedMode);
-                }
-            }
-
-            watchdog.start();
-            this.status = 'READY';
+            this.transitionTo('READY');
             console.log('[AppEngine] Ready');
 
         } catch (e) {
             console.error('[AppEngine] Data load failed', e);
             notifications.error('Failed to load account data');
-            this.status = 'READY';
+            this.transitionTo('READY'); // Proceed anyway, allows manual retry
+        }
+    }
+
+    private async restoreLastAccount() {
+        const savedMode = session.mode;
+        const savedAccountId = session.getLastAccountId(savedMode);
+
+        if (savedAccountId) {
+            const account = (savedMode === AUTH.REAL_TYPE
+                    ? accountStore.realAccounts
+                    : accountStore.demoAccounts
+            ).find(a => a.accountId === savedAccountId);
+
+            if (account) {
+                await accountStore.switchTo(account, savedMode);
+            }
+        }
+    }
+
+    /**
+     * Centralized State Transitions
+     */
+    private transitionTo(newStatus: AppStatus) {
+        // TEARDOWN Logic
+        if (this.status === 'READY') {
+            SystemController.hibernate();
+        }
+
+        this.status = newStatus;
+
+        // SETUP Logic
+        if (newStatus === 'READY') {
+            SystemController.wakeUp();
+        } else if (newStatus === 'OFFLINE' || newStatus === 'BACKGROUND') {
+            SystemController.hibernate();
         }
     }
 
@@ -102,7 +116,7 @@ class AppEngine {
         if (this.status === 'RECONNECTING' || this.status === 'OFFLINE') return;
 
         console.warn('[AppEngine] Freeze detected. Reconnecting...');
-        this.status = 'RECONNECTING';
+        this.transitionTo('RECONNECTING');
         notifications.info('Connection disrupted. Reconnecting...');
 
         try {
@@ -113,20 +127,26 @@ class AppEngine {
                 positionStore.refresh()
             ]);
 
-            this.status = 'READY';
+            this.transitionTo('READY');
             notifications.success('Reconnected');
         } catch (e) {
             console.error('[AppEngine] Reconnect failed', e);
-            notifications.error('Reconnection failed. Please reload.');
+            notifications.error('Reconnection failed. Retrying...');
+            setTimeout(() => this.handleFreeze(), 3000);
         }
     }
 
     handleVisibilityChange(isVisible: boolean) {
         if (!isVisible) {
-            this.status = 'BACKGROUND';
+            if (this.status === 'READY') {
+                this.transitionTo('BACKGROUND');
+            }
         } else {
             if (this.status === 'BACKGROUND') {
-                this.status = 'READY';
+                // Determine if we need a full reconnect or just a resume
+                this.transitionTo('READY');
+
+                // Immediately refresh vital data visually
                 void positionStore.refresh();
             }
         }
@@ -142,16 +162,14 @@ class AppEngine {
 
     private handleOffline() {
         this.isOnline = false;
-        this.status = 'OFFLINE';
+        this.transitionTo('OFFLINE');
         notifications.error('No Internet Connection');
-        watchdog.stop();
     }
 
     private async handleOnline() {
         this.isOnline = true;
         notifications.info('Internet restored');
         await this.handleFreeze();
-        watchdog.start();
     }
 }
 
