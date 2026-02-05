@@ -5,6 +5,7 @@ import { getMarketDetails } from "$lib/domains/market/services/MarketApiService.
 import { getPreferences } from "$lib/domains/trading/services/AccountApiService.js";
 import { LeverageService } from '$lib/domains/trading/domain/LeverageService.js';
 import type { ApiClient } from '$lib/core/api/ApiClient.js';
+import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 
 // Stores types
 import type { AccountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
@@ -62,8 +63,6 @@ export class ChartLoader {
             const source = this.getDataSourceForDirection(direction);
 
             // Initialize MarketStore state.
-            // Note: We do NOT connect stream here. MarketStore watches 'epic' change
-            // and AppEngine 'READY' status to connect itself.
             await this.marketStore.load(epic, source);
 
             return this.deriveContext(epic, config);
@@ -73,12 +72,12 @@ export class ChartLoader {
         }
     }
 
-    // Removed: initStream(), disconnectStream(), reconnectStream()
-    // These are no longer needed as MarketStore is autonomous.
-
     private async initializeStores(epic: string) {
         await this.accountStore.init();
-        await this.positionStore.init(epic);
+
+        // Update Poller Context and trigger refresh manually to sync store
+        positionPoller.setEpic(epic);
+        await positionPoller.refresh();
     }
 
     private async fetchConfiguration(client: ApiClient, epic: string): Promise<ChartConfiguration> {

@@ -3,6 +3,7 @@
     import { session } from '$lib/core/services/SessionManager.js';
     import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
     import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
+    import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 
     import AccountCard from '$lib/domains/trading/components/AccountCard.svelte';
     import PositionCard from '$lib/domains/trading/components/PositionCard.svelte';
@@ -12,13 +13,19 @@
     onMount(async () => {
         const epic = session.lastEpic;
         if (epic) {
+            // Configure poller context
+            positionPoller.setEpic(epic);
+
             await Promise.all([
                 accountStore.init(),
-                positionStore.init(epic)
+                // Manual refresh on mount
+                positionPoller.refresh()
             ]);
         }
+
+        // Local polling for UI responsiveness
         pollInterval = setInterval(() => {
-            positionStore.refresh();
+            positionPoller.refresh();
         }, 1000);
     });
 

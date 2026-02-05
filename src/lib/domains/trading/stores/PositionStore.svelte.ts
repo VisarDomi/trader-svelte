@@ -1,94 +1,40 @@
 import { BaseStore } from '$lib/core/stores/BaseStore.svelte.js';
-import { getPositions, createPosition, updatePosition, getConfirmation } from '$lib/domains/trading/services/TradeApiService.js';
-import { resolveInitialBalance } from '$lib/domains/trading/utils/position.js';
+import { createPosition, updatePosition, getConfirmation } from '$lib/domains/trading/services/TradeApiService.js';
 import { session } from '$lib/core/services/SessionManager.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
-import { accountStore } from './AccountStore.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { PositionResponse } from '$lib/shared/types/trading.js';
 
 export class PositionStore extends BaseStore {
+    // The "Local" position (matching the current chart)
     activePosition = $state<PositionResponse | null>(null);
+    // The "Global" position (any open position, usually first found)
     anyActivePosition = $state<PositionResponse | null>(null);
-    isClosing = $state(false);
 
-    private epic = "";
-    private pollInterval: ReturnType<typeof setInterval> | null = null;
+    isClosing = $state(false);
 
     constructor() {
         super();
         bus.on('trade:executed', (pos) => {
-            this.set(pos);
+            // Optimistic update
+            this.activePosition = pos;
+            this.anyActivePosition = pos;
         });
-        // NOTE: Auto-refresh $effect removed. We now rely on startPolling()/stopPolling().
     }
 
     /**
-     * COMMAND: Start polling for position updates.
-     * Called explicitly by SystemController.
+     * Called by the Poller to update state.
+     * Pure state setter.
      */
-    startPolling() {
-        this.stopPolling();
-
-        // Immediate check
-        void this.refresh();
-
-        this.pollInterval = setInterval(() => {
-            void this.refresh();
-        }, 15000); // 15 seconds
+    sync(globalPos: PositionResponse | null, localPos: PositionResponse | null) {
+        this.anyActivePosition = globalPos;
+        this.activePosition = localPos;
     }
 
-    /**
-     * COMMAND: Stop polling.
-     * Called explicitly by SystemController.
-     */
-    stopPolling() {
-        if (this.pollInterval) {
-            clearInterval(this.pollInterval);
-            this.pollInterval = null;
-        }
-    }
-
-    async init(epic: string) {
-        this.epic = epic;
-        await this.refresh();
-    }
-
-    async refresh() {
-        const client = this.getClient();
-        if (!client) return;
-
-        // Note: We avoid setting 'isLoading' global flag for background refreshes
-        // to avoid UI flickering. We just run the fetch.
-
-        try {
-            const list = await getPositions(client);
-
-            if (accountStore.activeAccount) {
-                for (const p of list.positions) {
-                    p.position.initialBalance = resolveInitialBalance(
-                        p.position,
-                        accountStore.activeAccount
-                    );
-                }
-            }
-
-            const globalPos = list.positions[0] || null;
-            const localPos = list.positions.find(p => p.market.epic === this.epic);
-
-            this.anyActivePosition = globalPos;
-            this.activePosition = localPos || null;
-        } catch (e) {
-            console.warn('[PositionStore] Refresh failed', e);
-        }
-    }
-
-    set(p: PositionResponse | null) {
-        this.activePosition = p;
-        this.anyActivePosition = p;
-    }
+    // --- Actions (User Triggered) ---
+    // These remain here as they are user-initiated "Writes", not autonomous "Reads".
 
     async close() {
         if (!this.anyActivePosition) return;
@@ -146,7 +92,9 @@ export class PositionStore extends BaseStore {
 
             await updatePosition(mode, tokens, p.dealId, payload);
             notifications.success(`Stop Loss Auto-Corrected to ${newLevel}`);
-            await this.refresh();
+
+            // We rely on the Poller to sync the new stop level eventually,
+            // or we could trigger an immediate refresh if desired.
 
         } catch (e) {
             console.error("Failed to auto-correct SL", e);
