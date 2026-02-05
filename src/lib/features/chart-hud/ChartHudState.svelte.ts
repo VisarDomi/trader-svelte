@@ -22,12 +22,10 @@ export class ChartOverlay {
 
     // --- Derived View State ---
 
-    // 1. Theme / Border Color based on Mode
     get modeColor() {
         return this.session.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350';
     }
 
-    // 2. Account Information
     get hasActiveAccount() {
         return !!this.accountStore.activeAccount;
     }
@@ -46,7 +44,6 @@ export class ChartOverlay {
         return this.session.mode;
     }
 
-    // 3. Position Information
     get hasPosition() {
         return !!this.positionStore.anyActivePosition;
     }
@@ -83,10 +80,10 @@ export class ChartOverlay {
     }
 
     resetChart() {
+        // Simply delegate to Logic -> StateManager -> Camera
         this.chartLogic.resetChartZoom();
     }
 
-    // Navigation Actions
     navToInstrument() {
         void goto('/instrument');
     }

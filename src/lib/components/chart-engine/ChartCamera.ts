@@ -1,5 +1,6 @@
 import type { IChartApi, IRange, Time, UTCTimestamp } from 'lightweight-charts';
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
+import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 
 export interface ViewState {
     centerTime: number;
@@ -8,85 +9,89 @@ export interface ViewState {
     priceSpan: number;
 }
 
+// Default to 2 hours if no span is known
+const DEFAULT_SPAN_SECONDS = 120 * 60;
+
 export class ChartCamera {
     private chart: IChartApi | null = null;
 
-    // Constants for "Sane" Defaults
-    private readonly DEFAULT_SPAN_SECONDS = 2 * 60 * 60; // 2 Hours
-    private readonly RIGHT_OFFSET_PERCENTAGE = 0.15; // 15% empty space on right
+    // The "Source of Truth" for behavior
+    private isTracking = true;
+
+    // We store the last known anchor to support resizing/restoring without new data
+    private lastAnchorTime: number | null = null;
 
     init(chart: IChartApi) {
         this.chart = chart;
-    }
 
-    /**
-     * Determines if the user has scrolled significantly back into history,
-     * ignoring the Ghost Series that might exist in the future.
-     *
-     * @param anchorTime - The timestamp of the last REAL candle
-     */
-    isUserBrowsingHistory(anchorTime: number): boolean {
-        if (!this.chart) return false;
-
-        const range = this.chart.timeScale().getVisibleRange();
-        if (!range) return false;
-
-        // If the rightmost visible moment is older than the anchor time (minus a small buffer),
-        // the user is explicitly looking at the past.
-        // We use a 2-minute buffer to allow for slight "wiggles" at the edge.
-        const buffer = 120; // 2 minutes
-        return (range.to as number) < (anchorTime - buffer);
-    }
-
-    /**
-     * Pans the chart to the anchor time.
-     * PRESERVES current zoom level (time span), but shifts the view
-     * so the anchor is near the right edge.
-     */
-    panToLive(anchorTime: number) {
-        if (!this.chart) return;
-
-        const timeScale = this.chart.timeScale();
-        const range = timeScale.getVisibleRange();
-
-        // If range is invalid (e.g. initialization), fall back to default
-        const span = range
-            ? (range.to as number) - (range.from as number)
-            : this.DEFAULT_SPAN_SECONDS;
-
-        // Calculate geometry
-        const { from, to } = this.calculateLiveRange(anchorTime, span);
-
-        timeScale.setVisibleRange({
-            from: from as UTCTimestamp,
-            to: to as UTCTimestamp
+        // Listen to user interaction to break tracking mode
+        this.chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+            this.handleUserInteraction();
         });
     }
 
     /**
-     * HARD RESET.
-     * Ignores current zoom/pan state.
-     * Enforces a standard 2-hour window ending at the Anchor.
-     * Fixes "Broken Reset" issue where chart stuck to 24h Ghost span.
+     * Called by the system whenever new market data arrives.
+     * If we are in 'Tracking Mode', we force the view to the new anchor.
+     */
+    updateAnchor(anchorTime: number) {
+        if (!anchorTime) return;
+        this.lastAnchorTime = anchorTime;
+
+        if (this.isTracking) {
+            this.enforceLivePosition(anchorTime);
+        }
+    }
+
+    /**
+     * Resets the chart to the "Default" view:
+     * 1. Sets mode to Tracking
+     * 2. Sets zoom to DEFAULT_SPAN_SECONDS
+     * 3. Aligns the Anchor to be exactly RESET_RIGHT_OFFSET_PIXELS from the edge
      */
     resetZoom(anchorTime: number) {
-        if (!this.chart) return;
+        if (!this.chart || !anchorTime) return;
 
-        // 1. Force Time Scale to sane default
-        const { from, to } = this.calculateLiveRange(anchorTime, this.DEFAULT_SPAN_SECONDS);
+        this.isTracking = true;
+        this.lastAnchorTime = anchorTime;
+
+        // Force a specific span (Zoom Reset)
+        const { from, to } = this.calculateTargetRange(anchorTime, DEFAULT_SPAN_SECONDS);
 
         this.chart.timeScale().setVisibleRange({
             from: from as UTCTimestamp,
             to: to as UTCTimestamp
         });
 
-        // 2. Reset Price Scale to auto-fit the new time range
+        // Reset Y-Axis to fit this new X-Axis range
         this.chart.priceScale('right').applyOptions({ autoScale: true });
     }
 
     /**
-     * Captures geometric state
+     * Restores a saved state (e.g. from LocalStorage).
+     * Smartly decides whether to resume Tracking based on the saved position.
      */
+    restoreState(state: ViewState, currentLiveTime: number) {
+        if (!this.chart) return;
+
+        // 1. Apply geometric state
+        this.restoreGeometry(state);
+
+        // 2. Determine Intent
+        // If the saved view was looking at the future/live-edge, resume tracking.
+        const distToLive = currentLiveTime - state.centerTime;
+        const threshold = state.timeSpan / 2;
+
+        if (distToLive < threshold) {
+            this.isTracking = true;
+            this.lastAnchorTime = currentLiveTime;
+            // Snap to exact live to fix any drift
+            this.enforceLivePosition(currentLiveTime, state.timeSpan);
+        } else {
+            this.isTracking = false;
+        }
+    }
+
     getViewState(): ViewState | null {
         if (!this.chart) return null;
 
@@ -102,13 +107,78 @@ export class ChartCamera {
         };
     }
 
-    /**
-     * Restores geometric state
-     */
-    restoreViewState(state: ViewState) {
+    destroy() {
+        this.chart = null;
+    }
+
+    // --- Internal Logic ---
+
+    private handleUserInteraction() {
+        if (!this.chart || !this.lastAnchorTime) return;
+
+        // If we are currently tracking, we need to check if the user *broke* it.
+        if (this.isTracking) {
+            const range = this.chart.timeScale().getVisibleRange();
+            if (!range) return;
+
+            const currentSpan = (range.to as number) - (range.from as number);
+            const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, currentSpan);
+
+            // Tolerance: If user dragged more than 1% away from the ideal "Magnet" position
+            const tolerance = currentSpan * 0.01;
+            const drift = Math.abs((range.to as number) - idealTo);
+
+            if (drift > tolerance) {
+                this.isTracking = false;
+            }
+        }
+    }
+
+    private enforceLivePosition(anchorTime: number, forceSpan?: number) {
         if (!this.chart) return;
 
-        // 1. Restore Price (Y-Axis)
+        const timeScale = this.chart.timeScale();
+        const range = timeScale.getVisibleRange();
+
+        // Use current span or fallback/force
+        const span = forceSpan ?? (range
+            ? (range.to as number) - (range.from as number)
+            : DEFAULT_SPAN_SECONDS);
+
+        const { from, to } = this.calculateTargetRange(anchorTime, span);
+
+        timeScale.setVisibleRange({
+            from: from as UTCTimestamp,
+            to: to as UTCTimestamp
+        });
+    }
+
+    /**
+     * Calculates the [From, To] range such that:
+     * 1. The total width is 'span' seconds
+     * 2. The 'anchorTime' is positioned exactly RESET_RIGHT_OFFSET_PIXELS from the right edge.
+     */
+    private calculateTargetRange(anchorTime: number, span: number) {
+        const widthPixels = viewport.width || 1000; // Safe fallback
+
+        // Calculate how many seconds correspond to 1 pixel at this zoom level
+        const secondsPerPixel = span / widthPixels;
+
+        // Calculate the time buffer based on the pixel constant
+        const rightBufferSeconds = CHART_CONST.RESET_RIGHT_OFFSET_PIXELS * secondsPerPixel;
+
+        // Target To = Anchor + Buffer
+        // This puts the Anchor exactly 'rightBufferSeconds' (== 100px) away from the edge
+        const targetTo = anchorTime + rightBufferSeconds;
+        const targetFrom = targetTo - span;
+
+        return { from: targetFrom, to: targetTo };
+    }
+
+    private restoreGeometry(state: ViewState) {
+        if (!this.chart) return;
+
+        // Restore Y
         this.chart.priceScale('right').applyOptions({ autoScale: false });
         const pHalf = state.priceSpan / 2;
         this.chart.priceScale('right').setVisibleRange({
@@ -116,29 +186,12 @@ export class ChartCamera {
             to: state.centerPrice + pHalf
         });
 
-        // 2. Restore Time (X-Axis)
+        // Restore X
         const tHalf = state.timeSpan / 2;
         this.chart.timeScale().setVisibleRange({
             from: (state.centerTime - tHalf) as UTCTimestamp,
             to: (state.centerTime + tHalf) as UTCTimestamp
         });
-    }
-
-    destroy() {
-        this.chart = null;
-    }
-
-    // --- Helpers ---
-
-    private calculateLiveRange(anchorTime: number, span: number) {
-        // We want empty space on the right (Ghost area) to be a percentage of the total view
-        const rightBuffer = span * this.RIGHT_OFFSET_PERCENTAGE;
-
-        // The 'to' is in the future relative to the anchor
-        const targetTo = anchorTime + rightBuffer;
-        const targetFrom = targetTo - span;
-
-        return { from: targetFrom, to: targetTo };
     }
 
     private calculateTimeState(range: IRange<Time>) {
