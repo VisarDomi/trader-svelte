@@ -4,6 +4,7 @@ import { riskService } from '$lib/domains/trading/services/RiskService.svelte.js
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js';
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
+import { bus } from '$lib/core/events/globalBus.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 
 /**
@@ -74,14 +75,13 @@ export class SystemController {
         session.lastEpic = newEpic;
 
         // 3. Reset Market Store (Clear old data to prevent flash of wrong chart)
-        // We default to BID until ChartLogic determines direction
         marketStore.reset(TRADING.CHART_DATA_SOURCE_BID);
 
-        // 4. Reconfigure Poller
-        positionPoller.setEpic(newEpic);
-
-        // 5. Restart
+        // 4. Restart services
         this.wakeUp();
+
+        // 5. Notify UI Layer (ChartLogic) to reload metadata/precision
+        bus.emit('market:selected', { epic: newEpic });
     }
 
     /**

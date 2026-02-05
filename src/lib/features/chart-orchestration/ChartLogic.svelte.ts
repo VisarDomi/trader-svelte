@@ -41,6 +41,7 @@ export class ChartLogic {
 
     private saveTimeout: ReturnType<typeof setTimeout> | null = null;
     private preResizeState: ViewState | null = null;
+    private cleanupEvents: (() => void)[] = [];
 
     constructor() {
         this.overlay = new ChartOverlay(accountStore, positionStore, session, this);
@@ -51,9 +52,15 @@ export class ChartLogic {
             () => this.isInteractionBlocked()
         );
 
-        // NOTE: Connection is managed by SystemController, not ChartLogic.
+        // Subscribe to global inputs
+        const offClick = bus.on('input:chart_click', (event) => this.handleChartClick(event));
 
-        bus.on('input:chart_click', (event) => this.handleChartClick(event));
+        // Subscribe to Context Switches (e.g. Instrument Change)
+        const offMarket = bus.on('market:selected', (event) => {
+            void this.handleEpicSwitch(event.epic);
+        });
+
+        this.cleanupEvents.push(offClick, offMarket);
 
         $effect(() => this.syncContext());
     }
@@ -68,25 +75,14 @@ export class ChartLogic {
         this.controller.init(container);
         this.configureLayout(container);
 
-        const context = await this.loader.loadContext(session.lastEpic);
-        if (!context) return;
+        await this.loadAndApplyEpic(this.currentEpic);
 
-        this.applyContext(context);
-        this.initializeRenderer(context);
         this.initializeInteractions();
-
-        if (!this.restoreZoom()) {
-            this.controller.resetZoom();
-        }
 
         this.controller.subscribeCameraChange(() => this.scheduleSaveZoom());
 
         this.layout.setDataLoaded(true);
-        void this.overlay.init(this.currentEpic);
 
-        // Signal that the Chart is Ready.
-        // AppEngine might already be 'READY', but we can ensure SystemController wakes up
-        // if we are doing a client-side navigation.
         import('$lib/core/engine/SystemController.js').then(({ SystemController }) => {
             SystemController.wakeUp();
         });
@@ -96,6 +92,7 @@ export class ChartLogic {
         if (typeof window !== 'undefined') {
             window.removeEventListener('beforeunload', this.saveZoom);
         }
+        this.cleanupEvents.forEach(fn => fn());
         this.cancelPlanning();
         this.layout.destroy();
         this.renderer.destroy();
@@ -103,6 +100,36 @@ export class ChartLogic {
 
         this.controller.unsubscribeClick(this.inputHandler.handleChartClick);
         this.controller.destroy();
+    }
+
+    /**
+     * Handles dynamic switching of instruments without full re-init
+     */
+    private async handleEpicSwitch(newEpic: string) {
+        if (this.currentEpic === newEpic) return;
+
+        // Save state for old epic before switching
+        this.saveZoom();
+
+        this.currentEpic = newEpic;
+
+        // Reset local UI state
+        this.cancelPlanning();
+
+        await this.loadAndApplyEpic(newEpic);
+    }
+
+    private async loadAndApplyEpic(epic: string) {
+        const context = await this.loader.loadContext(epic);
+        if (!context) return;
+
+        this.applyContext(context);
+        this.initializeRenderer(context);
+        void this.overlay.init(epic);
+
+        if (!this.restoreZoom()) {
+            this.controller.resetZoom();
+        }
     }
 
     resetChartZoom() {
@@ -116,8 +143,6 @@ export class ChartLogic {
             const source = result.position.direction === TRADING.SELL_DIRECTION
                 ? TRADING.CHART_DATA_SOURCE_OFR
                 : TRADING.CHART_DATA_SOURCE_BID;
-
-            // This is a UI preference, valid to set on Store directly
             marketStore.setDataSource(source);
         }
     }
@@ -158,6 +183,7 @@ export class ChartLogic {
         this.marketDetails = context.marketDetails;
         this.context.marketDetails = this.marketDetails;
 
+        // Update Controller with new Precision info
         this.controller.createMainSeries(context.precision);
 
         if (this.marketDetails.instrument.overnightFee?.swapChargeTimestamp) {

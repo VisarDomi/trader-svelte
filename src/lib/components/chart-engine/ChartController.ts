@@ -54,6 +54,13 @@ export class ChartController {
 
     createMainSeries(precision: number) {
         if (!this._chart) return;
+
+        // If series exists, just update its options
+        if (this._series) {
+            this._series.applyOptions(getBaseSeriesOptions(precision));
+            return;
+        }
+
         this._series = this._chart.addSeries(CandlestickSeries, getBaseSeriesOptions(precision));
     }
 
