@@ -8,7 +8,6 @@ import { ChartRenderer } from '$lib/features/chart-orchestration/ChartPluginMana
 import { ChartOverlay } from '$lib/features/chart-hud/ChartHudState.svelte.js';
 import { ChartInputHandler, type ChartClickEvent } from '$lib/components/chart-engine/ChartEvents.svelte';
 import { ChartLoader, type ChartContext as LoaderContext } from '$lib/features/chart-orchestration/ChartLoader.svelte.js';
-import { RiskManager } from '$lib/domains/trading/domain/RiskManager.js';
 import { TradingDomain } from '$lib/domains/trading/domain/TradingDomain.js';
 
 import { ChartContext } from '$lib/features/chart-orchestration/ChartContext.svelte.js';
@@ -33,7 +32,7 @@ export class ChartLogic {
     private renderer: ChartRenderer;
     private inputHandler: ChartInputHandler;
     private loader: ChartLoader;
-    private riskManager = new RiskManager();
+    // Removed: RiskManager
     private tradingDomain = new TradingDomain();
 
     private currentEpic = "";
@@ -41,10 +40,8 @@ export class ChartLogic {
 
     private marketDetails = $state<MarketDetailsResponse | null>(null);
 
-    private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-    private isBurstChecking = false;
+    // Removed: heartbeatInterval, isBurstChecking, lastSyncMinute
     private saveTimeout: ReturnType<typeof setTimeout> | null = null;
-    private lastSyncMinute = -1;
     private preResizeState: ViewState | null = null;
 
     constructor() {
@@ -57,17 +54,9 @@ export class ChartLogic {
         );
 
         // ACTIVATE AUTONOMOUS MARKET STORE
-        // This is valid here because ChartLogic is instantiated inside a component's script block
         marketStore.autoConnect();
 
         bus.on('input:chart_click', (event) => this.handleChartClick(event));
-
-        $effect(() => {
-            const price = marketStore.currentPrice;
-            if (price > 0 && positionStore.activePosition) {
-                this.checkLimits(price);
-            }
-        });
 
         $effect(() => this.syncContext());
     }
@@ -104,7 +93,7 @@ export class ChartLogic {
             window.removeEventListener('beforeunload', this.saveZoom);
         }
         this.cancelPlanning();
-        this.stopHeartbeat();
+        // Removed: this.stopHeartbeat()
         this.layout.destroy();
         this.renderer.destroy();
         this.overlay.destroy();
@@ -143,7 +132,7 @@ export class ChartLogic {
 
     private startServices() {
         this.currentEpic = session.lastEpic;
-        this.startHeartbeat();
+        // Removed: this.startHeartbeat()
     }
 
     private configureLayout(container: HTMLDivElement) {
@@ -237,81 +226,8 @@ export class ChartLogic {
         return false;
     }
 
-    private checkLimits(currentPrice: number) {
-        if (this.isBurstChecking) return;
-
-        const pos = positionStore.activePosition?.position;
-        if (!pos) return;
-
-        const isBuy = pos.direction === TRADING.BUY_DIRECTION;
-
-        const hitSL = pos.stopLevel
-            ? (isBuy ? currentPrice <= pos.stopLevel : currentPrice >= pos.stopLevel)
-            : false;
-
-        const hitTP = pos.profitLevel
-            ? (isBuy ? currentPrice >= pos.profitLevel : currentPrice <= pos.profitLevel)
-            : false;
-
-        if (hitSL || hitTP) {
-            void this.runBurstCheck();
-        }
-    }
-
-    private async runBurstCheck() {
-        this.isBurstChecking = true;
-        for (let i = 0; i < 5; i++) {
-            await Promise.all([positionStore.refresh(), accountStore.refreshActive()]);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        this.isBurstChecking = false;
-    }
-
-    private startHeartbeat() {
-        this.stopHeartbeat();
-        this.heartbeatInterval = setInterval(async () => {
-            const now = new Date();
-            const sec = now.getSeconds();
-
-            if (sec >= 30 && sec <= 32 && this.lastSyncMinute !== now.getMinutes()) {
-                this.lastSyncMinute = now.getMinutes();
-                void marketStore.syncHistory();
-            }
-
-            if (sec % 15 === 0 && !this.isBurstChecking) {
-                await positionStore.refresh();
-            }
-
-            if (sec < 2 && !this.isBurstChecking) {
-                await this.checkRiskCompliance();
-            }
-        }, 1000);
-    }
-
-    private async checkRiskCompliance() {
-        const position = positionStore.anyActivePosition;
-        if (!position || !this.marketDetails) return;
-
-        await accountStore.refreshActive();
-
-        const correction = this.riskManager.calculateCorrection(
-            position.position,
-            this.marketDetails,
-            accountStore.balance
-        );
-
-        if (correction !== null) {
-            console.log(`[RiskManager] Correction Needed. Updating SL to ${correction}`);
-            await positionStore.updateStopLoss(correction);
-        }
-    }
-
-    private stopHeartbeat() {
-        if (this.heartbeatInterval) {
-            clearInterval(this.heartbeatInterval);
-            this.heartbeatInterval = null;
-        }
-    }
+    // Removed: checkLimits, runBurstCheck, startHeartbeat, checkRiskCompliance, stopHeartbeat
+    // These are now handled by RiskService
 
     private isInteractionBlocked(): boolean {
         if (tradeStore.isExecuting) return true;

@@ -8,50 +8,58 @@ import type { ChartData } from '$lib/shared/types/trading.js';
 import type { ChartCandle } from '$lib/shared/types/market.js';
 
 export class MarketStore extends BaseStore {
-    // --- Public State (Runes) ---
     bid = $state(0);
     offer = $state(0);
     lastCandle = $state.raw<ChartCandle | null>(null);
     updateTrigger = $state(0);
     history = $state.raw<ChartCandle[]>([]);
-
-    // "isLoaded" implies data + stream ready
     isLoaded = $state(false);
 
-    // --- Configuration ---
     epic = $state("");
     dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
 
-    // --- Dependencies ---
     private feed: MarketFeed;
     private bidHistory: ChartCandle[] = [];
     private askHistory: ChartCandle[] = [];
     private liveBidCandle: ChartCandle | null = null;
     private liveAskCandle: ChartCandle | null = null;
 
+    // Track sync state
+    private lastSyncMinute = -1;
+
     constructor() {
         super();
         this.feed = new MarketFeed((update) => this.handleFeedUpdate(update));
     }
 
-    /**
-     * Initializes the reactive chain for connection management.
-     * MUST be called from a Component Context (e.g. ChartLogic constructor).
-     */
     autoConnect() {
         $effect(() => {
             const status = appEngine.status;
             const currentEpic = this.epic;
             const isOnline = appEngine.isOnline;
 
-            // Explicit extraction of dependencies for Svelte 5 strictness
             if (!currentEpic) return;
 
             if (status === 'READY' && isOnline) {
-                // Determine if we need to connect
                 this.ensureConnection(currentEpic);
+
+                // --- NEW: Internal History Sync Heartbeat ---
+                const interval = setInterval(() => {
+                    const now = new Date();
+                    const sec = now.getSeconds();
+
+                    // Sync roughly at the 30s mark of a minute, once per minute
+                    if (sec >= 30 && sec <= 35 && this.lastSyncMinute !== now.getMinutes()) {
+                        this.lastSyncMinute = now.getMinutes();
+                        void this.syncHistory();
+                    }
+                }, 1000);
+
+                return () => {
+                    clearInterval(interval);
+                    this.disconnect();
+                };
             } else {
-                // Offline, Background, or Booting -> Cut the feed
                 this.disconnect();
             }
         });
@@ -61,11 +69,7 @@ export class MarketStore extends BaseStore {
         return this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.offer : this.bid;
     }
 
-    /**
-     * Sets the target epic and loads initial history.
-     */
     async load(epic: string, dataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID) {
-        // If switching epics, reset first
         if (this.epic !== epic) {
             this.resetState();
             this.epic = epic;
@@ -83,7 +87,6 @@ export class MarketStore extends BaseStore {
             this.bidHistory = bid;
             this.askHistory = ask;
 
-            // Seed internal state from history end
             this.liveBidCandle = this.bidHistory.length > 0 ? this.bidHistory[this.bidHistory.length - 1] : null;
             this.liveAskCandle = this.askHistory.length > 0 ? this.askHistory[this.askHistory.length - 1] : null;
 
@@ -91,7 +94,6 @@ export class MarketStore extends BaseStore {
             if (this.liveAskCandle) this.offer = this.liveAskCandle.close;
 
             this.syncViewToSource();
-
             this.isLoaded = true;
         });
     }
@@ -99,8 +101,6 @@ export class MarketStore extends BaseStore {
     private ensureConnection(epic: string) {
         const tokens = session.getTokens(session.mode);
         if (!tokens) return;
-
-        // Feed handles its own duplicate connection checks
         this.feed.initialize(this.liveBidCandle, this.liveAskCandle);
         this.feed.connect(tokens, epic);
     }
@@ -130,7 +130,6 @@ export class MarketStore extends BaseStore {
             this.syncViewToSource();
             this.feed.mergeExternalData(bidData.current, askData.current);
             this.updateTrigger++;
-
         } catch (e) {
             console.warn("[MarketStore] History sync failed", e);
         }
@@ -157,6 +156,7 @@ export class MarketStore extends BaseStore {
         this.askHistory = [];
         this.liveBidCandle = null;
         this.liveAskCandle = null;
+        this.lastSyncMinute = -1;
     }
 
     private syncViewToSource() {

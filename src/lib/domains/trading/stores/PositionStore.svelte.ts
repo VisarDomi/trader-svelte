@@ -5,9 +5,10 @@ import { session } from '$lib/core/services/SessionManager.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
 import { accountStore } from './AccountStore.svelte.js';
-import { bus } from '$lib/core/events/globalBus.js'; // NEW: Event Bus
+import { bus } from '$lib/core/events/globalBus.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { PositionResponse } from '$lib/shared/types/trading.js';
+import { appEngine } from '$lib/core/AppEngine.svelte.js'; // Import AppEngine
 
 export class PositionStore extends BaseStore {
     activePosition = $state<PositionResponse | null>(null);
@@ -18,9 +19,24 @@ export class PositionStore extends BaseStore {
 
     constructor() {
         super();
-        // NEW: Listen for trades to update state immediately without a fetch
         bus.on('trade:executed', (pos) => {
             this.set(pos);
+        });
+    }
+
+    /**
+     * Starts the global auto-refresh loop for positions.
+     * Called by AppEngine.
+     */
+    startAutoRefresh() {
+        $effect(() => {
+            if (appEngine.status === 'READY' && appEngine.isOnline) {
+                const interval = setInterval(() => {
+                    void this.refresh();
+                }, 15000); // 15 seconds
+
+                return () => clearInterval(interval);
+            }
         });
     }
 
@@ -33,7 +49,10 @@ export class PositionStore extends BaseStore {
         const client = this.getClient();
         if (!client) return;
 
-        await this.execute(async () => {
+        // Note: We avoid setting 'isLoading' global flag for background refreshes
+        // to avoid UI flickering. We just run the fetch.
+
+        try {
             const list = await getPositions(client);
 
             if (accountStore.activeAccount) {
@@ -50,7 +69,9 @@ export class PositionStore extends BaseStore {
 
             this.anyActivePosition = globalPos;
             this.activePosition = localPos || null;
-        });
+        } catch (e) {
+            console.warn('[PositionStore] Refresh failed', e);
+        }
     }
 
     set(p: PositionResponse | null) {
@@ -86,8 +107,7 @@ export class PositionStore extends BaseStore {
             this.activePosition = null;
             this.anyActivePosition = null;
 
-            // Emit close event so AccountStore can update balance
-            bus.emit('position:closed', { dealId: p.dealId, pnl: 0 }); // PnL 0 placeholder, account refresh handles true value
+            bus.emit('position:closed', { dealId: p.dealId, pnl: 0 });
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

@@ -7,11 +7,11 @@ import { notifications } from '$lib/core/services/NotificationService.svelte.js'
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 import { session } from '$lib/core/services/SessionManager.js';
 
-// Domain Stores
+// Domain Stores & Services
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
-// Removed: MarketStore import (it now listens to us, we don't command it)
+import { riskService } from '$lib/domains/trading/services/RiskService.svelte.js';
 
 import * as AUTH from '$lib/shared/constants/auth.js';
 
@@ -26,7 +26,6 @@ export type AppStatus =
     | 'UNAUTHENTICATED'; // User needs to login
 
 class AppEngine {
-    // Reactive State
     status = $state<AppStatus>('BOOTING');
     isOnline = $state(true);
 
@@ -34,11 +33,23 @@ class AppEngine {
         if (browser) {
             this.setupListeners();
             watchdog.setOnFreeze(() => this.handleFreeze());
+            // REMOVED: positionStore.startAutoRefresh() - Cannot be called here
         }
     }
 
+    /**
+     * Called from +layout.svelte onMount.
+     * This is safe for creating effects.
+     */
     async boot() {
         console.log('[AppEngine] Booting...');
+
+        // ACTIVATE REACTIVE SERVICES HERE (Inside Component Context)
+        positionStore.startAutoRefresh();
+
+        // RiskService uses setInterval, not $effect, so it's safe anywhere,
+        // but let's keep it close to boot for logic consistency.
+        riskService.start();
 
         viewport.init();
         this.status = 'AUTH_CHECK';
@@ -95,9 +106,6 @@ class AppEngine {
         notifications.info('Connection disrupted. Reconnecting...');
 
         try {
-            // MarketStore will reactively disconnect when we set RECONNECTING
-            // and reconnect when we set READY below.
-
             await authStore.validateSession();
 
             await Promise.all([
@@ -117,8 +125,6 @@ class AppEngine {
         if (!isVisible) {
             this.status = 'BACKGROUND';
         } else {
-            // Upon returning, we set to READY.
-            // MarketStore will see READY and reconnect automatically.
             if (this.status === 'BACKGROUND') {
                 this.status = 'READY';
                 void positionStore.refresh();
@@ -139,13 +145,12 @@ class AppEngine {
         this.status = 'OFFLINE';
         notifications.error('No Internet Connection');
         watchdog.stop();
-        // MarketStore disconnects reactively
     }
 
     private async handleOnline() {
         this.isOnline = true;
         notifications.info('Internet restored');
-        await this.handleFreeze(); // Trigger reconnection logic
+        await this.handleFreeze();
         watchdog.start();
     }
 }
