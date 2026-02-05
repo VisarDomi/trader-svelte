@@ -71,6 +71,16 @@ class AppEngine {
             console.log('[AppEngine] Ready');
 
         } catch (e) {
+            const errString = String(e);
+
+            // Check for Session Invalid/401 errors
+            if (errString.includes('invalid.session') || errString.includes('401')) {
+                console.warn('[AppEngine] Session expired during load');
+                this.status = 'UNAUTHENTICATED';
+                await goto('/login');
+                return;
+            }
+
             console.error('[AppEngine] Data load failed', e);
             notifications.error('Failed to load account data');
             this.transitionTo('READY'); // Proceed anyway, allows manual retry
