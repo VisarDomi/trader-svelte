@@ -3,6 +3,8 @@ import { watchdog } from '$lib/core/services/WatchdogService.svelte.js';
 import { riskService } from '$lib/domains/trading/services/RiskService.svelte.js';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js';
+import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
+import * as TRADING from '$lib/shared/constants/trading.js';
 
 /**
  * The Mechanic.
@@ -16,6 +18,8 @@ export class SystemController {
      * Used when App becomes READY or recovers from FREEZE.
      */
     static wakeUp() {
+        console.log('[SystemController] Waking up...');
+
         // 1. Start Polling Positions
         if (session.lastEpic) {
             positionPoller.setEpic(session.lastEpic);
@@ -39,6 +43,8 @@ export class SystemController {
      * Used when App goes BACKGROUND, OFFLINE, or before RECONNECTING.
      */
     static hibernate() {
+        console.log('[SystemController] Hibernating...');
+
         // 1. Stop polling to save bandwidth/resources
         positionPoller.stop();
 
@@ -53,22 +59,42 @@ export class SystemController {
     }
 
     /**
-     * Switch Context (Epic Change)
+     * Switch Instrument Context
+     * Tears down everything, updates session, resets stores, and restarts.
      */
     static switchContext(newEpic: string) {
-        // 1. Hibernate current processes
+        if (session.lastEpic === newEpic && marketStore.isLoaded) return;
+
+        console.log(`[SystemController] Switching Context to ${newEpic}`);
+
+        // 1. Stop everything immediately
         this.hibernate();
 
-        // 2. Reconfigure Services
+        // 2. Update Persistent Session
+        session.lastEpic = newEpic;
+
+        // 3. Reset Market Store (Clear old data to prevent flash of wrong chart)
+        // We default to BID until ChartLogic determines direction
+        marketStore.reset(TRADING.CHART_DATA_SOURCE_BID);
+
+        // 4. Reconfigure Poller
         positionPoller.setEpic(newEpic);
 
-        // 3. Wake up (Connects MarketPump to new epic automatically via logic in connect())
-        // Note: We need to explicitly pass the new epic to connect if we want it to switch
-        marketDataPump.connect(newEpic);
+        // 5. Restart
+        this.wakeUp();
+    }
 
-        // (Wait, SystemController.wakeUp uses session.lastEpic.
-        // We should assume session.lastEpic was updated BEFORE calling switchContext,
-        // or update it here. For safety, wakeUp() checks session.)
+    /**
+     * Restart System
+     * Used when switching Accounts or recovering from deep sleep.
+     */
+    static restart() {
+        console.log('[SystemController] Restarting system...');
+        this.hibernate();
+        // Determine current epic from session and re-apply
+        if (session.lastEpic) {
+            positionPoller.setEpic(session.lastEpic);
+        }
         this.wakeUp();
     }
 }

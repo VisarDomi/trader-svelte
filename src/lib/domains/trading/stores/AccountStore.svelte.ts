@@ -3,7 +3,8 @@ import { getSyncedAccounts, switchAccount } from '$lib/domains/trading/services/
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import { session } from '$lib/core/services/SessionManager.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
-import { bus } from '$lib/core/events/globalBus.js'; // NEW
+import { bus } from '$lib/core/events/globalBus.js';
+import { SystemController } from '$lib/core/engine/SystemController.js';
 import * as AUTH from '$lib/shared/constants/auth.js';
 import type { Account } from '$lib/shared/types/account.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
@@ -23,16 +24,10 @@ export class AccountStore extends BaseStore {
 
     constructor() {
         super();
-        // Listen for trade execution to update balance instantly (optimistic)
-        // or trigger a refresh.
         bus.on('trade:executed', () => {
-            // Note: The trade itself might reduce "available" immediately,
-            // but "deposit" changes only on close.
-            // We refresh just in case.
             void this.refreshActive();
         });
 
-        // Listen for position close to update realized PnL/Deposit
         bus.on('position:closed', () => {
             void this.pollBalanceUpdate();
         });
@@ -113,6 +108,9 @@ export class AccountStore extends BaseStore {
             session.mode = type;
             await this.loadAll();
             notifications.success(`Switched to ${account.accountName}`);
+
+            // STRICT HANDOFF: Restart all pumps to ensure they use the new account tokens
+            SystemController.restart();
         });
 
         if (this.error) notifications.error(this.error);
@@ -124,7 +122,6 @@ export class AccountStore extends BaseStore {
         }
     }
 
-    // Moved polling logic here from PositionStore where it semantically belongs
     private async pollBalanceUpdate() {
         for (let i = 0; i < 5; i++) {
             await new Promise(resolve => setTimeout(resolve, 1000));

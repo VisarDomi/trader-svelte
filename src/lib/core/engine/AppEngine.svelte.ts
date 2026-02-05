@@ -10,10 +10,12 @@ import { notifications } from '$lib/core/services/NotificationService.svelte.js'
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 import { session } from '$lib/core/services/SessionManager.js';
 
-// Domain Stores
+// Domain Services (The Active Workers)
+import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
+
+// Domain Stores (Passive State)
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
-import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
 import * as AUTH from '$lib/shared/constants/auth.js';
 
 export type AppStatus =
@@ -98,6 +100,9 @@ class AppEngine {
             ).find(a => a.accountId === savedAccountId);
 
             if (account) {
+                // Restore strictly based on LocalStorage source of truth.
+                // If the server thinks we are on Account A, but LS says Account B,
+                // we force the switch to Account B.
                 await accountStore.switchTo(account, savedMode);
             }
         }
@@ -134,7 +139,7 @@ class AppEngine {
 
             await Promise.all([
                 accountStore.refreshActive(),
-                positionStore.refresh()
+                positionPoller.refresh()
             ]);
 
             this.transitionTo('READY');
@@ -156,8 +161,8 @@ class AppEngine {
                 // Determine if we need a full reconnect or just a resume
                 this.transitionTo('READY');
 
-                // Immediately refresh vital data visually
-                void positionStore.refresh();
+                // Immediately refresh vital data visually via the Poller
+                void positionPoller.refresh();
             }
         }
     }

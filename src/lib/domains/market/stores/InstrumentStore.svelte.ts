@@ -2,6 +2,7 @@ import { BaseStore } from '$lib/core/stores/BaseStore.svelte.js';
 import { getMarketDetails } from '$lib/domains/market/services/MarketApiService.js';
 import { getPreferences } from '$lib/domains/trading/services/AccountApiService.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
+import { SystemController } from '$lib/core/engine/SystemController.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 import type { AccountPreferences } from '$lib/shared/types/account.js';
@@ -31,12 +32,12 @@ export class InstrumentStore extends BaseStore {
         }
     }
 
+    /**
+     * Selects an instrument and triggers a System Context Switch.
+     */
     select(epic: string) {
-        // session imported dynamically or via import?
-        // We need to import session since BaseStore doesn't handle 'select' logic
-        import('$lib/core/services/SessionManager.js').then(({ session }) => {
-            session.lastEpic = epic;
-        });
+        // Enforce strict handoff via Controller
+        SystemController.switchContext(epic);
     }
 }
 
