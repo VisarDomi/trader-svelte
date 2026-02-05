@@ -1,5 +1,6 @@
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import type { Types } from "$lib/components/chart-engine/types.js";
+import { ChartContext } from "$lib/features/chart-orchestration/ChartContext.svelte.js";
 import * as CHART from '$lib/shared/constants/chart.js';
 
 export class ClockPlugin implements Types {
@@ -8,7 +9,6 @@ export class ClockPlugin implements Types {
     private container: HTMLElement | null = null;
     private clockEl: HTMLDivElement | null = null;
     private interval: ReturnType<typeof setInterval> | null = null;
-    private resizeObserver: ResizeObserver | null = null;
 
     mount(chart: IChartApi, series: ISeriesApi<"Candlestick">): void {
         this.container = document.getElementById(CHART.CHART_CONTAINER_ID);
@@ -22,14 +22,13 @@ export class ClockPlugin implements Types {
 
         this.clockEl = document.createElement('div');
 
-        // Style to fit in the bottom-right intersection of axes.
-        // We position it over the empty corner typically left by LWC.
+        // Initial Base Styles
         Object.assign(this.clockEl.style, {
             position: 'absolute',
-            bottom: '20px',
             right: '20px',
-            zIndex: '20', // Above scales
-            color: '#777', // Dimmer than main text
+            bottom: '5px', // Default (Portrait/Safe)
+            zIndex: '20',
+            color: '#777',
             fontSize: '14px',
             fontWeight: 'bold',
             fontFamily: 'Monaco, monospace',
@@ -39,34 +38,25 @@ export class ClockPlugin implements Types {
         });
 
         this.container.appendChild(this.clockEl);
-
-        // Observer for orientation/size changes to adjust vertical position
-        this.resizeObserver = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                const { width, height } = entry.contentRect;
-                this.updateLayout(width, height);
-            }
-        });
-        this.resizeObserver.observe(this.container);
-
-        // Initial layout check
-        const rect = this.container.getBoundingClientRect();
-        this.updateLayout(rect.width, rect.height);
-
         this.start();
     }
 
-    update(context: any): void {
-        // Not driven by chart updates, runs on independent timer
+    /**
+     * The system passes the context (including viewport dimensions) here.
+     * The Clock simply reacts to the provided state rather than calculating it.
+     */
+    update(context: ChartContext): void {
+        if (!this.clockEl) return;
+
+        const isLandscape = context.viewportWidth > context.viewportHeight;
+
+        // Portrait: 20px (Taller scale area)
+        // Landscape: 5px (Shorter scale area)
+        this.clockEl.style.bottom = isLandscape ? '5px' : '20px';
     }
 
     destroy(): void {
         if (this.interval) clearInterval(this.interval);
-
-        if (this.resizeObserver) {
-            this.resizeObserver.disconnect();
-            this.resizeObserver = null;
-        }
 
         if (this.clockEl && this.container) {
             if (this.container.contains(this.clockEl)) {
@@ -75,16 +65,6 @@ export class ClockPlugin implements Types {
         }
         this.clockEl = null;
         this.container = null;
-    }
-
-    private updateLayout(width: number, height: number) {
-        if (!this.clockEl) return;
-
-        const isLandscape = width > height;
-
-        // Portrait: Taller scale area (20px fits well)
-        // Landscape: Shorter scale area (5px fits well)
-        this.clockEl.style.bottom = isLandscape ? '5px' : '20px';
     }
 
     private start() {
