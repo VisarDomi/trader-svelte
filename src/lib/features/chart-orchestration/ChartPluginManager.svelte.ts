@@ -12,6 +12,8 @@ import type { TradeStore } from '$lib/domains/trading/stores/TradeStore.svelte.j
 import { PositionLines } from "$lib/features/chart-drawings/plugins/PositionLines.js";
 import { CurrentPrice } from "$lib/features/chart-drawings/plugins/CurrentPrice.js";
 import { Fee } from "$lib/features/chart-drawings/plugins/Fee.js";
+import { HistoryLoaderPlugin } from "$lib/features/chart-drawings/plugins/HistoryLoaderPlugin.js";
+import { LiveEdgePlugin } from "$lib/features/chart-drawings/plugins/LiveEdgePlugin.js";
 
 export class ChartRenderer {
     // Reactive references for the effect
@@ -32,6 +34,8 @@ export class ChartRenderer {
         this.features.push(new PositionLines());
         this.features.push(new CurrentPrice());
         this.features.push(new Fee());
+        this.features.push(new HistoryLoaderPlugin());
+        this.features.push(new LiveEdgePlugin());
 
         // The Main Render Loop
         $effect(() => {
@@ -46,21 +50,28 @@ export class ChartRenderer {
             const _trigger = this.marketStore.updateTrigger;
 
             if (loaded && lastCandle) {
+                // Live update (tick)
                 this.series.update(lastCandle);
             }
 
+            // Note: Full history set/prepend is handled via direct setData calls
+            // inside the Effect below or manually triggered logic,
+            // but normally we need an Effect watching history specifically if we want it reactive.
+
             // 2. Update Features
-            // The renderer no longer knows *what* it is rendering, only *that* it is rendering.
             for (const feature of this.features) {
                 feature.update(this.context);
             }
         });
 
-        // Initial History Load
+        // History Load / Prepend Effect
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
+            // Reactive dependency on history array reference change
             const history = this.marketStore.history;
+
             if (this.series && loaded && history.length > 0) {
+                // LWC efficient update is 'update', but for full history change/prepend we use setData
                 this.series.setData(history);
             }
         });
@@ -74,11 +85,6 @@ export class ChartRenderer {
         // Mount Features
         for (const feature of this.features) {
             feature.mount(chart, series);
-        }
-
-        // Initial Render of history
-        if (this.marketStore.isLoaded && this.marketStore.history.length > 0) {
-            this.series.setData(this.marketStore.history);
         }
     }
 

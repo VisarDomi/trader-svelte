@@ -1,6 +1,5 @@
 import type { ApiClient } from '$lib/core/api/ApiClient.js';
 import * as API from '$lib/shared/constants/api.js';
-import * as TIME from '$lib/shared/constants/time.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import { DateTime } from "luxon";
 import type { UTCTimestamp } from 'lightweight-charts';
@@ -14,32 +13,78 @@ import type { ChartData } from '$lib/shared/types/trading.js';
 export class MarketRepository {
     constructor(private client: ApiClient) {}
 
+    /**
+     * Fetch initial history (Latest N candles)
+     */
     async getHistory(epic: string): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
-        const rawHistory = await this.fetchRawHistory(epic);
-
-        return {
-            bid: this.mapToCandles(rawHistory, TRADING.CHART_DATA_SOURCE_BID),
-            ask: this.mapToCandles(rawHistory, TRADING.CHART_DATA_SOURCE_OFR)
-        };
+        // "TO" is Now.
+        const toStr = this.formatDateForApi(DateTime.utc());
+        console.log(`[MarketRepository] Fetching INITIAL history for ${epic} up to ${toStr}`);
+        return this.fetchAndMap(epic, toStr);
     }
 
-    private async fetchRawHistory(epic: string): Promise<PriceSnapshot[]> {
-        const endDateTime = DateTime.utc();
-        const fromUTCDateTime = endDateTime.minus({ minutes: TIME.TOTAL_MINUTES_IN_THE_PAST });
+    /**
+     * Fetch older history (N candles BEFORE a specific time)
+     */
+    async getHistoryBefore(epic: string, beforeTime: UTCTimestamp): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
+        // Convert Timestamp to ISO for API
+        const dt = DateTime.fromSeconds(beforeTime, { zone: 'utc' });
+        const toStr = this.formatDateForApi(dt);
 
+        console.log(`[MarketRepository] Fetching OLDER history for ${epic} ending at ${toStr} (Unix: ${beforeTime})`);
+        return this.fetchAndMap(epic, toStr);
+    }
+
+    private formatDateForApi(dt: DateTime): string {
+        // MATCHING THE SUCCESSFUL TEST FORMAT: YYYY-MM-DDTHH:mm:ss
+        // No Milliseconds, No 'Z' suffix.
+        return dt.toFormat("yyyy-MM-dd'T'HH:mm:ss");
+    }
+
+    private async fetchAndMap(epic: string, toStr: string) {
+        // CLEVER REQUEST PATTERN:
+        // We do NOT send 'from'. We send 'to' and 'max'.
+        // The server counts backwards 'max' rows from 'to'.
         const params = {
             [API.RESOLUTION_KEY]: API.RESOLUTION_MINUTE,
-            [API.MAX_KEY]: API.MAX_ROWS,
-            [API.FROM_KEY]: fromUTCDateTime.startOf(TIME.SECOND_KEY).toISO({ suppressMilliseconds: true }).slice(0, -1),
-            [API.TO_KEY]: endDateTime.startOf(TIME.SECOND_KEY).toISO({ suppressMilliseconds: true }).slice(0, -1),
+            [API.MAX_KEY]: API.MAX_ROWS, // 1000
+            [API.TO_KEY]: toStr
         };
 
         const endpoint = `${API.PRICES_ENDPOINT}/${epic}`;
-        const data = await this.client.get<MarketPriceResponse>(endpoint, params);
 
-        return data.prices.sort((a, b) =>
-            new Date(a.snapshotTimeUTC).getTime() - new Date(b.snapshotTimeUTC).getTime()
-        );
+        try {
+            // Debug Log
+            console.log(`[MarketRepository] GET ${endpoint}`, JSON.stringify(params));
+
+            const data = await this.client.get<MarketPriceResponse>(endpoint, params);
+
+            // Handle 404/Empty by returning empty lists (handled gracefully by pump)
+            if (!data.prices || data.prices.length === 0) {
+                console.warn("[MarketRepository] Received 0 prices.");
+                return { bid: [], ask: [] };
+            }
+
+            // Sort ascending (Oldest -> Newest) because API might return them descending or mixed
+            const sorted = data.prices.sort((a, b) =>
+                new Date(a.snapshotTimeUTC).getTime() - new Date(b.snapshotTimeUTC).getTime()
+            );
+
+            const first = sorted[0].snapshotTimeUTC;
+            const last = sorted[sorted.length - 1].snapshotTimeUTC;
+            console.log(`[MarketRepository] Received ${data.prices.length} candles. Range: ${first} -> ${last}`);
+
+            return {
+                bid: this.mapToCandles(sorted, TRADING.CHART_DATA_SOURCE_BID),
+                ask: this.mapToCandles(sorted, TRADING.CHART_DATA_SOURCE_OFR)
+            };
+
+        } catch (e) {
+            // If 404 or bad request, assume end of history or format error
+            // We log the full error now to debug 'error.invalid.to' specifically
+            console.error("[MarketRepository] Fetch failed details:", e);
+            return { bid: [], ask: [] };
+        }
     }
 
     private mapToCandles(snapshots: PriceSnapshot[], type: ChartData): ChartCandle[] {
@@ -51,12 +96,18 @@ export class MarketRepository {
                 o: p.openPrice.bid, h: p.highPrice.bid, l: p.lowPrice.bid, c: p.closePrice.bid
             };
 
+            // Safety: Ensure valid numbers
+            const close = target.c || 0;
+            const open = target.o || close;
+            const high = target.h || Math.max(open, close);
+            const low = target.l || Math.min(open, close);
+
             return {
-                time: DateTime.fromISO(p.snapshotTimeUTC, { zone: TIME.UTC_ZONE }).toSeconds() as UTCTimestamp,
-                open: target.o,
-                high: target.h,
-                low: target.l,
-                close: target.c
+                time: DateTime.fromISO(p.snapshotTimeUTC, { zone: 'utc' }).toSeconds() as UTCTimestamp,
+                open,
+                high,
+                low,
+                close
             };
         });
     }

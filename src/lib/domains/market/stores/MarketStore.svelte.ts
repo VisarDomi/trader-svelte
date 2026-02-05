@@ -15,19 +15,16 @@ export class MarketStore extends BaseStore {
 
     // State Flags
     isLoaded = $state(false);
-    // Used by charts to trigger a re-render when data arrives
     updateTrigger = $state(0);
 
     // Config
     dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
 
     // Status
-    // "TRADEABLE" | "CLOSED"
     marketStatus = $state("CLOSED");
     epic = $state("");
 
-    // Internal State (Public Read, Private Write via actions)
-    // These are needed by the Pump to seed the Feed
+    // Internal State
     bidHistory: ChartCandle[] = [];
     askHistory: ChartCandle[] = [];
     liveBidCandle: ChartCandle | null = null;
@@ -41,7 +38,7 @@ export class MarketStore extends BaseStore {
         return this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.offer : this.bid;
     }
 
-    // --- Actions (Called by Pump or UI) ---
+    // --- Actions ---
 
     reset(dataSource: ChartData) {
         this.isLoaded = false;
@@ -58,7 +55,6 @@ export class MarketStore extends BaseStore {
         this.marketStatus = "CLOSED";
     }
 
-    // New: Called by ChartLoader or Pump when details are fetched
     setMetadata(epic: string, status: string) {
         this.epic = epic;
         this.marketStatus = status;
@@ -68,18 +64,23 @@ export class MarketStore extends BaseStore {
         this.isLoaded = loaded;
     }
 
+    // Initial Full Set
     setHistory(bid: ChartCandle[], ask: ChartCandle[]) {
         this.bidHistory = bid;
         this.askHistory = ask;
+        this.recalcLiveState();
+        this.syncViewToSource();
+        this.updateTrigger++;
+    }
 
-        // Initialize live candles from end of history
-        this.liveBidCandle = this.bidHistory.length > 0 ? this.bidHistory[this.bidHistory.length - 1] : null;
-        this.liveAskCandle = this.askHistory.length > 0 ? this.askHistory[this.askHistory.length - 1] : null;
-
-        if (this.liveBidCandle) this.bid = this.liveBidCandle.close;
-        if (this.liveAskCandle) this.offer = this.liveAskCandle.close;
+    // Infinite Scroll Prepend
+    prependHistory(bid: ChartCandle[], ask: ChartCandle[]) {
+        // Prepend new older data
+        this.bidHistory = [...bid, ...this.bidHistory];
+        this.askHistory = [...ask, ...this.askHistory];
 
         this.syncViewToSource();
+        // We do NOT trigger recalcLiveState here as live data is at the end
         this.updateTrigger++;
     }
 
@@ -87,7 +88,6 @@ export class MarketStore extends BaseStore {
         this.bid = u.bid;
         this.offer = u.offer;
 
-        // If a candle completed, append to history
         if (u.completedBid) this.bidHistory.push(u.completedBid);
         if (u.completedAsk) this.askHistory.push(u.completedAsk);
 
@@ -104,6 +104,14 @@ export class MarketStore extends BaseStore {
         if (this.dataSource === source) return;
         this.dataSource = source;
         this.syncViewToSource();
+    }
+
+    private recalcLiveState() {
+        this.liveBidCandle = this.bidHistory.length > 0 ? this.bidHistory[this.bidHistory.length - 1] : null;
+        this.liveAskCandle = this.askHistory.length > 0 ? this.askHistory[this.askHistory.length - 1] : null;
+
+        if (this.liveBidCandle) this.bid = this.liveBidCandle.close;
+        if (this.liveAskCandle) this.offer = this.liveAskCandle.close;
     }
 
     private syncViewToSource() {
