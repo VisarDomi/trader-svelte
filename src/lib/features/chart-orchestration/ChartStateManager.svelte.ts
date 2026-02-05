@@ -3,6 +3,11 @@ import type { ChartController, ViewState } from '$lib/components/chart-engine/Ch
 import type { ChartUI } from '$lib/components/chart-engine/ChartResizer.svelte.js';
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 
+// Extend ViewState to include context about the data at the time of saving
+interface EnhancedViewState extends ViewState {
+    lastDataTimeAtSave: number;
+}
+
 export class ChartStateManager {
     private isZoomRestored = $state(false);
     private currentEpic = $state("");
@@ -12,7 +17,6 @@ export class ChartStateManager {
         private readonly controller: ChartController,
         private readonly layout: ChartUI
     ) {
-        // The Latch Effect: Decouples "When" (timing) from "What" (logic)
         $effect(() => {
             const hasHistory = marketStore.history.length > 0;
             const isLayoutReady = this.layout.isDataLoaded;
@@ -21,13 +25,13 @@ export class ChartStateManager {
             const epic = this.currentEpic;
 
             if (!this.isZoomRestored && hasHistory && isLayoutReady && epic) {
-                // The environment is stable.
-                // Attempt restore. If no save found, default to auto-scale.
-                if (!this.restoreZoom()) {
+                // Determine the CURRENT live time for calculation
+                const currentLastCandle = marketStore.lastCandle?.time as number | undefined;
+
+                if (!this.restoreZoom(currentLastCandle)) {
                     this.controller.resetZoom();
                 }
 
-                // Lock the latch
                 this.isZoomRestored = true;
             }
         });
@@ -35,9 +39,9 @@ export class ChartStateManager {
 
     setEpic(epic: string) {
         if (this.currentEpic !== epic) {
-            this.saveZoom(); // Save old before switching
+            this.saveZoom();
             this.currentEpic = epic;
-            this.isZoomRestored = false; // Reset latch
+            this.isZoomRestored = false;
         }
     }
 
@@ -60,7 +64,7 @@ export class ChartStateManager {
         this.controller.subscribeCameraChange(() => this.scheduleSaveZoom());
     }
 
-    // --- Private / Internal ---
+    // --- Internal ---
 
     private getStorageKey(): string {
         return `${STORAGE.CHART_STATE_KEY}_${this.currentEpic}`;
@@ -71,37 +75,58 @@ export class ChartStateManager {
         this.saveTimeout = setTimeout(() => this.saveZoom(), 500);
     }
 
-    // Wrapper for event listeners to bind 'this'
     private saveZoomWrapper = () => this.saveZoom();
 
     private saveZoom() {
         if (typeof window === 'undefined' || !this.currentEpic) return;
-
-        // Don't save if we haven't even restored yet (prevents overwriting valid saves with default state)
         if (!this.isZoomRestored) return;
 
         const state = this.controller.getViewState();
-        if (state) {
-            localStorage.setItem(this.getStorageKey(), JSON.stringify(state));
+        const lastCandle = marketStore.lastCandle;
+
+        if (state && lastCandle) {
+            const enhanced: EnhancedViewState = {
+                ...state,
+                lastDataTimeAtSave: Number(lastCandle.time)
+            };
+            localStorage.setItem(this.getStorageKey(), JSON.stringify(enhanced));
         }
     }
 
-    private restoreZoom(): boolean {
+    private restoreZoom(currentLastCandleTime?: number): boolean {
         if (typeof window === 'undefined') return false;
 
         const raw = localStorage.getItem(this.getStorageKey());
-        if (raw) {
-            try {
-                const state: ViewState = JSON.parse(raw);
-                // Slight delay to ensure the chart is ready to accept the range
-                setTimeout(() => {
-                    this.controller.restoreViewState(state);
-                }, 50);
-                return true;
-            } catch {
-                return false;
+        if (!raw) return false;
+
+        try {
+            const saved: EnhancedViewState = JSON.parse(raw);
+
+            // LOGIC: The "Smart Snap" Pattern
+            // If the user's center view was >= the last known data time,
+            // they were looking at the "Future" or "Live Edge".
+            const wasLookingAtFuture = saved.centerTime >= saved.lastDataTimeAtSave;
+
+            let targetState: ViewState = saved;
+
+            // If they were looking at the future, shift the view to the NEW Present
+            // but keep their Zoom Level (timeSpan)
+            if (wasLookingAtFuture && currentLastCandleTime) {
+                targetState = {
+                    ...saved,
+                    centerTime: currentLastCandleTime,
+                    // We effectively slide the window to center on the new data
+                    // while preserving price scale and zoom level
+                };
             }
+
+            setTimeout(() => {
+                this.controller.restoreViewState(targetState);
+            }, 50);
+
+            return true;
+        } catch {
+            return false;
         }
-        return false;
     }
 }
