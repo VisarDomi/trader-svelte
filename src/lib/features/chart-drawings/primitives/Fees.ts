@@ -6,6 +6,7 @@ import {
     type PrimitivePaneViewZOrder,
     type Time
 } from 'lightweight-charts';
+import * as CHART from '$lib/shared/constants/chart.js';
 
 // Shim for the fancy-canvas type used by lightweight-charts internal renderer
 interface CanvasRenderingTarget2D {
@@ -19,6 +20,7 @@ interface CanvasRenderingTarget2D {
 
 const FEE_LINE_COLOR = '#FF5252'; // Lighter, distinct red
 const FEE_TEXT_COLOR = '#FFFFFF';
+
 
 class FeeLineRenderer implements IPrimitivePaneRenderer {
     constructor(
@@ -60,7 +62,7 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
 
             // Draw Top Label (Fee Amount)
             if (this.topLabel) {
-                this.drawLabel(ctx, this.topLabel, sharpX, 20);
+                this.drawLabel(ctx, this.topLabel, sharpX, CHART.TOP_LABEL_OFFSET);
             }
 
             ctx.restore();
