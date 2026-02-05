@@ -7,10 +7,15 @@ import type { ChartData } from '$lib/shared/types/trading.js';
 import type { ChartCandle } from '$lib/shared/types/market.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 
+const STALE_THRESHOLD_MS = 10000; // 10 seconds without data = Zombie
+const LIVENESS_CHECK_INTERVAL = 2000;
+
 export class MarketDataPump {
     private feed: MarketFeed;
     private epic: string = "";
+
     private syncInterval: ReturnType<typeof setInterval> | null = null;
+    private livenessInterval: ReturnType<typeof setInterval> | null = null;
     private lastSyncMinute = -1;
 
     constructor() {
@@ -68,6 +73,25 @@ export class MarketDataPump {
             this.feed.connect(tokens, this.epic);
         }
 
+        this.startHistorySync();
+        this.startLivenessCheck();
+    }
+
+    disconnect() {
+        this.feed.disconnect();
+
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+            this.syncInterval = null;
+        }
+
+        if (this.livenessInterval) {
+            clearInterval(this.livenessInterval);
+            this.livenessInterval = null;
+        }
+    }
+
+    private startHistorySync() {
         // Heartbeat: Sync history roughly at the 30s mark of a minute
         this.syncInterval = setInterval(() => {
             const now = new Date();
@@ -80,12 +104,26 @@ export class MarketDataPump {
         }, 1000);
     }
 
-    disconnect() {
-        this.feed.disconnect();
-        if (this.syncInterval) {
-            clearInterval(this.syncInterval);
-            this.syncInterval = null;
-        }
+    /**
+     * ZOMBIE SOCKET KILLER
+     * Checks if we haven't received data for 10 seconds while the market is supposedly open.
+     */
+    private startLivenessCheck() {
+        this.livenessInterval = setInterval(() => {
+            const now = Date.now();
+            const gap = now - this.feed.lastUpdateTimestamp;
+
+            // Only kill if:
+            // 1. Data is stale (>10s)
+            // 2. We have successfully loaded market details
+            // 3. The market status says 'TRADEABLE' (Open)
+            if (gap > STALE_THRESHOLD_MS && marketStore.isLoaded && marketStore.marketStatus === 'TRADEABLE') {
+                console.warn(`[MarketDataPump] Zombie socket detected (Gap: ${gap}ms). Restarting...`);
+                // Force a restart of this specific service, not the whole system
+                this.connect();
+            }
+
+        }, LIVENESS_CHECK_INTERVAL);
     }
 
     private handleFeedUpdate(u: FeedUpdate) {

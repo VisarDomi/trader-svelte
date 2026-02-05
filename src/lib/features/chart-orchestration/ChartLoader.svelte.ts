@@ -11,7 +11,7 @@ import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js';
 // Stores types
 import type { AccountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import type { PositionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
-import type { MarketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
+import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js'; // Use singleton directly
 
 // Types
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
@@ -36,7 +36,7 @@ export class ChartLoader {
     constructor(
         private readonly accountStore: AccountStore,
         private readonly positionStore: PositionStore,
-        private readonly marketStore: MarketStore
+        private readonly marketStoreRef: typeof marketStore
     ) {}
 
     async ensureSession(): Promise<boolean> {
@@ -57,6 +57,12 @@ export class ChartLoader {
 
         try {
             const config = await this.fetchConfiguration(client, epic);
+
+            // Populate Metadata in MarketStore (Crucial for Liveness Checks)
+            this.marketStoreRef.setMetadata(
+                config.marketDetails.instrument.epic,
+                config.marketDetails.snapshot.marketStatus
+            );
 
             // Determine initial data source based on position direction
             const activePos = this.positionStore.activePosition;

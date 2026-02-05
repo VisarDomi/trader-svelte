@@ -16,6 +16,9 @@ export interface FeedUpdate {
 export class MarketFeed {
     private stream: StreamClient | null = null;
 
+    // Heartbeat Tracking
+    public lastUpdateTimestamp = 0;
+
     private bidAgg = new CandleAggregator();
     private askAgg = new CandleAggregator();
 
@@ -26,11 +29,14 @@ export class MarketFeed {
     initialize(lastBidCandle: ChartCandle | null, lastAskCandle: ChartCandle | null) {
         this.bidAgg.seed(lastBidCandle);
         this.askAgg.seed(lastAskCandle);
+        // Reset heartbeat on init
+        this.lastUpdateTimestamp = Date.now();
     }
 
     connect(tokens: SessionTokens, epic: string) {
         if (this.stream) return;
 
+        this.lastUpdateTimestamp = Date.now();
         this.stream = new StreamClient(tokens, epic, (msg) => this.processMessage(msg));
         this.stream.connect();
     }
@@ -50,6 +56,8 @@ export class MarketFeed {
     }
 
     private processMessage(msg: QuoteMessage) {
+        this.lastUpdateTimestamp = Date.now();
+
         const p = msg.payload;
         const time = this.calculateMinuteTimestamp(p.timestamp);
 

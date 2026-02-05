@@ -9,8 +9,8 @@ export class WatchdogService {
     private readonly TOLERANCE_MS = 2500;
     private readonly TICK_MS = 1000;
 
-    // Callback is now a property we can set later
-    private onFreeze: (() => void) | null = null;
+    // Callback now accepts the duration of the freeze (gap)
+    private onFreeze: ((gap: number) => void) | null = null;
 
     constructor() {}
 
@@ -18,7 +18,7 @@ export class WatchdogService {
      * Register the callback to fire when a freeze is detected.
      * Usually called by AppEngine.
      */
-    setOnFreeze(callback: () => void) {
+    setOnFreeze(callback: (gap: number) => void) {
         this.onFreeze = callback;
     }
 
@@ -31,8 +31,11 @@ export class WatchdogService {
             const delta = now - this.lastTick;
 
             if (delta > (this.TICK_MS + this.TOLERANCE_MS)) {
-                console.warn(`[Watchdog] Freeze detected. Gap: ${delta}ms`);
-                if (this.onFreeze) this.onFreeze();
+                // Determine the actual gap size
+                const gap = delta - this.TICK_MS;
+                console.warn(`[Watchdog] Freeze detected. Gap: ${gap}ms`);
+
+                if (this.onFreeze) this.onFreeze(gap);
             }
 
             this.lastTick = now;

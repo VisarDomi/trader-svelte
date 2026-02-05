@@ -21,6 +21,11 @@ export class MarketStore extends BaseStore {
     // Config
     dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
 
+    // Status
+    // "TRADEABLE" | "CLOSED"
+    marketStatus = $state("CLOSED");
+    epic = $state("");
+
     // Internal State (Public Read, Private Write via actions)
     // These are needed by the Pump to seed the Feed
     bidHistory: ChartCandle[] = [];
@@ -50,6 +55,13 @@ export class MarketStore extends BaseStore {
         this.liveBidCandle = null;
         this.liveAskCandle = null;
         this.dataSource = dataSource;
+        this.marketStatus = "CLOSED";
+    }
+
+    // New: Called by ChartLoader or Pump when details are fetched
+    setMetadata(epic: string, status: string) {
+        this.epic = epic;
+        this.marketStatus = status;
     }
 
     setLoaded(loaded: boolean) {
