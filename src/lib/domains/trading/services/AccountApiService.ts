@@ -6,9 +6,7 @@ import type { Account, AccountPreferences, LeverageUpdate, PreferencesUpdateResp
 import { DEFAULT_ERROR } from "$lib/shared/constants/error.js";
 import type { SessionTokens } from "$lib/shared/types/auth.js";
 import type { ApiClient } from '$lib/core/api/ApiClient.js';
-import { session } from '$lib/core/services/SessionManager.js';
 
-// Refactored to use ApiClient
 export async function getAccounts(client: ApiClient): Promise<Account[]> {
     const data = await client.get<{ accounts: Account[] }>(API.ACCOUNTS_ENDPOINT);
     return data.accounts;
@@ -34,38 +32,6 @@ export async function switchAccount(type: URL_TYPE, tokens: SessionTokens, accou
         throw new Error(err.error || DEFAULT_ERROR);
     }
     return await response.json() as SessionTokens;
-}
-
-export async function getSyncedAccounts(type: URL_TYPE, tokens: SessionTokens, client: ApiClient): Promise<Account[]> {
-    const accounts = await getAccounts(client);
-
-    if (typeof window === 'undefined') return accounts;
-
-    // Use SessionManager to get the persisted ID instead of raw localStorage keys
-    const lastUsedId = session.getLastAccountId(type);
-    const activeAccount = accounts.find(a => a.preferred);
-
-    if (lastUsedId && activeAccount && activeAccount.accountId !== lastUsedId) {
-        const targetAccount = accounts.find(a => a.accountId === lastUsedId);
-
-        if (targetAccount) {
-            try {
-                const newTokens = await switchAccount(type, tokens, lastUsedId);
-
-                // Use SessionManager to save tokens instead of raw localStorage keys
-                session.saveTokens(type, newTokens);
-
-                return accounts.map(a => ({
-                    ...a,
-                    preferred: a.accountId === lastUsedId
-                }));
-            } catch (e) {
-                console.warn(`Failed to auto-restore ${type} account:`, e);
-            }
-        }
-    }
-
-    return accounts;
 }
 
 export function getPreferences(client: ApiClient): Promise<AccountPreferences> {

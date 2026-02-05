@@ -8,7 +8,6 @@ import { SystemController } from '$lib/core/engine/SystemController.js';
 import { watchdog } from '$lib/core/services/WatchdogService.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
-import { session } from '$lib/core/services/SessionManager.js';
 
 // Domain Services (The Active Workers)
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
@@ -16,7 +15,6 @@ import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js'
 // Domain Stores (Passive State)
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
-import * as AUTH from '$lib/shared/constants/auth.js';
 
 export type AppStatus =
     | 'BOOTING'      // Initial page load
@@ -66,8 +64,10 @@ class AppEngine {
 
         this.status = 'LOADING';
         try {
+            // Load accounts.
+            // Note: accountStore.loadAll() now handles internal reconciliation
+            // of LocalStorage preferences vs Server preferences.
             await accountStore.loadAll();
-            await this.restoreLastAccount();
 
             this.transitionTo('READY');
             console.log('[AppEngine] Ready');
@@ -86,25 +86,6 @@ class AppEngine {
             console.error('[AppEngine] Data load failed', e);
             notifications.error('Failed to load account data');
             this.transitionTo('READY'); // Proceed anyway, allows manual retry
-        }
-    }
-
-    private async restoreLastAccount() {
-        const savedMode = session.mode;
-        const savedAccountId = session.getLastAccountId(savedMode);
-
-        if (savedAccountId) {
-            const account = (savedMode === AUTH.REAL_TYPE
-                    ? accountStore.realAccounts
-                    : accountStore.demoAccounts
-            ).find(a => a.accountId === savedAccountId);
-
-            if (account) {
-                // Restore strictly based on LocalStorage source of truth.
-                // If the server thinks we are on Account A, but LS says Account B,
-                // we force the switch to Account B.
-                await accountStore.switchTo(account, savedMode);
-            }
         }
     }
 
