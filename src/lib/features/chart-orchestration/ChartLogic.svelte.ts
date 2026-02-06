@@ -6,6 +6,7 @@ import { ChartRenderer } from '$lib/features/chart-orchestration/ChartPluginMana
 import { ChartOverlay } from '$lib/features/chart-hud/ChartHudState.svelte.js';
 import { ChartInputHandler } from '$lib/components/chart-engine/ChartEvents.svelte.js';
 import { ChartLoader, type ChartContext as LoaderContext } from '$lib/features/chart-orchestration/ChartLoader.svelte.js';
+import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js'; // Import Pump
 
 // New Managers
 import { ChartStateManager } from '$lib/features/chart-orchestration/ChartStateManager.svelte.js';
@@ -23,6 +24,7 @@ import { session } from '$lib/core/services/SessionManager.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
+import type { ChartCandle } from '$lib/shared/types/market.js';
 
 export class ChartLogic {
     // Core Engine Components
@@ -83,6 +85,12 @@ export class ChartLogic {
         this.configureLayout(container);
         this.stateManager.initListeners();
 
+        // WIRING: Register Direct Chart Adapter for Infinite Scroll
+        marketDataPump.registerChartAdapter((data: ChartCandle[], offset: number) => {
+            // This bypasses the Svelte Reactive Loop for performance
+            this.controller.prependData(data, offset);
+        });
+
         // Load Initial Epic
         const lastEpic = session.lastEpic;
         if (lastEpic) {
@@ -103,6 +111,8 @@ export class ChartLogic {
 
     destroy() {
         this.cleanupEvents.forEach(fn => fn());
+
+        marketDataPump.unregisterChartAdapter(); // Cleanup Adapter
 
         this.stateManager.destroy();
         this.interactionManager.cancelPlanning();
@@ -178,13 +188,7 @@ export class ChartLogic {
                 this.preResizeState = this.controller.camera.getViewState();
             },
             onAfterResize: () => {
-                if (this.preResizeState) {
-                    // Note: Camera now has restoreState exposed for internal use if needed,
-                    // but usually layout stability is handled by LWC.
-                    // Keeping original logic if compatible or ensure Camera exposes necessary method.
-                    // Assuming controller.camera has methods as defined in previous files.
-                    // For pure resize stability, the camera state logic is fine.
-                }
+                // Resize logic handled by LWC + Camera
             }
         });
     }

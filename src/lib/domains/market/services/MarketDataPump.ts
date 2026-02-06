@@ -11,6 +11,9 @@ import type { UTCTimestamp } from 'lightweight-charts';
 const STALE_THRESHOLD_MS = 10000;
 const LIVENESS_CHECK_INTERVAL = 2000;
 
+// Direct Interface for the Chart Controller to allow synchronous updates
+type ChartPrependCallback = (data: ChartCandle[], offset: number) => void;
+
 export class MarketDataPump {
     private feed: MarketFeed;
     private epic: string = "";
@@ -24,8 +27,24 @@ export class MarketDataPump {
     isLoadingHistory = false;
     isHistoryExhausted = false;
 
+    // Direct Pipe to Chart Controller (Architecture Bypass)
+    private chartAdapter: ChartPrependCallback | null = null;
+
     constructor() {
         this.feed = new MarketFeed((update) => this.handleFeedUpdate(update));
+    }
+
+    /**
+     * Registers a callback to the UI layer (ChartController).
+     * This allows the pump to perform atomic visual updates when loading history,
+     * bypassing the slower Svelte reactivity loop.
+     */
+    registerChartAdapter(callback: ChartPrependCallback) {
+        this.chartAdapter = callback;
+    }
+
+    unregisterChartAdapter() {
+        this.chartAdapter = null;
     }
 
     async load(epic: string, dataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID) {
@@ -62,13 +81,9 @@ export class MarketDataPump {
         if (this.isLoadingHistory || this.isHistoryExhausted || !this.epic) return;
 
         // 1. Get Anchor (Oldest Candle)
-        // We use bidHistory as the reference.
         if (marketStore.bidHistory.length === 0) return;
 
         const anchorTime = marketStore.bidHistory[0].time;
-
-        // CLEVER REQUEST: Subtract 60 seconds (1 candle) from anchor
-        // This attempts to ask the API for data strictly BEFORE the current anchor.
         const requestTime = (anchorTime - 60) as UTCTimestamp;
 
         this.isLoadingHistory = true;
@@ -79,44 +94,38 @@ export class MarketDataPump {
             return;
         }
 
-        console.log(`[MarketDataPump] Triggering history fetch. Anchor: ${anchorTime}, Requesting To: ${requestTime}`);
+        console.log(`[MarketDataPump] Triggering history fetch. Anchor: ${anchorTime}`);
 
         try {
             const repo = new MarketRepository(client);
-
-            // 2. Fetch Older Data (Reverse Cursor)
             const { bid, ask } = await repo.getHistoryBefore(this.epic, requestTime);
 
             if (bid.length === 0 && ask.length === 0) {
-                console.log("[MarketDataPump] History exhausted (0 returned).");
                 this.isHistoryExhausted = true;
             } else {
-
-                // 3. ROBUSTNESS: Explicitly filter overlaps
-                // Even with the requestTime offset, if the API snaps to grid, we might get the anchor back.
-                // We must ensure every new candle is strictly OLDER than the anchor.
-
                 const filteredBid = bid.filter(c => c.time < anchorTime);
                 const filteredAsk = ask.filter(c => c.time < anchorTime);
 
-                const droppedCount = bid.length - filteredBid.length;
-                if (droppedCount > 0) {
-                    console.warn(`[MarketDataPump] Dropped ${droppedCount} overlapping candles to prevent collision.`);
-                }
-
                 if (filteredBid.length === 0) {
-                    console.log("[MarketDataPump] History exhausted (All filtered out).");
                     this.isHistoryExhausted = true;
                 } else {
                     console.log(`[MarketDataPump] Prepending ${filteredBid.length} new candles.`);
-                    // 4. Prepend
+
+                    // 1. Update State (Reactive Store)
                     marketStore.prependHistory(filteredBid, filteredAsk);
+
+                    // 2. Direct Visual Update (Synchronous)
+                    // We invoke this IMMEDIATELY after state update to fix the scroll position
+                    // before the browser paints the "Index 0" glitch.
+                    if (this.chartAdapter) {
+                        const activeHistory = marketStore.history; // Get the newly merged full list
+                        this.chartAdapter(activeHistory, filteredBid.length);
+                    }
                 }
             }
 
         } catch (e) {
             console.warn("[MarketDataPump] LoadMore failed", e);
-            // Don't mark exhausted on network error, allows retry
         } finally {
             this.isLoadingHistory = false;
         }
@@ -185,7 +194,6 @@ export class MarketDataPump {
 
         try {
             const repo = new MarketRepository(client);
-            // This returns the LATEST 1000 candles
             const { bid, ask } = await repo.getHistory(this.epic);
 
             const split = (arr: ChartCandle[]) => {
@@ -198,9 +206,7 @@ export class MarketDataPump {
             const bidData = split(bid);
             const askData = split(ask);
 
-            // CHANGED: Use mergeLatestHistory instead of setHistory to preserve older infinite-scroll data
             marketStore.mergeLatestHistory(bidData.history, askData.history);
-
             this.feed.mergeExternalData(bidData.current, askData.current);
 
         } catch (e) {

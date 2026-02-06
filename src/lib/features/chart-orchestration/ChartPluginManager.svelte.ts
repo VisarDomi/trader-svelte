@@ -71,10 +71,10 @@ export class ChartRenderer {
             }
         });
 
-        // The History Injection Loop (Heavy)
+        // The History Loading Effect (Heavy)
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
-            // Reactive dependency on history array reference change
+            // STRICT SVELTE 5: We must maintain reference to `history` to detect changes
             const history = this.marketStore.history;
             const epic = this.marketStore.epic;
 
@@ -88,36 +88,35 @@ export class ChartRenderer {
             if (this.series && loaded && history.length > 0) {
                 const currentFirstTime = Number(history[0].time);
 
-                // 1. Apply Data
-                this.series.setData(history);
-
-                // 2. Handle Viewport Synchronization ATOMICALLY
+                // Scenario A: First Load
                 if (!this.hasInitializedView) {
-                    // Scenario A: First Load.
-                    // Snap to saved state or live edge immediately to prevent "Jump to Ghost Future".
+                    this.series.setData(history);
+
                     const savedState = this.stateManager.loadState();
                     const lastTime = Number(history[history.length - 1].time);
 
                     this.camera.initializeView(savedState, lastTime);
                     this.hasInitializedView = true;
-
-                } else if (currentFirstTime < this.lastFirstTime) {
-                    // Scenario B: History Prepend (Infinite Scroll).
-                    // We detect prepend by checking if the first candle is older than before.
-
-                    // Calculate how many bars were added to the LEFT.
-                    // We find the index of the old first candle in the new array.
-                    const offset = history.findIndex(c => Number(c.time) === this.lastFirstTime);
-
-                    if (offset > 0) {
-                        this.camera.maintainScrollPosition(offset);
-                    }
+                    this.lastFirstTime = currentFirstTime;
+                    return;
                 }
 
-                // Scenario C: Append (Live Update/Sync)
-                // If currentFirstTime >= lastFirstTime, we assume data was added to the end or updated in place.
-                // We do NOT shift the scroll in this case.
+                // Scenario B: History Prepend (Infinite Scroll)
+                if (currentFirstTime < this.lastFirstTime) {
+                    // ARCHITECTURE BYPASS:
+                    // We intentionally SKIP calling setData() here.
+                    // The MarketDataPump + ChartController have already handled
+                    // the data update and viewport shift atomically via a direct callback.
+                    // Doing it here would cause a "teleport" glitch due to async nature of $effect.
 
+                    this.lastFirstTime = currentFirstTime;
+                    return;
+                }
+
+                // Scenario C: Live Update / Refresh
+                // If the start time hasn't changed (or moved forward), we assume it's a standard refresh.
+                // We set data to ensure consistency.
+                this.series.setData(history);
                 this.lastFirstTime = currentFirstTime;
             }
         });

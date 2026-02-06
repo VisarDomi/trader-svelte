@@ -11,7 +11,19 @@ import { getChartOptions, getBaseSeriesOptions } from "$lib/components/chart-eng
 import { isIOS } from "$lib/core/utils/platform.js";
 import { viewport } from "$lib/core/services/ViewportService.svelte.js";
 import { ChartCamera } from "$lib/components/chart-engine/ChartCamera.js";
+import type { ChartCandle } from '$lib/shared/types/market.js';
 
+/**
+ * ARCHITECTURE DECISION: ATOMIC HISTORY LOADING
+ *
+ * Standard LWC behavior resets the view to Index 0 when data is prepended.
+ * Reactive updates via Svelte $effects are too slow (microtasks), causing
+ * a visible "teleportation" glitch during scrolling.
+ *
+ * We solve this by bypassing the reactive render loop for history prepends.
+ * The MarketDataPump calls `prependData` DIRECTLY.
+ * This method updates the data and shifts the viewport in the SAME execution frame.
+ */
 export class ChartController {
     private _chart: IChartApi | null = null;
     private _series: ISeriesApi<"Candlestick"> | null = null;
@@ -47,6 +59,34 @@ export class ChartController {
 
         // Hand over the instance to the Camera
         this.camera.init(this._chart);
+    }
+
+    /**
+     * SYNCHRONOUS HISTORY INJECTION
+     * Must be called directly by the data source, bypassing reactive effects.
+     *
+     * @param mergedData - The full dataset (Old + New History)
+     * @param newCandleCount - How many candles were added to the left
+     */
+    prependData(mergedData: ChartCandle[], newCandleCount: number) {
+        if (!this._chart || !this._series) return;
+
+        // 1. Capture current logical range (Where the user is looking)
+        const timeScale = this._chart.timeScale();
+        const currentRange = timeScale.getVisibleLogicalRange();
+
+        // 2. Atomic Update: Set Data
+        // This internally shifts the indices of existing bars by +newCandleCount
+        this._series.setData(mergedData);
+
+        // 3. Atomic Update: Shift View
+        // We immediately correct the camera to look at the new indices of the *same* candles.
+        if (currentRange) {
+            timeScale.setVisibleLogicalRange({
+                from: currentRange.from + newCandleCount,
+                to: currentRange.to + newCandleCount
+            });
+        }
     }
 
     createMainSeries(precision: number) {
