@@ -19,7 +19,6 @@ export class PreferencesStore extends BaseStore {
     async init(type: URL_TYPE) {
         this.activeType = type;
 
-        // We get client specific to the type requested, not just the global active one
         const client = api.getClientForMode(type);
         const tokens = session.getTokens(type);
 
@@ -36,11 +35,21 @@ export class PreferencesStore extends BaseStore {
 
             this.data = prefs;
 
-            const storedId = session.getLastAccountId(type);
-            this.account = accounts.find(a => a.accountId === storedId)
-                || accounts.find(a => a.preferred)
-                || accounts[0]
-                || null;
+            // Strict Source of Truth Logic (matching AccountStore)
+            // 1. Check LS
+            let storedId = session.getLastAccountId(type);
+            let active = storedId ? accounts.find(a => a.accountId === storedId) : null;
+
+            // 2. If missing/invalid, fallback to server preferred and SAVE
+            if (!active) {
+                active = accounts.find(a => a.preferred) || accounts[0];
+                if (active) {
+                    session.setLastAccountId(type, active.accountId);
+                    storedId = active.accountId;
+                }
+            }
+
+            this.account = active || null;
 
             this.leverages = {};
             for (const [key, val] of Object.entries(prefs.leverages)) {

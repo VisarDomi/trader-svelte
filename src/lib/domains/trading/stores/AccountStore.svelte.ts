@@ -8,7 +8,6 @@ import { SystemController } from '$lib/core/engine/SystemController.js';
 import * as AUTH from '$lib/shared/constants/auth.js';
 import type { Account } from '$lib/shared/types/account.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
-import type { ApiClient } from '$lib/core/api/ApiClient.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
 
 export class AccountStore extends BaseStore {
@@ -40,8 +39,15 @@ export class AccountStore extends BaseStore {
     }
 
     /**
-     * Loads accounts and enforces LocalStorage as the source of truth for the active account.
-     * This method blocks until the correct account is switched and ready.
+     * Loads accounts and enforces LocalStorage as the absolute Source of Truth.
+     *
+     * Logic Flow:
+     * 1. Fetch Lists.
+     * 2. Check LocalStorage for ID.
+     * 3. If LS has ID -> Use it.
+     * 4. If LS empty -> Pick Server Default -> Save to LS immediately.
+     * 5. Set activeAccount based on this resolved ID.
+     * 6. If Server disagrees with our choice, force Server to switch in background.
      */
     async loadAll() {
         this.isLoading = true;
@@ -66,11 +72,8 @@ export class AccountStore extends BaseStore {
             this.realAccounts = real;
             this.demoAccounts = demo;
 
-            // 2. Reconciliation Phase: Enforce LocalStorage Truth
-            await this.reconcileActiveAccount();
-
-            // 3. Final State Update
-            this.updateActiveFromLists();
+            // 2. Resolve Truth for Current Mode
+            await this.resolveSourceOfTruth();
 
         } catch (e) {
             console.error("AccountStore loadAll failed", e);
@@ -91,91 +94,128 @@ export class AccountStore extends BaseStore {
             if (mode === AUTH.REAL_TYPE) this.realAccounts = list;
             else this.demoAccounts = list;
 
-            this.updateActiveFromLists();
+            // Re-apply the stored ID to ensure the active object is up to date
+            const storedId = session.getLastAccountId(mode);
+            if (storedId) {
+                this.setActiveById(storedId);
+            }
         } catch (e) {
             console.error("AccountStore refreshActive failed", e);
         }
     }
 
     /**
-     * Checks if the Account marked as 'preferred' by the server matches
-     * the Account saved in LocalStorage. If not, it switches immediately.
+     * The Core Decision Maker.
+     * Determines which account is active based on LS priority.
      */
-    private async reconcileActiveAccount() {
+    private async resolveSourceOfTruth() {
         const mode = session.mode;
-        const tokens = session.getTokens(mode);
-        const storedId = session.getLastAccountId(mode);
-
-        if (!storedId || !tokens) return;
-
         const list = mode === AUTH.REAL_TYPE ? this.realAccounts : this.demoAccounts;
-        const targetAccount = list.find(a => a.accountId === storedId);
 
-        // If we can't find the LS account in the list, we fallback to server default.
-        if (!targetAccount) {
-            console.warn(`[AccountStore] Saved account ${storedId} not found in fetch list.`);
+        if (list.length === 0) {
+            this.error = "No accounts available.";
             return;
         }
 
-        // If the server thinks another account is preferred, we must switch
-        if (!targetAccount.preferred) {
-            console.log(`[AccountStore] Reconciling: Switching to saved account ${storedId}`);
-            try {
-                // Perform the switch
-                const newTokens = await switchAccount(mode, tokens, storedId);
+        // 1. Check LocalStorage (The Truth)
+        let targetId = session.getLastAccountId(mode);
+        let targetAccount = targetId ? list.find(a => a.accountId === targetId) : null;
 
-                // Update Session
-                session.saveTokens(mode, newTokens);
+        // 2. If Truth is missing (Fresh App) or Invalid (Account Deleted)
+        if (!targetAccount) {
+            if (targetId) {
+                console.warn(`[AccountStore] Stored ID ${targetId} not found in list. Resetting truth.`);
+            }
 
-                // Update Local State Optimistically
-                this.markAsPreferred(mode, storedId);
-            } catch (e) {
-                console.error("[AccountStore] Reconciliation switch failed", e);
-                // We swallow the error here to allow the app to boot with the default account
-                notifications.error("Failed to restore last selected account");
+            // Fallback: Use server preferred, or first available
+            targetAccount = list.find(a => a.preferred) || list[0];
+
+            if (targetAccount) {
+                // ESTABLISH NEW TRUTH
+                console.log(`[AccountStore] Establishing new default account: ${targetAccount.accountId}`);
+                session.setLastAccountId(mode, targetAccount.accountId);
+                targetId = targetAccount.accountId;
+            }
+        }
+
+        // 3. Set Active State (UI is now correct)
+        if (targetAccount) {
+            this.activeAccount = targetAccount;
+
+            // 4. Background Sync
+            // If the server thinks a different account is active, we force switch it
+            // to match our LocalStorage truth.
+            if (!targetAccount.preferred) {
+                console.log(`[AccountStore] Syncing server to local truth: ${targetAccount.accountId}`);
+                try {
+                    await this.enforceServerSwitch(targetAccount, mode);
+                } catch (e) {
+                    // Non-fatal: UI is correct, but trading might fail if backend is strict.
+                    console.error("[AccountStore] Background switch failed", e);
+                }
             }
         }
     }
 
-    private markAsPreferred(mode: URL_TYPE, accountId: string) {
-        const list = mode === AUTH.REAL_TYPE ? this.realAccounts : this.demoAccounts;
-
-        // Reset flags
-        list.forEach(a => a.preferred = false);
-
-        // Set new preferred
-        const match = list.find(a => a.accountId === accountId);
-        if (match) match.preferred = true;
-
-        if (mode === AUTH.REAL_TYPE) this.realAccounts = [...list];
-        else this.demoAccounts = [...list];
-    }
-
-    private updateActiveFromLists() {
+    private setActiveById(id: string) {
         const mode = session.mode;
         const list = mode === AUTH.REAL_TYPE ? this.realAccounts : this.demoAccounts;
-        this.activeAccount = list.find(a => a.preferred) || list[0] || null;
+        this.activeAccount = list.find(a => a.accountId === id) || null;
     }
 
+    private async enforceServerSwitch(account: Account, mode: URL_TYPE) {
+        const tokens = session.getTokens(mode);
+        if (!tokens) return;
+
+        const newTokens = await switchAccount(mode, tokens, account.accountId);
+
+        // Update Session Tokens
+        session.saveTokens(mode, newTokens);
+
+        // Update Local List 'preferred' flags optimistically
+        this.updateLocalFlags(mode, account.accountId);
+    }
+
+    private updateLocalFlags(mode: URL_TYPE, activeId: string) {
+        const list = mode === AUTH.REAL_TYPE ? this.realAccounts : this.demoAccounts;
+
+        // Create new array references for Svelte reactivity
+        const newList = list.map(a => ({
+            ...a,
+            preferred: a.accountId === activeId
+        }));
+
+        if (mode === AUTH.REAL_TYPE) this.realAccounts = newList;
+        else this.demoAccounts = newList;
+
+        // Re-bind active account to the new object reference
+        this.activeAccount = newList.find(a => a.accountId === activeId) || null;
+    }
+
+    /**
+     * User Action: Explicit Switch
+     */
     async switchTo(account: Account, type: URL_TYPE) {
         await this.execute(async () => {
             const tokens = session.getTokens(type);
             if (!tokens) throw new Error("No session tokens found");
 
+            // 1. Establish Truth Immediately
+            session.setLastAccountId(type, account.accountId);
+            session.mode = type;
+
+            // 2. Perform API Switch if needed
             if (!account.preferred) {
                 const newTokens = await switchAccount(type, tokens, account.accountId);
                 session.saveTokens(type, newTokens);
-                session.setLastAccountId(type, account.accountId);
             }
 
-            session.mode = type;
-
-            // Reload to ensure full sync, but we could just reconcile locally
+            // 3. Reload everything to conform to new Truth
             await this.loadAll();
 
             notifications.success(`Switched to ${account.accountName}`);
 
-            // STRICT HANDOFF: Restart all pumps to ensure they use the new account tokens
+            // STRICT HANDOFF: Restart all pumps
             SystemController.restart();
         });
 
