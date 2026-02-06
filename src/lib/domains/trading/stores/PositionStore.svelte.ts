@@ -4,6 +4,7 @@ import { session } from '$lib/core/services/SessionManager.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
+import { TradeCalculator } from '$lib/domains/trading/domain/TradeCalculator.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { PositionResponse } from '$lib/shared/types/trading.js';
@@ -15,6 +16,8 @@ export class PositionStore extends BaseStore {
     anyActivePosition = $state<PositionResponse | null>(null);
 
     isClosing = $state(false);
+
+    private calculator = new TradeCalculator();
 
     constructor() {
         super();
@@ -35,13 +38,11 @@ export class PositionStore extends BaseStore {
     }
 
     // --- Actions (User Triggered) ---
-    // These remain here as they are user-initiated "Writes", not autonomous "Reads".
 
     async close() {
         if (!this.anyActivePosition) return;
 
         this.isClosing = true;
-        // Notify user immediately that the process has started
         notifications.info("Request sent. Waiting for confirmation...");
 
         const client = api.getOrThrow();
@@ -54,21 +55,38 @@ export class PositionStore extends BaseStore {
                 ? TRADING.SELL_DIRECTION
                 : TRADING.BUY_DIRECTION;
 
+            // 1. Send Request
             const res = await createPosition(client, {
                 epic: marketEpic,
                 direction: oppositeDir,
                 size: p.size
             });
 
-            await getConfirmation(client, res.dealReference);
+            // 2. Await Server Confirmation (contains execution price)
+            const conf = await getConfirmation(client, res.dealReference);
+
+            // 3. Calculate Realized PnL locally
+            // We use the calculator to ensure logic matches the UI
+            const result = this.calculator.calculatePnL(
+                p.level,            // Entry Price
+                conf.level,         // Exit Price (from confirmation)
+                p.size,             // Size
+                p.direction,        // Direction
+                0                   // Initial Balance irrelevant for raw PnL calculation
+            );
 
             session.removeInitialBalance(p.dealId);
-            notifications.success("Position Closed");
+            notifications.success(`Position Closed. PnL: ${result.rawPnL.toFixed(2)}`);
 
+            // 4. Clear local state
             this.activePosition = null;
             this.anyActivePosition = null;
 
-            bus.emit(EVENTS.POSITION_CLOSED, { dealId: p.dealId, pnl: 0 });
+            // 5. Emit Event with Realized PnL for AccountStore to consume
+            bus.emit(EVENTS.POSITION_CLOSED, {
+                dealId: p.dealId,
+                pnl: result.rawPnL
+            });
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -96,9 +114,6 @@ export class PositionStore extends BaseStore {
 
             await updatePosition(mode, tokens, p.dealId, payload);
             notifications.success(`Stop Loss Auto-Corrected to ${newLevel}`);
-
-            // We rely on the Poller to sync the new stop level eventually,
-            // or we could trigger an immediate refresh if desired.
 
         } catch (e) {
             console.error("Failed to auto-correct SL", e);
