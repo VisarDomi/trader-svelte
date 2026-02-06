@@ -1,5 +1,6 @@
 import type { ISeriesApi, MouseEventParams } from 'lightweight-charts';
 import { bus } from '$lib/core/events/globalBus.js';
+import * as EVENTS from '$lib/shared/constants/events.js';
 
 export interface ChartClickEvent {
     price: number;
@@ -25,7 +26,7 @@ export class ChartInputHandler {
         if (!price) return;
 
         // Emit to global bus instead of calling a callback
-        bus.emit('input:chart_click', {
+        bus.emit(EVENTS.INPUT_CHART_CLICK, {
             price,
             time: param.time ? Number(param.time) : null
         });

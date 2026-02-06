@@ -5,6 +5,7 @@ import { api } from '$lib/core/services/ApiService.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
+import * as EVENTS from '$lib/shared/constants/events.js';
 import type { PositionResponse } from '$lib/shared/types/trading.js';
 
 export class PositionStore extends BaseStore {
@@ -17,7 +18,7 @@ export class PositionStore extends BaseStore {
 
     constructor() {
         super();
-        bus.on('trade:executed', (pos) => {
+        bus.on(EVENTS.TRADE_EXECUTED, (pos) => {
             // Optimistic update
             this.activePosition = pos;
             this.anyActivePosition = pos;
@@ -67,7 +68,7 @@ export class PositionStore extends BaseStore {
             this.activePosition = null;
             this.anyActivePosition = null;
 
-            bus.emit('position:closed', { dealId: p.dealId, pnl: 0 });
+            bus.emit(EVENTS.POSITION_CLOSED, { dealId: p.dealId, pnl: 0 });
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

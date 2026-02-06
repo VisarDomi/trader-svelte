@@ -5,6 +5,7 @@ import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js'
 import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js';
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
+import * as EVENTS from '$lib/shared/constants/events.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 
 /**
@@ -81,7 +82,7 @@ export class SystemController {
         this.wakeUp();
 
         // 5. Notify UI Layer (ChartLogic) to reload metadata/precision
-        bus.emit('market:selected', { epic: newEpic });
+        bus.emit(EVENTS.MARKET_SELECTED, { epic: newEpic });
     }
 
     /**

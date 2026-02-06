@@ -5,6 +5,7 @@ import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { getMarketDetails } from '$lib/domains/market/services/MarketApiService.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js'; // Import Bus
+import * as EVENTS from '$lib/shared/constants/events.js';
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 
 export class RiskService {
@@ -14,7 +15,7 @@ export class RiskService {
 
     constructor() {
         // Immediate check upon trade execution
-        bus.on('trade:executed', () => {
+        bus.on(EVENTS.TRADE_EXECUTED, () => {
             console.log('[RiskService] Trade executed event received. Running immediate risk check.');
             // Small delay to ensure stores are settled if necessary, though
             // the event usually implies the position store is updated.

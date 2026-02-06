@@ -6,6 +6,7 @@ import { notifications } from '$lib/core/services/NotificationService.svelte.js'
 import { bus } from '$lib/core/events/globalBus.js';
 import { SystemController } from '$lib/core/engine/SystemController.js';
 import * as AUTH from '$lib/shared/constants/auth.js';
+import * as EVENTS from '$lib/shared/constants/events.js';
 import type { Account } from '$lib/shared/types/account.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
@@ -25,11 +26,11 @@ export class AccountStore extends BaseStore {
 
     constructor() {
         super();
-        bus.on('trade:executed', () => {
+        bus.on(EVENTS.TRADE_EXECUTED, () => {
             void this.refreshActive();
         });
 
-        bus.on('position:closed', () => {
+        bus.on(EVENTS.POSITION_CLOSED, () => {
             void this.pollBalanceUpdate();
         });
     }

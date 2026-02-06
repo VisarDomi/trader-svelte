@@ -20,6 +20,7 @@ import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js
 import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
 import { tradeManager as tradeStore } from '$lib/domains/trading/stores/TradeStore.svelte.js';
 import { session } from '$lib/core/services/SessionManager.js';
+import * as EVENTS from '$lib/shared/constants/events.js';
 
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 
@@ -132,12 +133,12 @@ export class ChartLogic {
 
     private setupSubscriptions() {
         // 1. Chart Clicks
-        const offClick = bus.on('input:chart_click', (event) => {
+        const offClick = bus.on(EVENTS.INPUT_CHART_CLICK, (event) => {
             this.interactionManager.handleChartClick(event);
         });
 
         // 2. Context Switches
-        const offMarket = bus.on('market:selected', (event) => {
+        const offMarket = bus.on(EVENTS.MARKET_SELECTED, (event) => {
             void this.handleEpicSwitch(event.epic);
         });
 

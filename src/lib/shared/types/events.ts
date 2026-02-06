@@ -1,5 +1,6 @@
 import type { PositionResponse } from "$lib/shared/types/trading.js";
 import type { NotificationType } from "$lib/core/services/NotificationService.svelte.js";
+import * as EVENTS from "$lib/shared/constants/events.js";
 
 /**
  * Central definition of all Application Events.
@@ -7,19 +8,19 @@ import type { NotificationType } from "$lib/core/services/NotificationService.sv
  */
 export interface AppEvents {
     // Trading Events
-    "trade:executed": PositionResponse;
-    "trade:failed": { reason: string };
-    "position:closed": { dealId: string, pnl: number };
-    "position:updated": { dealId: string };
+    [EVENTS.TRADE_EXECUTED]: PositionResponse;
+    [EVENTS.TRADE_FAILED]: { reason: string };
+    [EVENTS.POSITION_CLOSED]: { dealId: string, pnl: number };
+    [EVENTS.POSITION_UPDATED]: { dealId: string };
 
     // Market Events
-    "market:selected": { epic: string };
-    "market:tick": { bid: number, offer: number };
+    [EVENTS.MARKET_SELECTED]: { epic: string };
+    [EVENTS.MARKET_TICK]: { bid: number, offer: number };
 
     // System Events
-    "session:expired": void;
-    "notification": { type: NotificationType, message: string };
+    [EVENTS.SESSION_EXPIRED]: void;
+    [EVENTS.NOTIFICATION]: { type: NotificationType, message: string };
 
     // Input Events (New)
-    "input:chart_click": { price: number, time: number | null };
+    [EVENTS.INPUT_CHART_CLICK]: { price: number, time: number | null };
 }

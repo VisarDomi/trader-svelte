@@ -6,6 +6,7 @@ import { MarketMapper } from '$lib/domains/market/domain/MarketMapper.js';
 import { bus } from '$lib/core/events/globalBus.js'; // NEW: Event Bus
 
 import * as TRADING from '$lib/shared/constants/trading.js';
+import * as EVENTS from '$lib/shared/constants/events.js';
 import type { Direction, PositionResponse, PositionBody } from '$lib/shared/types/trading.js';
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 
@@ -137,14 +138,14 @@ export class TradeStore {
             this.cancel();
 
             // NEW: Emit event instead of modifying other stores directly
-            bus.emit('trade:executed', result);
+            bus.emit(EVENTS.TRADE_EXECUTED, result);
 
             return result;
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             // NEW: Emit failure event
-            bus.emit('trade:failed', { reason: msg });
+            bus.emit(EVENTS.TRADE_FAILED, { reason: msg });
             notifications.error(msg);
             return null;
         } finally {
