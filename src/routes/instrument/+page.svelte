@@ -5,6 +5,7 @@
     import InstrumentCard from '$lib/domains/market/components/InstrumentCard.svelte';
 
     let searchTerm = $state('');
+    let isCollapsed = $state(false);
 
     onMount(() => {
         instrumentStore.load();
@@ -28,7 +29,23 @@
 
 <div style="padding: 1rem; max-width: 900px; margin: 0 auto;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-        <h1>Instruments</h1>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <h1>Instruments</h1>
+            <button
+                    onclick={() => isCollapsed = !isCollapsed}
+                    style="
+                    background: transparent;
+                    border: 1px solid #444;
+                    color: #888;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 0.8rem;
+                "
+            >
+                {isCollapsed ? 'Expand All' : 'Collapse All'}
+            </button>
+        </div>
         <a href="/chart" style="color: #d1d4dc;">← Back</a>
     </div>
 
@@ -62,11 +79,12 @@
             No instruments selected. Use the search bar above to add markets.
         </div>
     {:else}
-        <div style="display: grid; gap: 2rem;">
+        <div style="display: grid; gap: 1rem;">
             {#each instrumentStore.instruments as m (m.instrument.epic)}
                 <InstrumentCard
                         market={m}
                         preferences={instrumentStore.userPreferences}
+                        collapsed={isCollapsed}
                         onSelect={handleSelect}
                         onRemove={handleRemove}
                 />

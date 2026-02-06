@@ -6,11 +6,13 @@
     let {
         market,
         preferences,
+        collapsed = false, // New prop
         onSelect,
         onRemove = undefined
     } = $props<{
         market: MarketDetailsResponse,
         preferences: AccountPreferences | null,
+        collapsed?: boolean,
         onSelect: (epic: string) => void,
         onRemove?: (epic: string) => void
     }>();
@@ -38,6 +40,7 @@
     <!-- Header -->
     <div
             class="header"
+            class:no-border={collapsed}
             role="button"
             tabindex="0"
             onclick={() => onSelect(market.instrument.epic)}
@@ -68,92 +71,94 @@
         </div>
     </div>
 
-    <div class="body">
-        <!-- Prices Grid -->
-        <div class="price-grid">
-            <div>
-                <div class="label">BID</div>
-                <div class="price-val bid">
-                    {fmt.formatPrice(market.snapshot.bid, market.snapshot.decimalPlacesFactor)}
-                </div>
-            </div>
-            <div>
-                <div class="label">OFFER</div>
-                <div class="price-val offer">
-                    {fmt.formatPrice(market.snapshot.offer, market.snapshot.decimalPlacesFactor)}
-                </div>
-            </div>
-            <div>
-                <div class="label">CHANGE</div>
-                <div style="color: {fmt.getNetChangeColor(market.snapshot.netChange)}">
-                    {market.snapshot.percentageChange.toFixed(2)}%
-                </div>
-            </div>
-        </div>
-
-        {#if hasSchedule}
-            <div class="separator"></div>
-
-            <!-- Detailed Info (Only Visible if details available) -->
-            <div class="details-grid">
-
-                <!-- 1. Dealing Rules -->
-                <div class="section">
-                    <h4 class="section-title">Dealing Rules</h4>
-                    <div class="key-val-list">
-                        <div class="kv-row">
-                            <span class="kv-label">Min Deal</span>
-                            <span class="kv-val">{market.dealingRules.minDealSize.value}</span>
-                        </div>
-                        <div class="kv-row">
-                            <span class="kv-label">Max Deal</span>
-                            <span class="kv-val">{market.dealingRules.maxDealSize.value}</span>
-                        </div>
-                        <div class="kv-row">
-                            <span class="kv-label">Lot Size</span>
-                            <span class="kv-val">{market.instrument.lotSize}</span>
-                        </div>
+    {#if !collapsed}
+        <div class="body">
+            <!-- Prices Grid -->
+            <div class="price-grid">
+                <div>
+                    <div class="label">BID</div>
+                    <div class="price-val bid">
+                        {fmt.formatPrice(market.snapshot.bid, market.snapshot.decimalPlacesFactor)}
                     </div>
                 </div>
-
-                <!-- 2. Overnight Fees -->
-                <div class="section">
-                    <h4 class="section-title">Overnight Fees</h4>
-                    <div class="key-val-list">
-                        <div class="kv-row">
-                            <span class="kv-label">Long</span>
-                            <span class="kv-val" class:negative={(market.instrument.overnightFee?.longRate ?? 0) < 0}>
-                                {market.instrument.overnightFee?.longRate ?? '-'}%
-                            </span>
-                        </div>
-                        <div class="kv-row">
-                            <span class="kv-label">Short</span>
-                            <span class="kv-val" class:negative={(market.instrument.overnightFee?.shortRate ?? 0) < 0}>
-                                {market.instrument.overnightFee?.shortRate ?? '-'}%
-                            </span>
-                        </div>
+                <div>
+                    <div class="label">OFFER</div>
+                    <div class="price-val offer">
+                        {fmt.formatPrice(market.snapshot.offer, market.snapshot.decimalPlacesFactor)}
                     </div>
                 </div>
+                <div>
+                    <div class="label">CHANGE</div>
+                    <div style="color: {fmt.getNetChangeColor(market.snapshot.netChange)}">
+                        {market.snapshot.percentageChange.toFixed(2)}%
+                    </div>
+                </div>
+            </div>
 
-                <!-- 3. Trading Hours -->
-                <div class="section full-width">
-                    <h4 class="section-title">Trading Hours</h4>
-                    <div class="hours-container">
-                        {#each groupedHours as group}
-                            <div class="hours-row">
-                                <div class="days-label">{group.days}</div>
-                                <div class="time-list">
-                                    {#each group.hours as h}
-                                        <div class="time-item">{h}</div>
-                                    {/each}
-                                </div>
+            {#if hasSchedule}
+                <div class="separator"></div>
+
+                <!-- Detailed Info (Only Visible if details available) -->
+                <div class="details-grid">
+
+                    <!-- 1. Dealing Rules -->
+                    <div class="section">
+                        <h4 class="section-title">Dealing Rules</h4>
+                        <div class="key-val-list">
+                            <div class="kv-row">
+                                <span class="kv-label">Min Deal</span>
+                                <span class="kv-val">{market.dealingRules.minDealSize.value}</span>
                             </div>
-                        {/each}
+                            <div class="kv-row">
+                                <span class="kv-label">Max Deal</span>
+                                <span class="kv-val">{market.dealingRules.maxDealSize.value}</span>
+                            </div>
+                            <div class="kv-row">
+                                <span class="kv-label">Lot Size</span>
+                                <span class="kv-val">{market.instrument.lotSize}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Overnight Fees -->
+                    <div class="section">
+                        <h4 class="section-title">Overnight Fees</h4>
+                        <div class="key-val-list">
+                            <div class="kv-row">
+                                <span class="kv-label">Long</span>
+                                <span class="kv-val" class:negative={(market.instrument.overnightFee?.longRate ?? 0) < 0}>
+                                    {market.instrument.overnightFee?.longRate ?? '-'}%
+                                </span>
+                            </div>
+                            <div class="kv-row">
+                                <span class="kv-label">Short</span>
+                                <span class="kv-val" class:negative={(market.instrument.overnightFee?.shortRate ?? 0) < 0}>
+                                    {market.instrument.overnightFee?.shortRate ?? '-'}%
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Trading Hours -->
+                    <div class="section full-width">
+                        <h4 class="section-title">Trading Hours</h4>
+                        <div class="hours-container">
+                            {#each groupedHours as group}
+                                <div class="hours-row">
+                                    <div class="days-label">{group.days}</div>
+                                    <div class="time-list">
+                                        {#each group.hours as h}
+                                            <div class="time-item">{h}</div>
+                                        {/each}
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
                     </div>
                 </div>
-            </div>
-        {/if}
-    </div>
+            {/if}
+        </div>
+    {/if}
 </div>
 
 <style>
@@ -179,6 +184,9 @@
         cursor: pointer;
     }
     .header:hover { background: #2a2a2a; }
+
+    /* Remove border when body is hidden */
+    .header.no-border { border-bottom: none; }
 
     .header-right { display: flex; align-items: center; gap: 1rem; }
 
