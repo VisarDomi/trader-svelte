@@ -2,11 +2,7 @@
 
 Click on the graph to open a position with all of your deposited cash. Stop loss at 50%.
 
-## coupling and decoupling
-the app should be coupled in some ways, and coupled in other ways.
-right now it's in a desynced state and needs to be refactored/improved
-
-## dev pwa notes:
+## dev pwa - ios26 needs only these:
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <link rel="manifest" href="/manifest.json" />
@@ -16,6 +12,8 @@ manifest.json
 }
 * also some magic to get the correct dimensions for pwa and safari ios
 * no need for html for the icons
+
+## todo - ios18 needs more for pwa
 
 ## dev pwa localhost notes:
 pwa needs https. this repo sets up https on localhost

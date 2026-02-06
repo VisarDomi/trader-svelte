@@ -14,6 +14,15 @@ const LIVENESS_CHECK_INTERVAL = 2000;
 // Direct Interface for the Chart Controller to allow synchronous updates
 type ChartPrependCallback = (data: ChartCandle[], offset: number) => void;
 
+/**
+ * ARCHITECTURE NOTE:
+ * This class bypasses the standard Svelte reactivity loop for performance.
+ *
+ * It uses a direct 'chartAdapter' callback to inject history into the chart
+ * synchronously. This is required to prevent scroll-glitching on iOS.
+ *
+ * DO NOT REFACTOR TO USE STORES FOR HISTORICAL DATA INJECTION.
+ */
 export class MarketDataPump {
     private feed: MarketFeed;
     private epic: string = "";
