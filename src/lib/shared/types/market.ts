@@ -120,4 +120,29 @@ export interface MarketDetailsResponse {
     snapshot: MarketSnapshot;
 }
 
-// Legacy simple response (kept for compatibility if needed)
+// --- Bulk / Summary Types ---
+
+export interface MarketSummary {
+    delayTime: number;
+    epic: string;
+    symbol: string;
+    instrumentName: string;
+    instrumentType: string;
+    netChange: number;
+    percentageChange: number;
+    updateTime: string;
+    updateTimeUTC: string;
+    bid: number;
+    offer: number;
+    high: number;
+    low: number;
+    marketStatus: string;
+    scalingFactor: number;
+    marketModes: string[];
+    lotSize: number;
+}
+
+export interface MarketListResponse {
+    markets?: MarketSummary[];
+    marketDetails?: MarketDetailsResponse[];
+}

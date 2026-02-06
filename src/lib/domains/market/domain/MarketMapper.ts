@@ -1,4 +1,4 @@
-import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
+import type { MarketDetailsResponse, MarketSummary } from '$lib/shared/types/market.js';
 import type { PositionMarket } from '$lib/shared/types/trading.js';
 
 export class MarketMapper {
@@ -7,8 +7,6 @@ export class MarketMapper {
 
         return {
             instrumentName: instrument.name,
-            // Expiry is often not present in the stream snapshot but required by PositionMarket type.
-            // We use a safe fallback.
             expiry: "-",
             marketStatus: snapshot.marketStatus,
             epic: instrument.epic,
@@ -22,12 +20,60 @@ export class MarketMapper {
             bid: snapshot.bid,
             offer: snapshot.offer,
             updateTime: snapshot.updateTime,
-            // Map snapshot time to the expected updateTimeUTC field
             updateTimeUTC: snapshot.updateTime,
             delayTime: snapshot.delayTime,
             streamingPricesAvailable: instrument.streamingPricesAvailable,
             scalingFactor: snapshot.scalingFactor,
             marketModes: snapshot.marketModes
+        };
+    }
+
+    /**
+     * Converts a flat MarketSummary (from bulk API) into a rich MarketDetailsResponse structure.
+     * Missing details (Dealing Rules, Schedule) are filled with safe defaults or marked/hidden.
+     */
+    static fromSummary(summary: MarketSummary): MarketDetailsResponse {
+        if (!summary) {
+            throw new Error("[MarketMapper] Cannot map undefined summary");
+        }
+
+        return {
+            instrument: {
+                epic: summary.epic,
+                symbol: summary.symbol,
+                name: summary.instrumentName,
+                type: summary.instrumentType,
+                lotSize: summary.lotSize,
+                guaranteedStopAllowed: false,
+                streamingPricesAvailable: true,
+                currency: "USD", // Default assumption if missing in summary
+                marginFactor: 0,
+                marginFactorUnit: "PERCENTAGE",
+                openingHours: { zone: "UTC" }, // Empty schedule
+                overnightFee: undefined
+            },
+            dealingRules: {
+                minStepDistance: { unit: "POINTS", value: 0 },
+                minDealSize: { unit: "POINTS", value: 0 },
+                maxDealSize: { unit: "POINTS", value: 0 },
+                minSizeIncrement: { unit: "POINTS", value: 0 },
+                marketOrderPreference: "AVAILABLE",
+                trailingStopsPreference: "NOT_AVAILABLE"
+            },
+            snapshot: {
+                marketStatus: summary.marketStatus,
+                netChange: summary.netChange,
+                percentageChange: summary.percentageChange,
+                updateTime: summary.updateTime,
+                delayTime: summary.delayTime,
+                bid: summary.bid,
+                offer: summary.offer,
+                high: summary.high,
+                low: summary.low,
+                decimalPlacesFactor: 2, // Default fallback
+                scalingFactor: summary.scalingFactor,
+                marketModes: summary.marketModes
+            }
         };
     }
 }
