@@ -2,6 +2,7 @@
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
+    import { appEngine } from '$lib/core/engine/AppEngine.svelte.js';
 
     onMount(() => {
         authStore.init();
@@ -11,7 +12,10 @@
         await authStore.loginBoth();
 
         if (authStore.realTokens && authStore.demoTokens) {
-           void goto('/chart');
+            // Re-run boot so the full startup sequence completes
+            // (account loading, source-of-truth resolution, status → READY)
+            await appEngine.boot();
+            void goto('/chart');
         }
     }
 </script>

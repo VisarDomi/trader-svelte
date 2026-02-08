@@ -90,6 +90,11 @@ export class AccountStore extends BaseStore {
             const storedId = session.getLastAccountId(mode);
             if (storedId) {
                 this.setActiveById(storedId);
+            } else if (!this.activeAccount && list.length > 0) {
+                // Fallback: no stored account yet (e.g. first login via ChartLoader)
+                const fallback = list.find(a => a.preferred) || list[0];
+                this.activeAccount = fallback;
+                session.setLastAccountId(mode, fallback.accountId);
             }
         } catch (e) {
             console.error("AccountStore refreshActive failed", e);
