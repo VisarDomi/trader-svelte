@@ -89,7 +89,7 @@
     .overlay-container {
         position: fixed;
         left: 0;
-        top: 1%;
+        top: env(safe-area-inset-top, 0px);
         z-index: 50;
         display: flex;
         align-items: stretch;

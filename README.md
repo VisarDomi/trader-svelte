@@ -10,8 +10,8 @@ manifest.json
 {
     "start_url": "/"
 }
-* also some magic to get the correct dimensions for pwa and safari ios
 * no need for html for the icons
+* also some magic to get the correct dimensions for pwa and safari ios
 
 ## todo - ios18 needs more for pwa
 

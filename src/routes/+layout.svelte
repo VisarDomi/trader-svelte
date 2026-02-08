@@ -1,17 +1,23 @@
 <script lang="ts">
     import '$lib/styles.css';
     import { onMount, onDestroy } from 'svelte';
+    import { page } from '$app/stores';
     import { appEngine } from '$lib/core/engine/AppEngine.svelte.js'; // Updated import path
     import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
     import HydrationGate from '$lib/components/ui/HydrationGate.svelte';
 
     let { children } = $props();
+    const fullscreen = $derived($page.route?.id === '/chart');
 
     function preventZoom(e: Event) {
         e.preventDefault();
     }
 
     onMount(() => {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+
         appEngine.boot();
 
         document.addEventListener('gesturestart', preventZoom, { passive: false });
@@ -33,7 +39,15 @@
 </svelte:head>
 
 <HydrationGate>
-    {@render children()}
+    <div class:safe-area={!fullscreen}>
+        {@render children()}
+    </div>
 </HydrationGate>
 
 <ToastContainer />
+
+<style>
+    .safe-area {
+        padding-top: env(safe-area-inset-top, 0px);
+    }
+</style>

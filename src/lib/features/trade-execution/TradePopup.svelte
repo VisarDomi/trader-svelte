@@ -36,7 +36,7 @@
             onkeydown={block}
             style="
         position: fixed;
-        top: 5rem;
+        top: calc(env(safe-area-inset-top, 0px) + 3rem);
         left: 50%;
         transform: translateX(-50%);
         background: rgba(20, 20, 20, 0.95);

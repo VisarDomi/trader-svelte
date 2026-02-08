@@ -6,7 +6,7 @@
 
 <div style="
     position: fixed;
-    bottom: 2rem;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 2rem);
     left: 50%;
     transform: translateX(-50%);
     display: flex;
