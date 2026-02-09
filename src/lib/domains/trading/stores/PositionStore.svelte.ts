@@ -116,8 +116,7 @@ export class PositionStore extends BaseStore {
             notifications.success(`Stop Loss Auto-Corrected to ${newLevel}`);
 
         } catch (e) {
-            console.error("Failed to auto-correct SL", e);
-            notifications.error("Risk Manager: Failed to update SL");
+            console.error("[RiskService] Failed to auto-correct SL", e);
         }
     }
 }

@@ -3,8 +3,9 @@ import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { getMarketDetails } from '$lib/domains/market/services/MarketApiService.js';
+import { getPositions } from '$lib/domains/trading/services/TradeApiService.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
-import { bus } from '$lib/core/events/globalBus.js'; // Import Bus
+import { bus } from '$lib/core/events/globalBus.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 
@@ -12,13 +13,13 @@ export class RiskService {
     private manager = new RiskManager();
     private interval: ReturnType<typeof setInterval> | null = null;
     private marketDetailsCache = new Map<string, MarketDetailsResponse>();
+    private pendingDealId: string | null = null;
 
     constructor() {
-        // Immediate check upon trade execution
         bus.on(EVENTS.TRADE_EXECUTED, () => {
             console.log('[RiskService] Trade executed event received. Running immediate risk check.');
-            // Small delay to ensure stores are settled if necessary, though
-            // the event usually implies the position store is updated.
+            const pos = positionStore.anyActivePosition;
+            if (pos) this.pendingDealId = pos.position.dealId;
             setTimeout(() => void this.checkRisk(), 100);
         });
     }
@@ -83,9 +84,49 @@ export class RiskService {
         );
 
         if (correction !== null) {
-            console.log(`[RiskService] Correction Needed. Updating SL to ${correction}`);
+            const dealId = position.position.dealId;
+
+            // Only poll for readiness on freshly opened positions
+            if (this.pendingDealId === dealId) {
+                console.log(`[RiskService] Correction needed. Waiting for broker to confirm position...`);
+                const confirmed = await this.waitForBrokerPosition(dealId);
+                this.pendingDealId = null;
+                if (!confirmed) return;
+            }
+
+            console.log(`[RiskService] Updating SL to ${correction}`);
             await positionStore.updateStopLoss(correction);
         }
+    }
+
+    /**
+     * Poll the broker until the dealId appears in the positions list.
+     * Prevents 404s when the broker hasn't persisted the position yet.
+     */
+    private async waitForBrokerPosition(dealId: string): Promise<boolean> {
+        const client = api.client;
+        if (!client) return false;
+
+        // Exponential backoff: 100, 200, 400, 800, 1600, 3200ms (~6.3s total)
+        let delay = 100;
+        const maxDelay = 3200;
+
+        while (delay <= maxDelay) {
+            await new Promise(r => setTimeout(r, delay));
+            try {
+                const list = await getPositions(client);
+                if (list.positions.some(p => p.position.dealId === dealId)) {
+                    return true;
+                }
+            } catch {
+                // Network error — keep trying
+            }
+            console.log(`[RiskService] Position ${dealId} not yet at broker (waited ${delay}ms)`);
+            delay *= 2;
+        }
+
+        console.warn(`[RiskService] Position ${dealId} not found after backoff. Skipping SL update.`);
+        return false;
     }
 }
 

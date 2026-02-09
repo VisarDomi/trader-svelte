@@ -2,6 +2,7 @@
     import * as TRADING from '$lib/shared/constants/trading.js';
     import type { PlannedTrade } from '$lib/features/trade-execution/TradePlanner.js';
     import { CHART_CONTAINER_ID } from '$lib/shared/constants/chart.js';
+    import { blockChartEvents } from '$lib/components/chart-engine/chartGuard.js';
 
     let {
         isOpen,
@@ -30,26 +31,8 @@
         if (chart) chart.style.pointerEvents = 'none';
         return () => {
             const c = document.getElementById(CHART_CONTAINER_ID);
-            if (!c) return;
-
-            let blocking = true;
-            const blocked = ['mouseover', 'mouseenter', 'mousemove',
-                'pointerenter', 'pointerover', 'pointermove'];
-
-            function blockAll(e: Event) {
-                if (!blocking) return;
-                e.stopImmediatePropagation();
-                e.stopPropagation();
-                e.preventDefault();
-            }
-
-            for (const evt of blocked) c.addEventListener(evt, blockAll, true);
-            c.style.pointerEvents = '';
-
-            setTimeout(() => {
-                blocking = false;
-                for (const evt of blocked) c!.removeEventListener(evt, blockAll, true);
-            }, 300);
+            if (c) c.style.pointerEvents = '';
+            blockChartEvents();
         };
     });
 </script>
