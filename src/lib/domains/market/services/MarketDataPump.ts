@@ -154,6 +154,9 @@ export class MarketDataPump {
 
         this.startHistorySync();
         this.startLivenessCheck();
+
+        // Immediate sync to fill any gap (e.g. after iOS sleep resume)
+        void this.syncHistory();
     }
 
     disconnect() {
