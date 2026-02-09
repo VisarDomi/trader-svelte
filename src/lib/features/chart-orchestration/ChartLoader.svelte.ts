@@ -1,6 +1,5 @@
 import { goto } from '$app/navigation';
 import { api } from '$lib/core/services/ApiService.svelte.js';
-import { authenticateAndStoreSession } from "$lib/domains/auth/services/AuthService.js";
 import { getMarketDetails } from "$lib/domains/market/services/MarketApiService.js";
 import { getPreferences } from "$lib/domains/trading/services/AccountApiService.js";
 import { LeverageService } from '$lib/domains/trading/domain/LeverageService.js';
@@ -40,13 +39,13 @@ export class ChartLoader {
     ) {}
 
     async ensureSession(): Promise<boolean> {
-        try {
-            await authenticateAndStoreSession();
-            return true;
-        } catch {
+        // Boot (AppEngine) has already validated/refreshed tokens.
+        // Just verify we have them — if not, redirect to login.
+        if (!api.client) {
             await goto('/login');
             return false;
         }
+        return true;
     }
 
     async loadContext(epic: string): Promise<ChartContext | null> {

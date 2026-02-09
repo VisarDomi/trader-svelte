@@ -31,6 +31,21 @@ export class ConnectionMonitor {
             this.isVisible = visible;
             this.onVisibilityChange?.(visible);
         });
+
+        // iOS PWA: backup signals when visibilitychange doesn't fire on screen unlock
+        window.addEventListener('pageshow', () => {
+            if (document.visibilityState === 'visible' && !this.isVisible) {
+                this.isVisible = true;
+                this.onVisibilityChange?.(true);
+            }
+        });
+
+        window.addEventListener('focus', () => {
+            if (!this.isVisible) {
+                this.isVisible = true;
+                this.onVisibilityChange?.(true);
+            }
+        });
     }
 
     destroy() {

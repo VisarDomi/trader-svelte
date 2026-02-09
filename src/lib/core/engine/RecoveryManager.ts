@@ -34,13 +34,15 @@ export class RecoveryManager {
         console.log('[RecoveryManager] Deep Sleep detected. Performing Hard Restart.');
         notifications.info('Session restored');
 
-        // 1. Hard Restart: Tear down sockets, reset polling
-        SystemController.restart();
-
-        // 2. Re-verify everything from scratch
         try {
+            // 1. Validate session first (may refresh stale tokens)
             await authStore.validateSession();
-            await accountStore.loadAll(); // Re-reconcile strict truth
+
+            // 2. Restart services with fresh tokens
+            SystemController.restart();
+
+            // 3. Re-verify everything from scratch
+            await accountStore.loadAll();
             this.setStatus('READY');
         } catch (e) {
             await this.handleRecoveryFailure(e, () => this.executeDeepSleepRestart());
@@ -50,10 +52,13 @@ export class RecoveryManager {
     private async executeSoftReconnect() {
         notifications.info('Connection disrupted. Reconnecting...');
         try {
-            // 1. Verify Session
+            // 1. Validate session (refresh stale tokens)
             await authStore.validateSession();
 
-            // 2. Refresh Data (Parallel)
+            // 2. Restart services (stream, polling, watchdog) with fresh tokens
+            SystemController.restart();
+
+            // 3. Refresh Data (Parallel)
             await Promise.all([
                 accountStore.refreshActive(),
                 positionPoller.refresh()

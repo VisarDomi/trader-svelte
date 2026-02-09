@@ -96,6 +96,13 @@ export class AccountStore extends BaseStore {
                 this.activeAccount = fallback;
                 session.setLastAccountId(mode, fallback.accountId);
             }
+
+            // Server session may not match our localStorage selection
+            // (e.g. after a fresh login created a default-account session).
+            // Fix the mismatch so API calls return the correct account's data.
+            if (this.activeAccount && !this.activeAccount.preferred) {
+                await this.enforceServerSwitch(this.activeAccount, mode);
+            }
         } catch (e) {
             console.error("AccountStore refreshActive failed", e);
         }

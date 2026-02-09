@@ -29,7 +29,7 @@
 
     // Helper: Is this the account currently being used for this mode?
     function isTradingAccount(account: Account, type: string) {
-        return account.preferred && session.mode === type;
+        return accountStore.activeAccount?.accountId === account.accountId && session.mode === type;
     }
 
     // Helper: Check if we have data to show

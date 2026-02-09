@@ -54,42 +54,40 @@ export class AuthStore extends BaseStore {
      * Checks if current tokens are actually valid on the server.
      * Called by AppEngine on boot and reconnect.
      *
-     * Throws AuthError if session is dead.
+     * Validates BOTH modes (Real + Demo) so that loadAll() doesn't
+     * fail with stale tokens for the non-active mode.
+     *
+     * Throws AuthError if session is dead (re-login failed).
      * Throws NetworkError if internet is dead.
      */
     async validateSession(): Promise<void> {
-        // If we have no tokens at all, we can't validate.
         if (!this.realTokens && !this.demoTokens) {
             throw new AuthError("No session tokens available");
         }
 
-        // We ping the 'Active' mode to ensure connectivity
-        const mode = session.mode;
-        const tokens = session.getTokens(mode);
+        // Validate all modes with stored tokens in parallel
+        await Promise.all([
+            this.realTokens ? this.validateMode(AUTH.REAL_TYPE) : Promise.resolve(),
+            this.demoTokens ? this.validateMode(AUTH.DEMO_TYPE) : Promise.resolve()
+        ]);
+    }
 
-        if (!tokens) {
-            throw new AuthError(`No tokens for active mode: ${mode}`);
-        }
-
+    private async validateMode(mode: URL_TYPE): Promise<void> {
         const client = api.getClientForMode(mode);
-        if (!client) throw new AuthError("Client initialization failed");
+        if (!client) return;
 
         try {
-            // The API Client throws specialized errors now
             await client.get(API.PING_ENDPOINT);
         } catch (e) {
             if (e instanceof AuthError) {
-                console.log("Ping returned 401, attempting silent refresh...");
-                // Attempt silent re-login
+                console.log(`[AuthStore] ${mode} session expired, refreshing...`);
                 try {
                     await this.performLogin(mode);
-                    return; // Recovered successfully
+                    return;
                 } catch (loginErr) {
-                    // If refresh fails, bubble up the AuthError
                     throw loginErr instanceof AuthError ? loginErr : new AuthError("Refresh failed");
                 }
             }
-            // Bubble up NetworkError / ApiError
             throw e;
         }
     }
