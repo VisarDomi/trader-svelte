@@ -82,17 +82,11 @@ export function getChartOptions(config: ChartLayoutConfig): DeepPartial<ChartOpt
             color: CHART.CROSSHAIR_COLOR,
             style: LineStyle.LargeDashed,
             labelBackgroundColor: CHART.CROSSHAIR_LABEL_BG,
-            // Disable line AND label on PWA/iOS
-            visible: !isPwa,
-            labelVisible: !isPwa
         },
         horzLine: {
             color: CHART.CROSSHAIR_COLOR,
             style: LineStyle.LargeDashed,
             labelBackgroundColor: CHART.CROSSHAIR_LABEL_BG,
-            // Disable line AND label on PWA/iOS
-            visible: !isPwa,
-            labelVisible: !isPwa
         },
     };
 
