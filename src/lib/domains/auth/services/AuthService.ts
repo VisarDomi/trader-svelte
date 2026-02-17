@@ -5,6 +5,7 @@ import { DEFAULT_ERROR } from "$lib/shared/constants/error.js";
 import type { URL_TYPE } from "$lib/shared/types/url.js";
 import type { SessionTokens, UserCredentials } from "$lib/shared/types/auth.js";
 import { session } from "$lib/core/services/SessionManager.js";
+import { log } from '$lib/shared/utils/log.js';
 
 export async function login(type: URL_TYPE): Promise<SessionTokens> {
     const credentials: UserCredentials = session.getCredentials();
@@ -78,12 +79,12 @@ export function startRestHeartbeat() {
 
         const realTokens = session.getTokens(AUTH.REAL_TYPE);
         if (realTokens) {
-            promises.push(ping(AUTH.REAL_TYPE, realTokens).catch(console.error));
+            promises.push(ping(AUTH.REAL_TYPE, realTokens).catch(log.error));
         }
 
         const demoTokens = session.getTokens(AUTH.DEMO_TYPE);
         if (demoTokens) {
-            promises.push(ping(AUTH.DEMO_TYPE, demoTokens).catch(console.error));
+            promises.push(ping(AUTH.DEMO_TYPE, demoTokens).catch(log.error));
         }
 
         await Promise.all(promises);

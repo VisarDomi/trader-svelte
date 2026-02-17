@@ -8,6 +8,7 @@ import { api } from '$lib/core/services/ApiService.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
+import { log } from '$lib/shared/utils/log.js';
 
 export class RiskService {
     private manager = new RiskManager();
@@ -17,7 +18,7 @@ export class RiskService {
 
     constructor() {
         bus.on(EVENTS.TRADE_EXECUTED, () => {
-            console.log('[RiskService] Trade executed event received. Running immediate risk check.');
+            log.info('[RiskService] Trade executed event received. Running immediate risk check.');
             const pos = positionStore.anyActivePosition;
             if (pos) this.pendingDealId = pos.position.dealId;
             setTimeout(() => void this.checkRisk(), 100);
@@ -64,7 +65,7 @@ export class RiskService {
                     const md = await getMarketDetails(client, position.market.epic);
                     this.marketDetailsCache.set(position.market.epic, md);
                 } catch (e) {
-                    console.warn('[RiskService] Failed to fetch market details', e);
+                    log.warn('[RiskService] Failed to fetch market details', e);
                     return;
                 }
             }
@@ -88,13 +89,13 @@ export class RiskService {
 
             // Only poll for readiness on freshly opened positions
             if (this.pendingDealId === dealId) {
-                console.log(`[RiskService] Correction needed. Waiting for broker to confirm position...`);
+                log.info(`[RiskService] Correction needed. Waiting for broker to confirm position...`);
                 const confirmed = await this.waitForBrokerPosition(dealId);
                 this.pendingDealId = null;
                 if (!confirmed) return;
             }
 
-            console.log(`[RiskService] Updating SL to ${correction}`);
+            log.info(`[RiskService] Updating SL to ${correction}`);
             await positionStore.updateStopLoss(correction);
         }
     }
@@ -121,11 +122,11 @@ export class RiskService {
             } catch {
                 // Network error — keep trying
             }
-            console.log(`[RiskService] Position ${dealId} not yet at broker (waited ${delay}ms)`);
+            log.info(`[RiskService] Position ${dealId} not yet at broker (waited ${delay}ms)`);
             delay *= 2;
         }
 
-        console.warn(`[RiskService] Position ${dealId} not found after backoff. Skipping SL update.`);
+        log.warn(`[RiskService] Position ${dealId} not found after backoff. Skipping SL update.`);
         return false;
     }
 }

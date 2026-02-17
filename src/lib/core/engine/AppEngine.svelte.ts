@@ -16,6 +16,7 @@ import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js'
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { AuthError } from '$lib/core/api/ApiClient.js';
+import { log } from '$lib/shared/utils/log.js';
 
 const DEEP_SLEEP_THRESHOLD = 10 * 60 * 1000; // 10 minutes
 const RESUME_RECOVERY_MS = 5_000; // 5 seconds — validate session for any non-trivial background
@@ -68,7 +69,7 @@ class AppEngine {
      * Called from +layout.svelte onMount.
      */
     async boot() {
-        console.log('[AppEngine] Booting...');
+        log.info('[AppEngine] Booting...');
 
         viewport.init();
         this.status = 'AUTH_CHECK';
@@ -83,7 +84,7 @@ class AppEngine {
             await authStore.validateSession();
         } catch (e) {
             if (e instanceof AuthError) {
-                console.warn('[AppEngine] Boot Auth failed:', e.message);
+                log.warn('[AppEngine] Boot Auth failed:', e.message);
                 this.status = 'UNAUTHENTICATED';
                 await goto('/login');
                 return;
@@ -95,7 +96,7 @@ class AppEngine {
         try {
             await accountStore.loadAll();
             this.transitionTo('READY');
-            console.log('[AppEngine] Ready');
+            log.info('[AppEngine] Ready');
         } catch (e) {
             // Handle fatal boot errors
             if (e instanceof AuthError || String(e).includes('401')) {
@@ -103,7 +104,7 @@ class AppEngine {
                 await goto('/login');
                 return;
             }
-            console.error('[AppEngine] Boot load failed', e);
+            log.error('[AppEngine] Boot load failed', e);
             notifications.error('Failed to load data. Retrying...');
             this.transitionTo('READY');
         }
@@ -193,7 +194,7 @@ class AppEngine {
             // Large delta = JS was frozen by iOS and has now resumed.
             // Only act if page is actually visible (screen unlocked) and we're still stuck in BACKGROUND.
             if (delta > 3000 && this.status === 'BACKGROUND' && document.visibilityState === 'visible') {
-                console.warn(`[AppEngine] Sentinel: visibilitychange missed, forcing resume (frozen ${Math.round(delta / 1000)}s)`);
+                log.warn(`[AppEngine] Sentinel: visibilitychange missed, forcing resume (frozen ${Math.round(delta / 1000)}s)`);
                 this.executeResume();
             }
         }, 1000);
@@ -222,7 +223,7 @@ class AppEngine {
                 return;
             }
             // Network error — proceed with existing tokens, services will retry
-            console.warn('[AppEngine] Session validation failed on resume', e);
+            log.warn('[AppEngine] Session validation failed on resume', e);
         }
 
         // Restart services with (potentially refreshed) tokens

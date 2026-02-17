@@ -7,6 +7,7 @@ import { SystemController } from '$lib/core/engine/SystemController.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { MarketDetailsResponse, MarketListResponse } from '$lib/shared/types/market.js';
 import type { AccountPreferences } from '$lib/shared/types/account.js';
+import { log } from '$lib/shared/utils/log.js';
 
 const STORAGE_KEY = 'mt_favorite_epics';
 
@@ -78,27 +79,27 @@ export class InstrumentStore extends BaseStore {
             listResponses.forEach((r, index) => {
                 // Case A: Response contains "marketDetails" (Full objects)
                 if (r.marketDetails && Array.isArray(r.marketDetails)) {
-                    console.log(`[InstrumentStore] Chunk ${index} returned full marketDetails.`);
+                    log.info(`[InstrumentStore] Chunk ${index} returned full marketDetails.`);
                     finalInstruments = [...finalInstruments, ...r.marketDetails];
                     return;
                 }
 
                 // Case B: Response contains "markets" (Flat summaries)
                 if (r.markets && Array.isArray(r.markets)) {
-                    console.log(`[InstrumentStore] Chunk ${index} returned flat markets.`);
+                    log.info(`[InstrumentStore] Chunk ${index} returned flat markets.`);
                     const mapped = r.markets.map(s => MarketMapper.fromSummary(s));
                     finalInstruments = [...finalInstruments, ...mapped];
                     return;
                 }
 
-                console.warn(`[InstrumentStore] Chunk ${index} missing 'markets' or 'marketDetails'.`, r);
+                log.warn(`[InstrumentStore] Chunk ${index} missing 'markets' or 'marketDetails'.`, r);
             });
 
             this.instruments = finalInstruments;
         });
 
         if (this.error) {
-            console.error('[InstrumentStore] Load failed:', this.error);
+            log.error('[InstrumentStore] Load failed:', this.error);
             notifications.error(this.error);
         }
     }

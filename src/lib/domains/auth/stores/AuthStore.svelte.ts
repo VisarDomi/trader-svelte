@@ -8,6 +8,7 @@ import type { URL_TYPE } from '$lib/shared/types/url.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import * as API from '$lib/shared/constants/api.js';
 import { AuthError } from '$lib/core/api/ApiClient.js';
+import { log } from '$lib/shared/utils/log.js';
 
 export class AuthStore extends BaseStore {
     // Form State
@@ -80,7 +81,7 @@ export class AuthStore extends BaseStore {
             await client.get(API.PING_ENDPOINT);
         } catch (e) {
             if (e instanceof AuthError) {
-                console.log(`[AuthStore] ${mode} session expired, refreshing...`);
+                log.info(`[AuthStore] ${mode} session expired, refreshing...`);
                 try {
                     await this.performLogin(mode);
                     return;

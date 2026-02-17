@@ -6,6 +6,7 @@ import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js'
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { AuthError } from '$lib/core/api/ApiClient.js';
+import { log } from '$lib/shared/utils/log.js';
 
 const DEEP_SLEEP_THRESHOLD = 10 * 60 * 1000; // 10 Minutes
 
@@ -20,7 +21,7 @@ export class RecoveryManager {
      * Decides whether to do a Hard Restart (Deep Sleep) or Soft Reconnect (Hiccup).
      */
     async handleFreeze(gap: number) {
-        console.warn(`[RecoveryManager] Freeze detected (${Math.round(gap/1000)}s). Recovery initiated...`);
+        log.warn(`[RecoveryManager] Freeze detected (${Math.round(gap/1000)}s). Recovery initiated...`);
         this.setStatus('RECONNECTING');
 
         if (gap > DEEP_SLEEP_THRESHOLD) {
@@ -31,7 +32,7 @@ export class RecoveryManager {
     }
 
     private async executeDeepSleepRestart() {
-        console.log('[RecoveryManager] Deep Sleep detected. Performing Hard Restart.');
+        log.info('[RecoveryManager] Deep Sleep detected. Performing Hard Restart.');
         notifications.info('Session restored');
 
         try {
@@ -74,14 +75,14 @@ export class RecoveryManager {
     private async handleRecoveryFailure(e: unknown, retryAction: () => Promise<void>) {
         if (e instanceof AuthError) {
             // Fatal Error: User session is dead.
-            console.error('[RecoveryManager] Reconnect failed: Auth Error');
+            log.error('[RecoveryManager] Reconnect failed: Auth Error');
             this.setStatus('UNAUTHENTICATED');
             await goto('/login');
             return;
         }
 
         // Transient Error: Network / Timeout / API Glitch
-        console.warn('[RecoveryManager] Reconnect failed. Retrying in 3s...', e);
+        log.warn('[RecoveryManager] Reconnect failed. Retrying in 3s...', e);
 
         // Simple Retry Strategy
         setTimeout(() => {

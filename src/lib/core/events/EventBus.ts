@@ -3,6 +3,8 @@
  * Allows components to react to events (e.g., "TradeExecuted") without
  * holding references to the specific store that triggered it.
  */
+import { log } from '$lib/shared/utils/log.js';
+
 
 // Define the shape of our events map
 export type EventMap = Record<string, any>;
@@ -47,7 +49,7 @@ export class EventBus<Events extends EventMap> {
                 try {
                     handler(payload);
                 } catch (e) {
-                    console.error(`[EventBus] Error in handler for ${String(type)}:`, e);
+                    log.error(`[EventBus] Error in handler for ${String(type)}:`, e);
                 }
             });
         }

@@ -1,6 +1,7 @@
 import * as API from '$lib/shared/constants/api.js';
 import type { MarketDetailsResponse, MarketListResponse } from "$lib/shared/types/market.js";
 import type { ApiClient } from '$lib/core/api/ApiClient.js';
+import { log } from '$lib/shared/utils/log.js';
 
 export function getMarketDetails(
     client: ApiClient,
@@ -22,7 +23,7 @@ export function getMarketsByEpics(
     epics: string[]
 ): Promise<MarketListResponse> {
     const epicsStr = epics.join(',');
-    console.log(`[MarketApiService] Fetching bulk epics: ${epicsStr}`);
+    log.info(`[MarketApiService] Fetching bulk epics: ${epicsStr}`);
     const params = { epics: epicsStr };
     return client.get<MarketListResponse>(API.MARKETS_ENDPOINT, params);
 }

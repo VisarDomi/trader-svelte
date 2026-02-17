@@ -7,6 +7,7 @@ import type { ChartData } from '$lib/shared/types/trading.js';
 import type { ChartCandle } from '$lib/shared/types/market.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { UTCTimestamp } from 'lightweight-charts';
+import { log } from '$lib/shared/utils/log.js';
 
 const STALE_THRESHOLD_MS = 10000;
 const LIVENESS_CHECK_INTERVAL = 2000;
@@ -31,6 +32,7 @@ export class MarketDataPump {
     private syncInterval: ReturnType<typeof setInterval> | null = null;
     private livenessInterval: ReturnType<typeof setInterval> | null = null;
     private lastSyncMinute = -1;
+    private pendingSyncOnTick = false;
 
     // Infinite Scroll State
     isLoadingHistory = false;
@@ -79,7 +81,7 @@ export class MarketDataPump {
             marketStore.setLoaded(true);
 
         } catch (e) {
-            console.error('[MarketDataPump] Load failed', e);
+            log.error('[MarketDataPump] Load failed', e);
         }
     }
 
@@ -103,7 +105,7 @@ export class MarketDataPump {
             return;
         }
 
-        console.log(`[MarketDataPump] Triggering history fetch. Anchor: ${anchorTime}`);
+        log.info(`[MarketDataPump] Triggering history fetch. Anchor: ${anchorTime}`);
 
         try {
             const repo = new MarketRepository(client);
@@ -118,7 +120,7 @@ export class MarketDataPump {
                 if (filteredBid.length === 0) {
                     this.isHistoryExhausted = true;
                 } else {
-                    console.log(`[MarketDataPump] Prepending ${filteredBid.length} new candles.`);
+                    log.info(`[MarketDataPump] Prepending ${filteredBid.length} new candles.`);
 
                     // 1. Update State (Reactive Store)
                     marketStore.prependHistory(filteredBid, filteredAsk);
@@ -134,7 +136,7 @@ export class MarketDataPump {
             }
 
         } catch (e) {
-            console.warn("[MarketDataPump] LoadMore failed", e);
+            log.warn("[MarketDataPump] LoadMore failed", e);
         } finally {
             this.isLoadingHistory = false;
         }
@@ -155,8 +157,8 @@ export class MarketDataPump {
         this.startHistorySync();
         this.startLivenessCheck();
 
-        // Immediate sync to fill any gap (e.g. after iOS sleep resume)
-        void this.syncHistory();
+        // Sync will fire on the first live tick (see handleFeedUpdate)
+        this.pendingSyncOnTick = true;
     }
 
     disconnect() {
@@ -189,13 +191,18 @@ export class MarketDataPump {
             const gap = now - this.feed.lastUpdateTimestamp;
 
             if (gap > STALE_THRESHOLD_MS && marketStore.isLoaded && marketStore.marketStatus === 'TRADEABLE') {
-                console.warn(`[MarketDataPump] Zombie socket detected (Gap: ${gap}ms). Restarting...`);
+                log.warn(`[MarketDataPump] Zombie socket detected (Gap: ${gap}ms). Restarting...`);
                 this.connect();
             }
         }, LIVENESS_CHECK_INTERVAL);
     }
 
     private handleFeedUpdate(u: FeedUpdate) {
+        if (this.pendingSyncOnTick) {
+            this.pendingSyncOnTick = false;
+            log.info('[MarketDataPump] First tick after reconnect — triggering history sync');
+            void this.syncHistory();
+        }
         marketStore.updateLive(u);
     }
 
@@ -222,7 +229,7 @@ export class MarketDataPump {
             this.feed.mergeExternalData(bidData.current, askData.current);
 
         } catch (e) {
-            console.warn("[MarketDataPump] History sync failed", e);
+            log.warn("[MarketDataPump] History sync failed", e);
         }
     }
 }

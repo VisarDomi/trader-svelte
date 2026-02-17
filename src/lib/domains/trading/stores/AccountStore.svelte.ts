@@ -10,6 +10,7 @@ import * as EVENTS from '$lib/shared/constants/events.js';
 import type { Account } from '$lib/shared/types/account.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
+import { log } from '$lib/shared/utils/log.js';
 
 export class AccountStore extends BaseStore {
     activeAccount = $state<Account | null>(null);
@@ -69,7 +70,7 @@ export class AccountStore extends BaseStore {
             await this.resolveSourceOfTruth();
 
         } catch (e) {
-            console.error("AccountStore loadAll failed", e);
+            log.error("AccountStore loadAll failed", e);
             this.error = "Failed to load accounts";
         } finally {
             this.isLoading = false;
@@ -104,7 +105,7 @@ export class AccountStore extends BaseStore {
                 await this.enforceServerSwitch(this.activeAccount, mode);
             }
         } catch (e) {
-            console.error("AccountStore refreshActive failed", e);
+            log.error("AccountStore refreshActive failed", e);
         }
     }
 
@@ -134,7 +135,7 @@ export class AccountStore extends BaseStore {
                 try {
                     await this.enforceServerSwitch(targetAccount, mode);
                 } catch (e) {
-                    console.error("[AccountStore] Background switch failed", e);
+                    log.error("[AccountStore] Background switch failed", e);
                 }
             }
         }
@@ -211,7 +212,7 @@ export class AccountStore extends BaseStore {
         // 3. Update Available (Deposit + 0 PnL)
         this.activeAccount.balance.available = this.activeAccount.balance.deposit;
 
-        console.log(`[AccountStore] Optimistic Update applied. New Deposit: ${this.activeAccount.balance.deposit}`);
+        log.info(`[AccountStore] Optimistic Update applied. New Deposit: ${this.activeAccount.balance.deposit}`);
     }
 
     private async pollBalanceUpdate() {

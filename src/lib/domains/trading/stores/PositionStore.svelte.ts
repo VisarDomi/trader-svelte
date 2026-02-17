@@ -8,6 +8,7 @@ import { TradeCalculator } from '$lib/domains/trading/domain/TradeCalculator.js'
 import * as TRADING from '$lib/shared/constants/trading.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { PositionResponse } from '$lib/shared/types/trading.js';
+import { log } from '$lib/shared/utils/log.js';
 
 export class PositionStore extends BaseStore {
     // The "Local" position (matching the current chart)
@@ -116,7 +117,7 @@ export class PositionStore extends BaseStore {
             notifications.success(`Stop Loss Auto-Corrected to ${newLevel}`);
 
         } catch (e) {
-            console.error("[RiskService] Failed to auto-correct SL", e);
+            log.error("[RiskService] Failed to auto-correct SL", e);
         }
     }
 }

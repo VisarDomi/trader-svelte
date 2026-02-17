@@ -3,6 +3,8 @@
  * Detects if the Javascript event loop has paused (e.g. tab backgrounded, phone locked)
  * by measuring the drift between expected execution time and actual execution time.
  */
+import { log } from '$lib/shared/utils/log.js';
+
 export class WatchdogService {
     private lastTick = 0;
     private intervalId: ReturnType<typeof setInterval> | null = null;
@@ -33,7 +35,7 @@ export class WatchdogService {
             if (delta > (this.TICK_MS + this.TOLERANCE_MS)) {
                 // Determine the actual gap size
                 const gap = delta - this.TICK_MS;
-                console.warn(`[Watchdog] Freeze detected. Gap: ${gap}ms`);
+                log.warn(`[Watchdog] Freeze detected. Gap: ${gap}ms`);
 
                 if (this.onFreeze) this.onFreeze(gap);
             }

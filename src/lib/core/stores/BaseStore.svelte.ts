@@ -1,5 +1,6 @@
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import type { ApiClient } from '$lib/core/api/ApiClient.js';
+import { log } from '$lib/shared/utils/log.js';
 
 /**
  * Base class for all Stores to standardize Loading, Error, and Client access.
@@ -33,7 +34,7 @@ export abstract class BaseStore {
             return result;
         } catch (e) {
             this.error = e instanceof Error ? e.message : String(e);
-            console.error(`[${this.constructor.name}] Error:`, e);
+            log.error(`[${this.constructor.name}] Error:`, e);
             return null;
         } finally {
             this.isLoading = false;

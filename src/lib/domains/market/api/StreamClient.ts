@@ -2,6 +2,7 @@ import * as API from '$lib/shared/constants/api.js';
 import * as AUTH from '$lib/shared/constants/auth.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
 import type { QuoteMessage, WebSocketPayload } from '$lib/shared/types/market.js';
+import { log } from '$lib/shared/utils/log.js';
 
 type PriceUpdateCallback = (msg: QuoteMessage) => void;
 
@@ -37,7 +38,7 @@ export class StreamClient {
             this.ws.onerror = this.handleError;
             this.ws.onclose = this.handleClose;
         } catch (e) {
-            console.error("[StreamClient] Connection failed immediately", e);
+            log.error("[StreamClient] Connection failed immediately", e);
             this.scheduleReconnect();
         }
     }
@@ -66,7 +67,7 @@ export class StreamClient {
     }
 
     private handleOpen = () => {
-        console.log(`[StreamClient] Connected to ${this.epic}`);
+        log.info(`[StreamClient] Connected to ${this.epic}`);
         this.retryCount = 0; // Reset backoff on success
         this.subscribe();
         this.startPing();
@@ -83,13 +84,13 @@ export class StreamClient {
                 this.onPriceUpdate(data);
             }
         } catch (err) {
-            console.error("[StreamClient] Parse Error", err);
+            log.error("[StreamClient] Parse Error", err);
         }
     };
 
     private handleError = (event: Event) => {
         // WS errors are usually followed by Close, which handles the retry.
-        console.warn("[StreamClient] Socket Error", event);
+        log.warn("[StreamClient] Socket Error", event);
     };
 
     private handleClose = (event: CloseEvent) => {
@@ -97,7 +98,7 @@ export class StreamClient {
         this.ws = null;
 
         if (!this.isIntentionalClose) {
-            console.warn(`[StreamClient] Unexpected close (Code: ${event.code}). Reconnecting...`);
+            log.warn(`[StreamClient] Unexpected close (Code: ${event.code}). Reconnecting...`);
             this.scheduleReconnect();
         }
     };
@@ -105,12 +106,12 @@ export class StreamClient {
     private scheduleReconnect() {
         if (this.isIntentionalClose) return;
         if (this.retryCount >= this.MAX_RETRIES) {
-            console.error("[StreamClient] Max retries exceeded. Giving up.");
+            log.error("[StreamClient] Max retries exceeded. Giving up.");
             return;
         }
 
         const delay = Math.min(this.BASE_DELAY * Math.pow(1.5, this.retryCount), 30000); // Cap at 30s
-        console.log(`[StreamClient] Retry attempt ${this.retryCount + 1} in ${delay}ms`);
+        log.info(`[StreamClient] Retry attempt ${this.retryCount + 1} in ${delay}ms`);
 
         this.reconnectTimer = setTimeout(() => {
             this.retryCount++;

@@ -7,6 +7,7 @@ import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
+import { log } from '$lib/shared/utils/log.js';
 
 /**
  * The Mechanic.
@@ -20,7 +21,7 @@ export class SystemController {
      * Used when App becomes READY or recovers from FREEZE.
      */
     static wakeUp() {
-        console.log('[SystemController] Waking up...');
+        log.info('[SystemController] Waking up...');
 
         // 1. Start Polling Positions
         if (session.lastEpic) {
@@ -45,7 +46,7 @@ export class SystemController {
      * Used when App goes BACKGROUND, OFFLINE, or before RECONNECTING.
      */
     static hibernate() {
-        console.log('[SystemController] Hibernating...');
+        log.info('[SystemController] Hibernating...');
 
         // 1. Stop polling to save bandwidth/resources
         positionPoller.stop();
@@ -67,7 +68,7 @@ export class SystemController {
     static switchContext(newEpic: string) {
         if (session.lastEpic === newEpic && marketStore.isLoaded) return;
 
-        console.log(`[SystemController] Switching Context to ${newEpic}`);
+        log.info(`[SystemController] Switching Context to ${newEpic}`);
 
         // 1. Stop everything immediately
         this.hibernate();
@@ -90,7 +91,7 @@ export class SystemController {
      * Used when switching Accounts or recovering from deep sleep.
      */
     static restart() {
-        console.log('[SystemController] Restarting system...');
+        log.info('[SystemController] Restarting system...');
         this.hibernate();
         // Determine current epic from session and re-apply
         if (session.lastEpic) {

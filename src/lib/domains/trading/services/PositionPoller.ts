@@ -3,6 +3,7 @@ import { resolveInitialBalance } from '$lib/domains/trading/utils/position.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
+import { log } from '$lib/shared/utils/log.js';
 
 export class PositionPoller {
     private intervalId: ReturnType<typeof setInterval> | null = null;
@@ -76,7 +77,7 @@ export class PositionPoller {
             positionStore.sync(globalPos, localPos);
 
         } catch (e) {
-            console.warn('[PositionPoller] Fetch failed', e);
+            log.warn('[PositionPoller] Fetch failed', e);
         }
     }
 }

@@ -17,6 +17,7 @@ import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 import type { AccountPreferences } from '$lib/shared/types/account.js';
 import type { ChartData } from "$lib/shared/types/trading";
 import * as TRADING from '$lib/shared/constants/trading.js';
+import { log } from '$lib/shared/utils/log.js';
 
 export interface ChartContext {
     marketDetails: MarketDetailsResponse;
@@ -74,7 +75,7 @@ export class ChartLoader {
 
             return this.deriveContext(epic, config);
         } catch (e) {
-            console.error("Chart Context Load Failed", e);
+            log.error("Chart Context Load Failed", e);
             return null;
         }
     }

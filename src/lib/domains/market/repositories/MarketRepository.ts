@@ -9,6 +9,7 @@ import type {
     ChartCandle
 } from '$lib/shared/types/market.js';
 import type { ChartData } from '$lib/shared/types/trading.js';
+import { log } from '$lib/shared/utils/log.js';
 
 export class MarketRepository {
     constructor(private client: ApiClient) {}
@@ -19,7 +20,7 @@ export class MarketRepository {
     async getHistory(epic: string): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
         // "TO" is Now.
         const toStr = this.formatDateForApi(DateTime.utc());
-        console.log(`[MarketRepository] Fetching INITIAL history for ${epic} up to ${toStr}`);
+        log.info(`[MarketRepository] Fetching INITIAL history for ${epic} up to ${toStr}`);
         return this.fetchAndMap(epic, toStr);
     }
 
@@ -31,7 +32,7 @@ export class MarketRepository {
         const dt = DateTime.fromSeconds(beforeTime, { zone: 'utc' });
         const toStr = this.formatDateForApi(dt);
 
-        console.log(`[MarketRepository] Fetching OLDER history for ${epic} ending at ${toStr} (Unix: ${beforeTime})`);
+        log.info(`[MarketRepository] Fetching OLDER history for ${epic} ending at ${toStr} (Unix: ${beforeTime})`);
         return this.fetchAndMap(epic, toStr);
     }
 
@@ -55,13 +56,13 @@ export class MarketRepository {
 
         try {
             // Debug Log
-            console.log(`[MarketRepository] GET ${endpoint}`, JSON.stringify(params));
+            log.info(`[MarketRepository] GET ${endpoint}`, JSON.stringify(params));
 
             const data = await this.client.get<MarketPriceResponse>(endpoint, params);
 
             // Handle 404/Empty by returning empty lists (handled gracefully by pump)
             if (!data.prices || data.prices.length === 0) {
-                console.warn("[MarketRepository] Received 0 prices.");
+                log.warn("[MarketRepository] Received 0 prices.");
                 return { bid: [], ask: [] };
             }
 
@@ -72,7 +73,7 @@ export class MarketRepository {
 
             const first = sorted[0].snapshotTimeUTC;
             const last = sorted[sorted.length - 1].snapshotTimeUTC;
-            console.log(`[MarketRepository] Received ${data.prices.length} candles. Range: ${first} -> ${last}`);
+            log.info(`[MarketRepository] Received ${data.prices.length} candles. Range: ${first} -> ${last}`);
 
             return {
                 bid: this.mapToCandles(sorted, TRADING.CHART_DATA_SOURCE_BID),
@@ -82,7 +83,7 @@ export class MarketRepository {
         } catch (e) {
             // If 404 or bad request, assume end of history or format error
             // We log the full error now to debug 'error.invalid.to' specifically
-            console.error("[MarketRepository] Fetch failed details:", e);
+            log.error("[MarketRepository] Fetch failed details:", e);
             return { bid: [], ask: [] };
         }
     }
