@@ -4,15 +4,12 @@ import { browser } from '$app/environment';
 // Delegates
 import { SystemController } from '$lib/core/engine/SystemController.js';
 import { ConnectionMonitor } from '$lib/core/engine/ConnectionMonitor.svelte.js';
-import { RecoveryManager } from '$lib/core/engine/RecoveryManager.js';
 
 // Services
-import { watchdog } from '$lib/core/services/WatchdogService.svelte.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
 
 // Domain Imports for Boot
-import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { AuthError } from '$lib/core/api/ApiClient.js';
@@ -36,30 +33,18 @@ class AppEngine {
 
     // Dependencies
     private monitor: ConnectionMonitor;
-    private recovery: RecoveryManager;
 
-    // iOS resume tracking
+    // Resume tracking
     private backgroundedAt = 0;
+    private resumeInProgress = false;
     private bgSentinelId: ReturnType<typeof setInterval> | null = null;
     private bgSentinelTick = 0;
 
     constructor() {
-        // Initialize Delegates
-        this.recovery = new RecoveryManager((s) => this.setStatus(s));
-
         this.monitor = new ConnectionMonitor(
             (online) => this.handleConnectivityChange(online),
             (visible) => this.handleVisibilityChange(visible)
         );
-
-        if (browser) {
-            watchdog.setOnFreeze((gap) => {
-                // Only trigger recovery when READY — prevents re-entrant calls during RECONNECTING
-                if (this.status === 'READY') {
-                    void this.recovery.handleFreeze(gap);
-                }
-            });
-        }
     }
 
     // Expose connectivity state from monitor
@@ -112,21 +97,22 @@ class AppEngine {
 
     // --- State Management ---
 
-    private setStatus(s: AppStatus) {
-        this.status = s;
-    }
-
+    /**
+     * Exit/Enter pattern — hibernate only on EXIT from READY, wakeUp only on ENTER to READY.
+     */
     private transitionTo(newStatus: AppStatus) {
-        if (this.status === 'READY') {
+        const oldStatus = this.status;
+
+        // EXIT: tear down services when leaving READY
+        if (oldStatus === 'READY' && newStatus !== 'READY') {
             SystemController.hibernate();
         }
 
         this.status = newStatus;
 
-        if (newStatus === 'READY') {
+        // ENTER: start services when arriving at READY
+        if (newStatus === 'READY' && oldStatus !== 'READY') {
             SystemController.wakeUp();
-        } else if (newStatus === 'OFFLINE' || newStatus === 'BACKGROUND') {
-            SystemController.hibernate();
         }
     }
 
@@ -135,8 +121,7 @@ class AppEngine {
     private handleConnectivityChange(isOnline: boolean) {
         if (isOnline) {
             notifications.info('Internet restored');
-            // Treat as a small hiccup (1s gap) to trigger soft reconnect logic
-            void this.recovery.handleFreeze(1000);
+            this.handleResume();
         } else {
             this.transitionTo('OFFLINE');
             notifications.error('No Internet Connection');
@@ -152,18 +137,18 @@ class AppEngine {
             }
         } else {
             this.stopBackgroundSentinel();
-            if (this.status === 'BACKGROUND') {
-                this.executeResume();
-            }
+            this.handleResume();
         }
     }
 
     /**
-     * Shared resume logic — called by visibilitychange, focus, or the background sentinel.
-     * Checks status to prevent duplicate execution from multiple signals.
+     * Single resume entry point — all signals (visibility, focus, pageshow, sentinel, online)
+     * funnel here. Re-entrancy guard prevents concurrent recovery from rapid-fire signals.
      */
-    private executeResume() {
-        if (this.status !== 'BACKGROUND') return;
+    private handleResume() {
+        if (this.status !== 'BACKGROUND' && this.status !== 'OFFLINE') return;
+        if (this.resumeInProgress) return;
+        this.resumeInProgress = true;
 
         const elapsed = Date.now() - this.backgroundedAt;
         this.backgroundedAt = 0;
@@ -173,7 +158,7 @@ class AppEngine {
             void this.resumeFromSleep(elapsed);
         } else {
             this.transitionTo('READY');
-            void positionPoller.refresh();
+            this.resumeInProgress = false;
         }
     }
 
@@ -195,7 +180,7 @@ class AppEngine {
             // Only act if page is actually visible (screen unlocked) and we're still stuck in BACKGROUND.
             if (delta > 3000 && this.status === 'BACKGROUND' && document.visibilityState === 'visible') {
                 log.warn(`[AppEngine] Sentinel: visibilitychange missed, forcing resume (frozen ${Math.round(delta / 1000)}s)`);
-                this.executeResume();
+                this.handleResume();
             }
         }, 1000);
     }
@@ -208,8 +193,9 @@ class AppEngine {
     }
 
     /**
-     * Resumes from an iOS sleep / long background.
-     * Validates session (refreshing stale tokens) BEFORE restarting the WebSocket.
+     * Resumes from a long background / deep sleep.
+     * Validates session (refreshing stale tokens) BEFORE restarting services.
+     * No eager data fetches — MarketDataPump's first-tick handles position + history sync.
      */
     private async resumeFromSleep(elapsed: number) {
         this.status = 'RECONNECTING';
@@ -219,6 +205,7 @@ class AppEngine {
         } catch (e) {
             if (e instanceof AuthError) {
                 this.status = 'UNAUTHENTICATED';
+                this.resumeInProgress = false;
                 await goto('/login');
                 return;
             }
@@ -229,19 +216,11 @@ class AppEngine {
         // Restart services with (potentially refreshed) tokens
         this.transitionTo('READY');
 
-        // Refresh data
-        try {
-            await Promise.all([
-                accountStore.refreshActive(),
-                positionPoller.refresh()
-            ]);
-        } catch {
-            // Non-critical — services are running and will catch up
-        }
-
         if (elapsed > DEEP_SLEEP_THRESHOLD) {
             notifications.info('Session restored');
         }
+
+        this.resumeInProgress = false;
     }
 }
 

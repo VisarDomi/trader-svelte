@@ -7,6 +7,7 @@ import type { ChartData } from '$lib/shared/types/trading.js';
 import type { ChartCandle } from '$lib/shared/types/market.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { UTCTimestamp } from 'lightweight-charts';
+import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 import { log } from '$lib/shared/utils/log.js';
 
 const STALE_THRESHOLD_MS = 10000;
@@ -142,6 +143,14 @@ export class MarketDataPump {
         }
     }
 
+    /**
+     * Arms the first-tick sync without a full reconnect.
+     * Used when navigating to /chart while the websocket is already connected.
+     */
+    requestSyncOnNextTick() {
+        this.pendingSyncOnTick = true;
+    }
+
     connect(targetEpic?: string) {
         if (targetEpic) this.epic = targetEpic;
         if (!this.epic) return;
@@ -200,8 +209,9 @@ export class MarketDataPump {
     private handleFeedUpdate(u: FeedUpdate) {
         if (this.pendingSyncOnTick) {
             this.pendingSyncOnTick = false;
-            log.info('[MarketDataPump] First tick after reconnect — triggering history sync');
+            log.info('[MarketDataPump] First tick after reconnect — triggering history + position sync');
             void this.syncHistory();
+            void positionPoller.refresh();
         }
         marketStore.updateLive(u);
     }

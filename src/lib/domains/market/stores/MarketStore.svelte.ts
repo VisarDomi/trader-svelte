@@ -91,10 +91,14 @@ export class MarketStore extends BaseStore {
     mergeLatestHistory(newBid: ChartCandle[], newAsk: ChartCandle[]) {
         if (newBid.length === 0) return;
 
-        // Helper to merge:
-        // 1. Find where the new batch starts in the old array.
-        // 2. Keep everything before that.
-        // 3. Append new batch.
+        // If server data doesn't extend beyond what we already have, skip entirely.
+        // Completed candles don't change — tick-built local data is authoritative.
+        // This prevents unnecessary series.setData() calls that cause chart flicker.
+        const lastExistingTime = this.bidHistory.length > 0
+            ? this.bidHistory[this.bidHistory.length - 1].time
+            : 0;
+        const lastNewTime = newBid[newBid.length - 1].time;
+        if (lastNewTime <= lastExistingTime) return;
 
         const merge = (oldArr: ChartCandle[], newArr: ChartCandle[]) => {
             if (oldArr.length === 0) return newArr;
@@ -115,7 +119,10 @@ export class MarketStore extends BaseStore {
         this.bidHistory = merge(this.bidHistory, newBid);
         this.askHistory = merge(this.askHistory, newAsk);
 
-        this.recalcLiveState();
+        // Do NOT call recalcLiveState() here — the live candle is maintained
+        // by the feed aggregator via updateLive(). Overwriting it with the last
+        // history candle causes the chart to briefly lose the current-minute bar,
+        // and series.update() re-adding it shifts the view right by one bar.
         this.syncViewToSource();
         this.updateTrigger++;
     }

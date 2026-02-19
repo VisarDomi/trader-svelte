@@ -103,10 +103,9 @@ export class ChartLogic {
         // Signal UI Ready
         this.layout.setDataLoaded(true);
 
-        // Wake up System
-        import('$lib/core/engine/SystemController.js').then(({ SystemController }) => {
-            SystemController.wakeUp();
-        });
+        // Arm first-tick sync so the next websocket tick refreshes history + positions.
+        // Services are already running via AppEngine — no need to restart them.
+        marketDataPump.requestSyncOnNextTick();
     }
 
     destroy() {

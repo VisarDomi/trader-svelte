@@ -1,5 +1,4 @@
 import { session } from '$lib/core/services/SessionManager.js';
-import { watchdog } from '$lib/core/services/WatchdogService.svelte.js';
 import { riskService } from '$lib/domains/trading/services/RiskService.svelte.js';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js';
@@ -36,9 +35,6 @@ export class SystemController {
         if (session.lastEpic) {
             marketDataPump.connect(session.lastEpic);
         }
-
-        // 4. Start the Watchdog to detect freezes
-        watchdog.start();
     }
 
     /**
@@ -56,9 +52,6 @@ export class SystemController {
 
         // 3. Kill the stream connection to prevent "zombie" sockets
         marketDataPump.disconnect();
-
-        // 4. Stop Watchdog (optional, but good for pure backgrounding)
-        watchdog.stop();
     }
 
     /**

@@ -49,10 +49,11 @@ export class MarketFeed {
     }
 
     mergeExternalData(bidCandle: ChartCandle | null, askCandle: ChartCandle | null) {
-        if (bidCandle) this.bidAgg.merge(bidCandle);
-        if (askCandle) this.askAgg.merge(askCandle);
+        let changed = false;
+        if (bidCandle) changed = this.bidAgg.merge(bidCandle) || changed;
+        if (askCandle) changed = this.askAgg.merge(askCandle) || changed;
 
-        this.emitSnapshot();
+        if (changed) this.emitSnapshot();
     }
 
     private processMessage(msg: QuoteMessage) {
