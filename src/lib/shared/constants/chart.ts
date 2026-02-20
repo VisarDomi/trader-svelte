@@ -1,6 +1,4 @@
 export const CHART_CONTAINER_ID = 'tv-chart-container';
-export const TOPBAR_ID = 'topbar';
-export const TOPBAR_HEIGHT = 200;
 
 export const UP_COLOR = '#26a69a';
 export const DOWN_COLOR = '#ef5350';
