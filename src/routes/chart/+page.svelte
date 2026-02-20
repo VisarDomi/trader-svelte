@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import { ChartLogic } from '$lib/features/chart-orchestration/ChartLogic.svelte.js';
-    import TopBar from '$lib/components/chart-engine/TopBar.svelte';
     import ChartHud from '$lib/features/chart-hud/ChartHud.svelte';
     import TradePopup from '$lib/features/trade-execution/TradePopup.svelte';
     import * as CHART_CONST from '$lib/shared/constants/chart.js';
@@ -23,7 +22,6 @@
     });
 </script>
 
-<TopBar layout={logic.layout} />
 <ChartHud overlay={logic.overlay} />
 
 <TradePopup

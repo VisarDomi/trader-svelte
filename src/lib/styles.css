@@ -15,12 +15,13 @@ html {
 }
 
 body {
-    min-height: 100vh;
+    height: var(--app-height, 100vh);
     text-rendering: optimizeSpeed;
     line-height: 1.5;
     background-color: black;
     color: white;
     font-family: -apple-system, sans-serif;
+    position: relative;
 }
 
 img {

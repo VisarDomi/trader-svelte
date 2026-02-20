@@ -50,7 +50,6 @@ export class ChartUI {
         if (loaded) {
             setTimeout(() => {
                 this.updateDimensions();
-                this.enforceScrollPosition();
             }, 50);
         }
     }
@@ -85,33 +84,6 @@ export class ChartUI {
         if (!window.visualViewport) return;
     };
 
-    private enforceScrollPosition = () => {
-        if (!this.shouldEnforceScroll()) return;
-
-        const target = this.getScrollTarget();
-
-        if (window.scrollY < target) {
-            window.scrollTo({ top: target, behavior: 'instant' });
-        }
-    };
-
-    private shouldEnforceScroll(): boolean {
-        if (!this.isIosDevice || !this.isDataLoaded || !this.container) return false;
-
-        if (this.isUserZoomedIn()) return false;
-
-        return true;
-    }
-
-    private isUserZoomedIn(): boolean {
-        return !!(window.visualViewport && window.visualViewport.scale > 1.01);
-    }
-
-    private getScrollTarget(): number {
-        if (!this.container) return 0;
-        return CHART_CONST.TOPBAR_HEIGHT + (this.container.clientHeight - window.innerHeight);
-    }
-
     private updateDimensions() {
         if (!this.container || !this.chart) return;
 
@@ -121,8 +93,6 @@ export class ChartUI {
         this.updateContainerSize(width, height);
         this.resizeChart(width, height);
         this.updateTimeScaleOptions(width, height);
-
-        this.enforceScrollPosition();
     }
 
     private updateContainerSize(width: number, height: number) {
