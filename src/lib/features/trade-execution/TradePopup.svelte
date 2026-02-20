@@ -1,8 +1,8 @@
 <script lang="ts">
     import * as TRADING from '$lib/shared/constants/trading.js';
     import type { PlannedTrade } from '$lib/features/trade-execution/TradePlanner.js';
-    import { CHART_CONTAINER_ID } from '$lib/shared/constants/chart.js';
-    import { blockChartEvents } from '$lib/components/chart-engine/chartGuard.js';
+    import { bus } from '$lib/core/events/globalBus.js';
+    import * as EVENTS from '$lib/shared/constants/events.js';
 
     let {
         isOpen,
@@ -18,31 +18,21 @@
         onCancel: () => void;
     }>();
 
-    // Disable pointer events on the chart while popup is open.
-    // On close, block synthetic hover/enter/move events for 300ms.
-    //
-    // Why: iOS fires synthetic mouseover/pointerenter/pointermove events
-    // at the last known touch position when pointer-events are restored
-    // on an element. Without this, LWC's crosshair activates the instant
-    // the popup closes, even though the user isn't touching the chart.
+    // Block crosshair via bus while popup is open.
+    // Chart pointer-events are left enabled so the user can tap
+    // elsewhere on the chart to re-plan at a different price.
     $effect(() => {
         if (!isOpen) return;
-        const chart = document.getElementById(CHART_CONTAINER_ID);
-        if (chart) chart.style.pointerEvents = 'none';
+        bus.emit(EVENTS.OVERLAY_BLOCK_CROSSHAIR, undefined as never);
         return () => {
-            const c = document.getElementById(CHART_CONTAINER_ID);
-            if (c) c.style.pointerEvents = '';
-            blockChartEvents();
+            bus.emit(EVENTS.OVERLAY_UNBLOCK_CROSSHAIR, undefined as never);
         };
     });
 </script>
 
 {#if isOpen && plannedTrade}
-    <!-- Full-screen backdrop to capture all touch/pointer events -->
-    <div
-            class="backdrop"
-            ontouchstart={(e) => e.preventDefault()}
-    >
+    <!-- Backdrop is click-through so chart taps can re-plan at a different price -->
+    <div class="backdrop">
         <div
                 role="dialog"
                 tabindex="-1"
@@ -100,6 +90,7 @@
         position: fixed;
         inset: 0;
         z-index: 100;
+        pointer-events: none;
     }
 
     .popup {
@@ -115,5 +106,6 @@
         min-width: 250px;
         backdrop-filter: blur(4px);
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        pointer-events: auto;
     }
 </style>

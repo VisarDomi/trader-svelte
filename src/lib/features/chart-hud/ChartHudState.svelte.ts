@@ -61,6 +61,10 @@ export class ChartOverlay {
         return dir === TRADING.BUY_DIRECTION ? '#26a69a' : '#ef5350';
     }
 
+    get isClosingPosition() {
+        return this.positionStore.isClosing;
+    }
+
     // --- Actions ---
 
     async init(epic: string) {
@@ -96,6 +100,10 @@ export class ChartOverlay {
 
     navToPosition() {
         void goto('/position');
+    }
+
+    closePosition() {
+        void this.positionStore.close();
     }
 
     destroy() {

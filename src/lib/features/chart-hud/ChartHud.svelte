@@ -1,9 +1,34 @@
 <script lang="ts">
     import { onDestroy } from 'svelte';
     import { ChartOverlay } from '$lib/features/chart-hud/ChartHudState.svelte.js';
-    import { chartGuard } from '$lib/components/chart-engine/chartGuard.js';
+    import { CHART_CONTAINER_ID } from '$lib/shared/constants/chart.js';
+    import { bus } from '$lib/core/events/globalBus.js';
+    import * as EVENTS from '$lib/shared/constants/events.js';
 
     let { overlay }: { overlay: ChartOverlay } = $props();
+
+    function onTouchStart() {
+        bus.emit(EVENTS.OVERLAY_BLOCK_CROSSHAIR, undefined as never);
+    }
+
+    function onTouchEnd() {
+        bus.emit(EVENTS.OVERLAY_UNBLOCK_CROSSHAIR, undefined as never);
+    }
+
+    // Block crosshair + chart pointer-events while position is closing.
+    // When close completes, the position section unmounts — iOS fires synthetic
+    // events at that point, same problem TradePopup solves with this pattern.
+    $effect(() => {
+        if (!overlay.isClosingPosition) return;
+        const chart = document.getElementById(CHART_CONTAINER_ID);
+        if (chart) chart.style.pointerEvents = 'none';
+        bus.emit(EVENTS.OVERLAY_BLOCK_CROSSHAIR, undefined as never);
+        return () => {
+            const c = document.getElementById(CHART_CONTAINER_ID);
+            if (c) c.style.pointerEvents = '';
+            bus.emit(EVENTS.OVERLAY_UNBLOCK_CROSSHAIR, undefined as never);
+        };
+    });
 
     onDestroy(() => {
         overlay.destroy();
@@ -11,7 +36,15 @@
 </script>
 
 {#if overlay.hasActiveAccount}
-    <div class="overlay-container" use:chartGuard>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        class="overlay-container"
+        ontouchstart={onTouchStart}
+        ontouchend={onTouchEnd}
+        ontouchcancel={onTouchEnd}
+        onmousedown={onTouchStart}
+        onmouseup={onTouchEnd}
+    >
         <!-- The Toggle Arrow -->
         <button
                 class="toggle-btn"
@@ -75,6 +108,15 @@
                             {overlay.positionSize}
                         </div>
                     </div>
+
+                    <!-- 4. Close Position Button -->
+                    <button
+                        class="section close-position-btn"
+                        onclick={() => overlay.closePosition()}
+                        disabled={overlay.isClosingPosition}
+                    >
+                        {overlay.isClosingPosition ? '...' : 'X'}
+                    </button>
                 {/if}
             </div>
         {/if}
@@ -214,5 +256,21 @@
         font-weight: bold;
         font-size: 0.85rem;
         line-height: 1.1;
+    }
+
+    /* Close Position Button */
+    .close-position-btn {
+        background: rgba(239, 83, 80, 0.15);
+        border: none;
+        color: #ef5350;
+        font-weight: 900;
+        font-size: 0.8rem;
+        padding: 0 0.5rem;
+        cursor: pointer;
+        min-width: 2.5rem;
+    }
+    .close-position-btn:disabled {
+        opacity: 0.5;
+        cursor: default;
     }
 </style>

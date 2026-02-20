@@ -11,6 +11,8 @@ import { getChartOptions, getBaseSeriesOptions } from "$lib/components/chart-eng
 import { isIOS } from "$lib/core/utils/platform.js";
 import { viewport } from "$lib/core/services/ViewportService.svelte.js";
 import { ChartCamera } from "$lib/components/chart-engine/ChartCamera.js";
+import { bus } from '$lib/core/events/globalBus.js';
+import * as EVENTS from '$lib/shared/constants/events.js';
 import type { ChartCandle } from '$lib/shared/types/market.js';
 
 /**
@@ -28,6 +30,9 @@ export class ChartController {
     private _chart: IChartApi | null = null;
     private _series: ISeriesApi<"Candlestick"> | null = null;
     private _ghostSeries: ISeriesApi<"Line"> | null = null;
+    private crosshairBlocked = false;
+    private unblockTimer: ReturnType<typeof setTimeout> | null = null;
+    private cleanupBus: (() => void)[] = [];
 
     // Publicly expose the Camera for Orchestrators to use
     public readonly camera = new ChartCamera();
@@ -59,6 +64,35 @@ export class ChartController {
 
         // Hand over the instance to the Camera
         this.camera.init(this._chart);
+
+        // CROSSHAIR GUARD: Suppress crosshair when overlays are active.
+        // LWC attaches mousemove/pointermove listeners to the document, not just
+        // its canvas. iOS fires synthetic mouse events from overlay touches that
+        // reach those document-level listeners, bypassing any container-level
+        // event blocking. Instead of fighting DOM events, we let LWC process them
+        // but immediately clear the crosshair result when overlays are active.
+        this._chart.subscribeCrosshairMove((param) => {
+            if (this.crosshairBlocked && param.point) {
+                requestAnimationFrame(() => this._chart?.clearCrosshairPosition());
+            }
+        });
+
+        this.cleanupBus.push(
+            bus.on(EVENTS.OVERLAY_BLOCK_CROSSHAIR, () => {
+                if (this.unblockTimer) {
+                    clearTimeout(this.unblockTimer);
+                    this.unblockTimer = null;
+                }
+                this.crosshairBlocked = true;
+            }),
+            bus.on(EVENTS.OVERLAY_UNBLOCK_CROSSHAIR, () => {
+                // Delay unblock to catch post-interaction synthetic events from iOS.
+                this.unblockTimer = setTimeout(() => {
+                    this.crosshairBlocked = false;
+                    this._chart?.clearCrosshairPosition();
+                }, 400);
+            })
+        );
     }
 
     /**
@@ -124,6 +158,8 @@ export class ChartController {
 
     destroy() {
         this.camera.destroy();
+        this.cleanupBus.forEach(fn => fn());
+        if (this.unblockTimer) clearTimeout(this.unblockTimer);
 
         if (this._chart) {
             this._chart.remove();

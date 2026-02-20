@@ -21,6 +21,10 @@ export interface AppEvents {
     [EVENTS.SESSION_EXPIRED]: void;
     [EVENTS.NOTIFICATION]: { type: NotificationType, message: string };
 
-    // Input Events (New)
+    // Input Events
     [EVENTS.INPUT_CHART_CLICK]: { price: number, time: number | null };
+
+    // Overlay Events
+    [EVENTS.OVERLAY_BLOCK_CROSSHAIR]: void;
+    [EVENTS.OVERLAY_UNBLOCK_CROSSHAIR]: void;
 }

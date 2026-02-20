@@ -17,3 +17,7 @@ export const NOTIFICATION = 'notification';
 
 // Input Events
 export const INPUT_CHART_CLICK = 'input:chart_click';
+
+// Overlay Events
+export const OVERLAY_BLOCK_CROSSHAIR = 'overlay:block-crosshair';
+export const OVERLAY_UNBLOCK_CROSSHAIR = 'overlay:unblock-crosshair';
