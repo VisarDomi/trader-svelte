@@ -36,6 +36,11 @@ export class AccountStore extends BaseStore {
             this.applyOptimisticUpdate(pnl);
             void this.pollBalanceUpdate();
         });
+
+        // Position closed externally (SL/TP hit or closed from another device)
+        bus.on(EVENTS.POSITION_VANISHED, () => {
+            void this.refreshActive();
+        });
     }
 
     async init() {

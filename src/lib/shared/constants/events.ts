@@ -5,6 +5,7 @@ export const WINDOW_ORIENTATION_CHANGE = 'orientationchange';
 export const TRADE_EXECUTED = 'trade:executed';
 export const TRADE_FAILED = 'trade:failed';
 export const POSITION_CLOSED = 'position:closed';
+export const POSITION_VANISHED = 'position:vanished';
 export const POSITION_UPDATED = 'position:updated';
 
 // Market Events

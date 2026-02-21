@@ -31,11 +31,19 @@ export class PositionStore extends BaseStore {
 
     /**
      * Called by the Poller to update state.
-     * Pure state setter.
+     * Detects externally-closed positions (SL/TP hit, closed from another device)
+     * and emits POSITION_VANISHED so AccountStore can refresh the balance.
      */
     sync(globalPos: PositionResponse | null, localPos: PositionResponse | null) {
+        const prev = this.anyActivePosition;
         this.anyActivePosition = globalPos;
         this.activePosition = localPos;
+
+        if (prev && !globalPos && !this.isClosing) {
+            session.removeInitialBalance(prev.position.dealId);
+            bus.emit(EVENTS.POSITION_VANISHED, undefined as never);
+            log.info('[PositionStore] Position vanished externally');
+        }
     }
 
     // --- Actions (User Triggered) ---

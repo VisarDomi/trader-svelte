@@ -11,6 +11,7 @@ export interface AppEvents {
     [EVENTS.TRADE_EXECUTED]: PositionResponse;
     [EVENTS.TRADE_FAILED]: { reason: string };
     [EVENTS.POSITION_CLOSED]: { dealId: string, pnl: number };
+    [EVENTS.POSITION_VANISHED]: void;
     [EVENTS.POSITION_UPDATED]: { dealId: string };
 
     // Market Events

@@ -216,6 +216,9 @@ class AppEngine {
         // Restart services with (potentially refreshed) tokens
         this.transitionTo('READY');
 
+        // Refresh account balance — may have changed while backgrounded
+        void accountStore.refreshActive();
+
         if (elapsed > DEEP_SLEEP_THRESHOLD) {
             notifications.info('Session restored');
         }
