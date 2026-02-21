@@ -34,6 +34,8 @@ export class MarketDataPump {
     private livenessInterval: ReturnType<typeof setInterval> | null = null;
     private lastSyncMinute = -1;
     private pendingSyncOnTick = false;
+    private syncInProgress = false;
+    private hasPreviousBarGap = false;
 
     // Infinite Scroll State
     isLoadingHistory = false;
@@ -184,6 +186,12 @@ export class MarketDataPump {
 
     private startHistorySync() {
         this.syncInterval = setInterval(() => {
+            // Aggressive 1-second sync when previous bar is missing from history
+            if (this.hasPreviousBarGap) {
+                void this.syncHistory();
+                return;
+            }
+
             const now = new Date();
             const sec = now.getSeconds();
             // Sync roughly every minute at the 30s mark
@@ -217,9 +225,12 @@ export class MarketDataPump {
     }
 
     private async syncHistory() {
+        if (this.syncInProgress) return;
         if (!this.epic || !marketStore.isLoaded) return;
         const client = api.client;
         if (!client) return;
+
+        this.syncInProgress = true;
 
         try {
             const repo = new MarketRepository(client);
@@ -240,6 +251,30 @@ export class MarketDataPump {
 
         } catch (e) {
             log.warn("[MarketDataPump] History sync failed", e);
+        } finally {
+            this.syncInProgress = false;
+            this.checkForPreviousBarGap();
+        }
+    }
+
+    /**
+     * Detects if there's a missing bar between the last history candle and the live candle.
+     * When a gap exists, startHistorySync polls every second until the API catches up.
+     */
+    private checkForPreviousBarGap() {
+        const lastHistoryTime = marketStore.bidHistory.length > 0
+            ? marketStore.bidHistory[marketStore.bidHistory.length - 1].time
+            : 0;
+        const liveTime = marketStore.liveBidCandle?.time ?? 0;
+
+        const hadGap = this.hasPreviousBarGap;
+        // Consecutive 1-minute candles are 60s apart; anything more means missing bars
+        this.hasPreviousBarGap = liveTime > 0 && lastHistoryTime > 0 && (liveTime - lastHistoryTime) > 60;
+
+        if (hadGap && !this.hasPreviousBarGap) {
+            log.info('[MarketDataPump] Previous bar gap filled');
+        } else if (!hadGap && this.hasPreviousBarGap) {
+            log.info(`[MarketDataPump] Previous bar gap detected (history: ${lastHistoryTime}, live: ${liveTime})`);
         }
     }
 }
