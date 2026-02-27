@@ -32,6 +32,7 @@ export class MarketDataPump {
     // Sync State
     private syncInterval: ReturnType<typeof setInterval> | null = null;
     private livenessInterval: ReturnType<typeof setInterval> | null = null;
+    private abortController: AbortController | null = null;
     private lastSyncMinute = -1;
     private pendingSyncOnTick = false;
     private syncInProgress = false;
@@ -112,7 +113,7 @@ export class MarketDataPump {
 
         try {
             const repo = new MarketRepository(client);
-            const { bid, ask } = await repo.getHistoryBefore(this.epic, requestTime);
+            const { bid, ask } = await repo.getHistoryBefore(this.epic, requestTime, this.abortController?.signal);
 
             if (bid.length === 0 && ask.length === 0) {
                 this.isHistoryExhausted = true;
@@ -158,6 +159,8 @@ export class MarketDataPump {
         if (!this.epic) return;
 
         this.disconnect();
+        this.syncInProgress = false;
+        this.abortController = new AbortController();
 
         const tokens = session.getTokens(session.mode);
         if (tokens) {
@@ -174,6 +177,10 @@ export class MarketDataPump {
 
     disconnect() {
         this.feed.disconnect();
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
         if (this.syncInterval) {
             clearInterval(this.syncInterval);
             this.syncInterval = null;
@@ -234,7 +241,7 @@ export class MarketDataPump {
 
         try {
             const repo = new MarketRepository(client);
-            const { bid, ask } = await repo.getHistory(this.epic);
+            const { bid, ask } = await repo.getHistory(this.epic, this.abortController?.signal);
 
             const split = (arr: ChartCandle[]) => {
                 if (arr.length === 0) return { history: [], current: null };

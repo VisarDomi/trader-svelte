@@ -201,29 +201,30 @@ class AppEngine {
         this.status = 'RECONNECTING';
 
         try {
-            await authStore.validateSession();
-        } catch (e) {
-            if (e instanceof AuthError) {
-                this.status = 'UNAUTHENTICATED';
-                this.resumeInProgress = false;
-                await goto('/login');
-                return;
+            try {
+                await authStore.validateSession();
+            } catch (e) {
+                if (e instanceof AuthError) {
+                    this.status = 'UNAUTHENTICATED';
+                    await goto('/login');
+                    return;
+                }
+                // Network error — proceed with existing tokens, services will retry
+                log.warn('[AppEngine] Session validation failed on resume', e);
             }
-            // Network error — proceed with existing tokens, services will retry
-            log.warn('[AppEngine] Session validation failed on resume', e);
+
+            // Restart services with (potentially refreshed) tokens
+            this.transitionTo('READY');
+
+            // Refresh account balance — may have changed while backgrounded
+            void accountStore.refreshActive();
+
+            if (elapsed > DEEP_SLEEP_THRESHOLD) {
+                notifications.info('Session restored');
+            }
+        } finally {
+            this.resumeInProgress = false;
         }
-
-        // Restart services with (potentially refreshed) tokens
-        this.transitionTo('READY');
-
-        // Refresh account balance — may have changed while backgrounded
-        void accountStore.refreshActive();
-
-        if (elapsed > DEEP_SLEEP_THRESHOLD) {
-            notifications.info('Session restored');
-        }
-
-        this.resumeInProgress = false;
     }
 }
 

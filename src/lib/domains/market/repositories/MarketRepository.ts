@@ -17,23 +17,23 @@ export class MarketRepository {
     /**
      * Fetch initial history (Latest N candles)
      */
-    async getHistory(epic: string): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
+    async getHistory(epic: string, signal?: AbortSignal): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
         // "TO" is Now.
         const toStr = this.formatDateForApi(DateTime.utc());
         log.info(`[MarketRepository] Fetching INITIAL history for ${epic} up to ${toStr}`);
-        return this.fetchAndMap(epic, toStr);
+        return this.fetchAndMap(epic, toStr, signal);
     }
 
     /**
      * Fetch older history (N candles BEFORE a specific time)
      */
-    async getHistoryBefore(epic: string, beforeTime: UTCTimestamp): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
+    async getHistoryBefore(epic: string, beforeTime: UTCTimestamp, signal?: AbortSignal): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
         // Convert Timestamp to ISO for API
         const dt = DateTime.fromSeconds(beforeTime, { zone: 'utc' });
         const toStr = this.formatDateForApi(dt);
 
         log.info(`[MarketRepository] Fetching OLDER history for ${epic} ending at ${toStr} (Unix: ${beforeTime})`);
-        return this.fetchAndMap(epic, toStr);
+        return this.fetchAndMap(epic, toStr, signal);
     }
 
     private formatDateForApi(dt: DateTime): string {
@@ -42,7 +42,7 @@ export class MarketRepository {
         return dt.toFormat("yyyy-MM-dd'T'HH:mm:ss");
     }
 
-    private async fetchAndMap(epic: string, toStr: string) {
+    private async fetchAndMap(epic: string, toStr: string, signal?: AbortSignal) {
         // CLEVER REQUEST PATTERN:
         // We do NOT send 'from'. We send 'to' and 'max'.
         // The server counts backwards 'max' rows from 'to'.
@@ -58,7 +58,7 @@ export class MarketRepository {
             // Debug Log
             log.info(`[MarketRepository] GET ${endpoint}`, JSON.stringify(params));
 
-            const data = await this.client.get<MarketPriceResponse>(endpoint, params);
+            const data = await this.client.get<MarketPriceResponse>(endpoint, params, signal);
 
             // Handle 404/Empty by returning empty lists (handled gracefully by pump)
             if (!data.prices || data.prices.length === 0) {

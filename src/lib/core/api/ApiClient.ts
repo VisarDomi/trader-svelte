@@ -39,7 +39,7 @@ export class ApiClient {
         this.baseUrl = getBaseUrl(type);
     }
 
-    private async request<T>(method: string, endpoint: string, body?: unknown, params?: Record<string, string>): Promise<T> {
+    private async request<T>(method: string, endpoint: string, body?: unknown, params?: Record<string, string>, signal?: AbortSignal): Promise<T> {
         let url = `${this.baseUrl}${endpoint}`;
 
         if (params) {
@@ -62,7 +62,8 @@ export class ApiClient {
             response = await fetch(url, {
                 method,
                 headers,
-                body: body ? JSON.stringify(body) : undefined
+                body: body ? JSON.stringify(body) : undefined,
+                signal
             });
         } catch (e) {
             // Fetch only throws on network failure (DNS, Offline, etc), not 4xx/5xx
@@ -83,15 +84,15 @@ export class ApiClient {
         return await response.json() as T;
     }
 
-    get<T>(endpoint: string, params?: Record<string, string>) {
-        return this.request<T>(API.GET_METHOD, endpoint, undefined, params);
+    get<T>(endpoint: string, params?: Record<string, string>, signal?: AbortSignal) {
+        return this.request<T>(API.GET_METHOD, endpoint, undefined, params, signal);
     }
 
-    post<T>(endpoint: string, body: unknown) {
-        return this.request<T>(API.POST_METHOD, endpoint, body);
+    post<T>(endpoint: string, body: unknown, signal?: AbortSignal) {
+        return this.request<T>(API.POST_METHOD, endpoint, body, undefined, signal);
     }
 
-    put<T>(endpoint: string, body: unknown) {
-        return this.request<T>(API.PUT_METHOD, endpoint, body);
+    put<T>(endpoint: string, body: unknown, signal?: AbortSignal) {
+        return this.request<T>(API.PUT_METHOD, endpoint, body, undefined, signal);
     }
 }
