@@ -219,9 +219,7 @@ class AppEngine {
             // Refresh account balance — may have changed while backgrounded
             void accountStore.refreshActive();
 
-            if (elapsed > DEEP_SLEEP_THRESHOLD) {
-                notifications.info('Session restored');
-            }
+            notifications.info('Session restored');
         } finally {
             this.resumeInProgress = false;
         }

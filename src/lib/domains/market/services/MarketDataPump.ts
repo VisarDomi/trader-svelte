@@ -8,6 +8,8 @@ import type { ChartCandle } from '$lib/shared/types/market.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { UTCTimestamp } from 'lightweight-charts';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
+import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
+import { notifications } from '$lib/core/services/NotificationService.svelte.js';
 import { log } from '$lib/shared/utils/log.js';
 
 const STALE_THRESHOLD_MS = 10000;
@@ -168,6 +170,7 @@ export class MarketDataPump {
             this.feed.connect(tokens, this.epic);
         }
 
+        this.lastSyncMinute = -1; // Reset so 30th-second sync fires on next eligible check
         this.startHistorySync();
         this.startLivenessCheck();
 
@@ -224,9 +227,11 @@ export class MarketDataPump {
     private handleFeedUpdate(u: FeedUpdate) {
         if (this.pendingSyncOnTick) {
             this.pendingSyncOnTick = false;
-            log.info('[MarketDataPump] First tick after reconnect — triggering history + position sync');
+            log.info('[MarketDataPump] First tick after reconnect — triggering history + position + account sync');
+            notifications.info('Syncing data...');
             void this.syncHistory();
             void positionPoller.refresh();
+            void accountStore.refreshActive();
         }
         marketStore.updateLive(u);
     }

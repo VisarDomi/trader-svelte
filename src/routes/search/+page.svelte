@@ -26,7 +26,7 @@
 
         try {
             const data = await searchMarkets(client, term);
-            results = data.markets;
+            results = data.markets ?? [];
         } catch (e) {
             console.error(e);
             notifications.error('Search failed');
