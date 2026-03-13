@@ -86,6 +86,9 @@ export class MarketStore extends BaseStore {
             case MarketCmd.SetDataSource:
                 this._setDataSource(cmd.source);
                 break;
+            case MarketCmd.SetMetadata:
+                this._setMetadata(cmd.epic, cmd.status);
+                break;
         }
     }
 
@@ -104,6 +107,11 @@ export class MarketStore extends BaseStore {
         this._liveAskCandle = null;
         this.dataSource = dataSource;
         this.marketStatus = "CLOSED";
+    }
+
+    private _setMetadata(epic: string, status: string) {
+        this.epic = epic;
+        this.marketStatus = status;
     }
 
     private _setLoaded(loaded: boolean) {

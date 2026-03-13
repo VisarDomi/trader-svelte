@@ -10,6 +10,7 @@ export const MarketCmd = {
     MergeLatestHistory: 4,
     UpdateLive: 5,
     SetDataSource: 6,
+    SetMetadata: 7,
 } as const;
 
 export type MarketCommand =
@@ -19,7 +20,8 @@ export type MarketCommand =
     | { tag: typeof MarketCmd.PrependHistory; bid: ChartCandle[]; ask: ChartCandle[] }
     | { tag: typeof MarketCmd.MergeLatestHistory; bid: ChartCandle[]; ask: ChartCandle[] }
     | { tag: typeof MarketCmd.UpdateLive; update: FeedUpdate }
-    | { tag: typeof MarketCmd.SetDataSource; source: ChartData };
+    | { tag: typeof MarketCmd.SetDataSource; source: ChartData }
+    | { tag: typeof MarketCmd.SetMetadata; epic: string; status: string };
 
 export const marketCmd = {
     reset: (dataSource: ChartData): MarketCommand =>
@@ -36,4 +38,6 @@ export const marketCmd = {
         ({ tag: MarketCmd.UpdateLive, update }),
     setDataSource: (source: ChartData): MarketCommand =>
         ({ tag: MarketCmd.SetDataSource, source }),
+    setMetadata: (epic: string, status: string): MarketCommand =>
+        ({ tag: MarketCmd.SetMetadata, epic, status }),
 };
