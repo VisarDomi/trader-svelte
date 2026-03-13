@@ -5,6 +5,8 @@ import { api } from '$lib/core/services/ApiService.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 import { TradeCalculator } from '$lib/domains/trading/domain/TradeCalculator.js';
+import { PositionCmd, type PositionCommand } from './PositionCommands.js';
+import { positionCmd } from './PositionCommands.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { PositionResponse } from '$lib/shared/types/trading.js';
@@ -23,26 +25,37 @@ export class PositionStore extends BaseStore {
     constructor() {
         super();
         bus.on(EVENTS.TRADE_EXECUTED, (pos) => {
-            // Optimistic update
-            this.activePosition = pos;
-            this.anyActivePosition = pos;
+            this.dispatch(positionCmd.setFromTrade(pos));
         });
     }
 
-    /**
-     * Called by the Poller to update state.
-     * Detects externally-closed positions (SL/TP hit, closed from another device)
-     * and emits POSITION_VANISHED so AccountStore can refresh the balance.
-     */
-    sync(globalPos: PositionResponse | null, localPos: PositionResponse | null) {
-        const prev = this.anyActivePosition;
-        this.anyActivePosition = globalPos;
-        this.activePosition = localPos;
+    // --- Command Dispatch ---
 
-        if (prev && !globalPos && !this.isClosing) {
-            session.removeInitialBalance(prev.position.dealId);
-            bus.emit(EVENTS.POSITION_VANISHED, undefined as never);
-            log.info('[PositionStore] Position vanished externally');
+    dispatch(cmd: PositionCommand) {
+        switch (cmd.tag) {
+            case PositionCmd.Sync: {
+                const prev = this.anyActivePosition;
+                this.anyActivePosition = cmd.globalPos;
+                this.activePosition = cmd.localPos;
+
+                if (prev && !cmd.globalPos && !this.isClosing) {
+                    session.removeInitialBalance(prev.position.dealId);
+                    bus.emit(EVENTS.POSITION_VANISHED, undefined as never);
+                    log.info('[PositionStore] Position vanished externally');
+                }
+                break;
+            }
+            case PositionCmd.SetClosing:
+                this.isClosing = cmd.closing;
+                break;
+            case PositionCmd.ClearPositions:
+                this.activePosition = null;
+                this.anyActivePosition = null;
+                break;
+            case PositionCmd.SetFromTrade:
+                this.activePosition = cmd.position;
+                this.anyActivePosition = cmd.position;
+                break;
         }
     }
 
@@ -51,7 +64,7 @@ export class PositionStore extends BaseStore {
     async close() {
         if (!this.anyActivePosition) return;
 
-        this.isClosing = true;
+        this.dispatch(positionCmd.setClosing(true));
         notifications.info("Request sent. Waiting for confirmation...");
 
         const client = api.getOrThrow();
@@ -88,8 +101,7 @@ export class PositionStore extends BaseStore {
             notifications.success(`Position Closed. PnL: ${result.rawPnL.toFixed(2)}`);
 
             // 4. Clear local state
-            this.activePosition = null;
-            this.anyActivePosition = null;
+            this.dispatch(positionCmd.clearPositions());
 
             // 5. Emit Event with Realized PnL for AccountStore to consume
             bus.emit(EVENTS.POSITION_CLOSED, {
@@ -101,7 +113,7 @@ export class PositionStore extends BaseStore {
             const msg = e instanceof Error ? e.message : String(e);
             notifications.error(msg);
         } finally {
-            this.isClosing = false;
+            this.dispatch(positionCmd.setClosing(false));
         }
     }
 

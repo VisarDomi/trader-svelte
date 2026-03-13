@@ -1,6 +1,7 @@
 import * as TRADING from '$lib/shared/constants/trading.js';
 import { TradingDomain } from '$lib/domains/trading/domain/TradingDomain.js';
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
+import { marketCmd } from '$lib/domains/market/stores/MarketCommands.js';
 import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
 import { tradeManager as tradeStore } from '$lib/domains/trading/stores/TradeStore.svelte.js';
 import type { ChartClickEvent } from '$lib/components/chart-engine/ChartEvents.svelte.js';
@@ -31,7 +32,7 @@ export class ChartInteractionManager {
         const intent = this.tradingDomain.determineIntent(event.price, bid, offer);
 
         if (intent) {
-            marketStore.setDataSource(intent.source);
+            marketStore.dispatch(marketCmd.setDataSource(intent.source));
             tradeStore.plan(
                 intent.entryPrice,
                 intent.targetPrice,
@@ -48,14 +49,14 @@ export class ChartInteractionManager {
             const source = result.position.direction === TRADING.SELL_DIRECTION
                 ? TRADING.CHART_DATA_SOURCE_OFR
                 : TRADING.CHART_DATA_SOURCE_BID;
-            marketStore.setDataSource(source);
+            marketStore.dispatch(marketCmd.setDataSource(source));
         }
     }
 
     cancelPlanning() {
         tradeStore.cancel();
         if (!positionStore.activePosition) {
-            marketStore.setDataSource(TRADING.CHART_DATA_SOURCE_BID);
+            marketStore.dispatch(marketCmd.setDataSource(TRADING.CHART_DATA_SOURCE_BID));
         }
     }
 

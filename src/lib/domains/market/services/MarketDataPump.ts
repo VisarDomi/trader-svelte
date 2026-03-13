@@ -1,6 +1,7 @@
 import { MarketRepository } from '$lib/domains/market/repositories/MarketRepository.js';
 import { MarketFeed, type FeedUpdate } from '$lib/domains/market/services/MarketFeed.js';
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
+import { marketCmd } from '$lib/domains/market/stores/MarketCommands.js';
 import { session } from '$lib/core/services/SessionManager.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import type { ChartData } from '$lib/shared/types/trading.js';
@@ -68,7 +69,7 @@ export class MarketDataPump {
         this.epic = epic;
         this.isHistoryExhausted = false; // Reset flag
 
-        marketStore.reset(dataSource);
+        marketStore.dispatch(marketCmd.reset(dataSource));
 
         const client = api.client;
         if (!client) return;
@@ -78,13 +79,13 @@ export class MarketDataPump {
             // New "Latest" fetch
             const { bid, ask } = await repo.getHistory(epic);
 
-            marketStore.setHistory(bid, ask);
+            marketStore.dispatch(marketCmd.setHistory(bid, ask));
 
             const lastBid = bid.length > 0 ? bid[bid.length - 1] : null;
             const lastAsk = ask.length > 0 ? ask[ask.length - 1] : null;
 
             this.feed.initialize(lastBid, lastAsk);
-            marketStore.setLoaded(true);
+            marketStore.dispatch(marketCmd.setLoaded(true));
 
         } catch (e) {
             log.error('[MarketDataPump] Load failed', e);
@@ -98,9 +99,9 @@ export class MarketDataPump {
         if (this.isLoadingHistory || this.isHistoryExhausted || !this.epic) return;
 
         // 1. Get Anchor (Oldest Candle)
-        if (marketStore.bidHistory.length === 0) return;
+        if (!marketStore.hasBidHistory()) return;
 
-        const anchorTime = marketStore.bidHistory[0].time;
+        const anchorTime = marketStore.getOldestBidTime();
         const requestTime = (anchorTime - 60) as UTCTimestamp;
 
         this.isLoadingHistory = true;
@@ -129,7 +130,7 @@ export class MarketDataPump {
                     log.info(`[MarketDataPump] Prepending ${filteredBid.length} new candles.`);
 
                     // 1. Update State (Reactive Store)
-                    marketStore.prependHistory(filteredBid, filteredAsk);
+                    marketStore.dispatch(marketCmd.prependHistory(filteredBid, filteredAsk));
 
                     // 2. Direct Visual Update (Synchronous)
                     // We invoke this IMMEDIATELY after state update to fix the scroll position
@@ -166,7 +167,7 @@ export class MarketDataPump {
 
         const tokens = session.getTokens(session.mode);
         if (tokens) {
-            this.feed.initialize(marketStore.liveBidCandle, marketStore.liveAskCandle);
+            this.feed.initialize(marketStore.getLiveBidCandle(), marketStore.getLiveAskCandle());
             this.feed.connect(tokens, this.epic);
         }
 
@@ -233,7 +234,7 @@ export class MarketDataPump {
             void positionPoller.refresh();
             void accountStore.refreshActive();
         }
-        marketStore.updateLive(u);
+        marketStore.dispatch(marketCmd.updateLive(u));
     }
 
     private async syncHistory() {
@@ -258,7 +259,7 @@ export class MarketDataPump {
             const bidData = split(bid);
             const askData = split(ask);
 
-            marketStore.mergeLatestHistory(bidData.history, askData.history);
+            marketStore.dispatch(marketCmd.mergeLatestHistory(bidData.history, askData.history));
             this.feed.mergeExternalData(bidData.current, askData.current);
 
         } catch (e) {
@@ -274,10 +275,8 @@ export class MarketDataPump {
      * When a gap exists, startHistorySync polls every second until the API catches up.
      */
     private checkForPreviousBarGap() {
-        const lastHistoryTime = marketStore.bidHistory.length > 0
-            ? marketStore.bidHistory[marketStore.bidHistory.length - 1].time
-            : 0;
-        const liveTime = marketStore.liveBidCandle?.time ?? 0;
+        const lastHistoryTime = marketStore.getNewestBidTime();
+        const liveTime = marketStore.getLiveBidCandle()?.time ?? 0;
 
         const hadGap = this.hasPreviousBarGap;
         // Consecutive 1-minute candles are 60s apart; anything more means missing bars

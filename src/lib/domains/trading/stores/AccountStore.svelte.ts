@@ -5,6 +5,8 @@ import { session } from '$lib/core/services/SessionManager.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 import { SystemController } from '$lib/core/engine/SystemController.js';
+import { AccountCmd, type AccountCommand } from './AccountCommands.js';
+import { accountCmd } from './AccountCommands.js';
 import * as AUTH from '$lib/shared/constants/auth.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { Account } from '$lib/shared/types/account.js';
@@ -33,7 +35,7 @@ export class AccountStore extends BaseStore {
 
         // Optimistic update + Reconciliation
         bus.on(EVENTS.POSITION_CLOSED, ({ pnl }) => {
-            this.applyOptimisticUpdate(pnl);
+            this.dispatch(accountCmd.applyOptimistic(pnl));
             void this.pollBalanceUpdate();
         });
 
@@ -41,6 +43,23 @@ export class AccountStore extends BaseStore {
         bus.on(EVENTS.POSITION_VANISHED, () => {
             void this.refreshActive();
         });
+    }
+
+    // --- Command Dispatch ---
+
+    dispatch(cmd: AccountCommand) {
+        switch (cmd.tag) {
+            case AccountCmd.SetActive:
+                this.activeAccount = cmd.account;
+                break;
+            case AccountCmd.SetAccounts:
+                this.realAccounts = cmd.real;
+                this.demoAccounts = cmd.demo;
+                break;
+            case AccountCmd.ApplyOptimistic:
+                this.applyOptimisticUpdate(cmd.pnl);
+                break;
+        }
     }
 
     async init() {
@@ -192,12 +211,6 @@ export class AccountStore extends BaseStore {
         });
 
         if (this.error) notifications.error(this.error);
-    }
-
-    updateBalance(amount: number) {
-        if (this.activeAccount) {
-            this.activeAccount.balance.deposit = amount;
-        }
     }
 
     /**

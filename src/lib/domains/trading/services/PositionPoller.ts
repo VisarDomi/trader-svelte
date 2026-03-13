@@ -3,6 +3,7 @@ import { resolveInitialBalance } from '$lib/domains/trading/utils/position.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
+import { positionCmd } from '$lib/domains/trading/stores/PositionCommands.js';
 import { log } from '$lib/shared/utils/log.js';
 
 export class PositionPoller {
@@ -74,7 +75,7 @@ export class PositionPoller {
                 : null;
 
             // Push to Store (State Sync)
-            positionStore.sync(globalPos, localPos);
+            positionStore.dispatch(positionCmd.sync(globalPos, localPos));
 
         } catch (e) {
             log.warn('[PositionPoller] Fetch failed', e);
