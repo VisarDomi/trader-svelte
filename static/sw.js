@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-v1';
+const CACHE_NAME = 'pwa-v2';
 
 self.addEventListener('install', () => {
 	self.skipWaiting();
@@ -9,7 +9,10 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-	// Pass through all requests to the network
-	// This minimal fetch handler is required for iOS 18 PWA installability
-	event.respondWith(fetch(event.request));
+	// Only handle same-origin requests — cross-origin API calls (Capital.com)
+	// must bypass the SW entirely, otherwise Firefox blocks them with CORS errors.
+	// This minimal fetch handler is required for iOS 18 PWA installability.
+	if (new URL(event.request.url).origin === self.location.origin) {
+		event.respondWith(fetch(event.request));
+	}
 });
