@@ -101,6 +101,10 @@ Nothing in JS decides state transitions. JS only:
 | 3     | AppEngine lifecycle state machine   | 1 week    | `03-phase3-app-engine.md`        |
 | 4     | Validation guards + typestate       | 1 week    | `04-phase4-validation-guards.md` |
 
+## Starting Point
+
+**Do NOT start the rewrite, write tests, or implement any Rust code until `business.md` is complete.** Everything derives from it. See `10-tdd-workflow.md` for the full process.
+
 ## Documents Index
 
 - `00-overview.md` — this file
@@ -113,3 +117,4 @@ Nothing in JS decides state transitions. JS only:
 - `07-testing-strategy.md` — what to test where (cargo vs vitest)
 - `08-svelte-bindings-pattern.md` — the thin bridge between Rust state and Svelte $state
 - `09-codebase-audit.md` — current code classified by tier (pure → browser-coupled)
+- `10-tdd-workflow.md` — TDD process: business.md → tests → rewrite
