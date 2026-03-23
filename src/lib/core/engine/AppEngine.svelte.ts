@@ -13,7 +13,7 @@ import { notifications } from '$lib/core/services/NotificationService.svelte.js'
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { AuthError } from '$lib/core/api/ApiClient.js';
-import { log } from '$lib/shared/utils/log.js';
+import { log, serverLog } from '$lib/shared/utils/log.js';
 
 const DEEP_SLEEP_THRESHOLD = 10 * 60 * 1000; // 10 minutes
 const RESUME_RECOVERY_MS = 5_000; // 5 seconds — validate session for any non-trivial background
@@ -198,6 +198,7 @@ class AppEngine {
      * No eager data fetches — MarketDataPump's first-tick handles position + history sync.
      */
     private async resumeFromSleep(elapsed: number) {
+        serverLog('app-restore', { elapsedMs: elapsed, fromStatus: this.status });
         this.status = 'RECONNECTING';
 
         try {

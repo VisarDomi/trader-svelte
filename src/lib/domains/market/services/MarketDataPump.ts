@@ -11,7 +11,7 @@ import type { UTCTimestamp } from 'lightweight-charts';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
-import { log } from '$lib/shared/utils/log.js';
+import { log, serverLog } from '$lib/shared/utils/log.js';
 
 const STALE_THRESHOLD_MS = 10000;
 const LIVENESS_CHECK_INTERVAL = 2000;
@@ -167,7 +167,15 @@ export class MarketDataPump {
 
         const tokens = session.getTokens(session.mode);
         if (tokens) {
-            this.feed.initialize(marketStore.getLiveBidCandle(), marketStore.getLiveAskCandle());
+            const seedBid = marketStore.getLiveBidCandle();
+            const seedAsk = marketStore.getLiveAskCandle();
+            serverLog('connect-seed', {
+                epic: this.epic,
+                bidTime: seedBid?.time ?? null,
+                bidOHLC: seedBid ? { o: seedBid.open, h: seedBid.high, l: seedBid.low, c: seedBid.close } : null,
+                staleMs: seedBid ? Date.now() - seedBid.time * 1000 : null,
+            });
+            this.feed.initialize(seedBid, seedAsk);
             this.feed.connect(tokens, this.epic);
         }
 
@@ -228,7 +236,12 @@ export class MarketDataPump {
     private handleFeedUpdate(u: FeedUpdate) {
         if (this.pendingSyncOnTick) {
             this.pendingSyncOnTick = false;
-            log.info('[MarketDataPump] First tick after reconnect — triggering history + position + account sync');
+            serverLog('first-tick-after-reconnect', {
+                bid: u.bid,
+                offer: u.offer,
+                liveBidTime: u.liveBid?.time ?? null,
+                completedBid: u.completedBid ? { time: u.completedBid.time, o: u.completedBid.open, c: u.completedBid.close } : null,
+            });
             notifications.info('Syncing data...');
             void this.syncHistory();
             void positionPoller.refresh();
@@ -259,8 +272,24 @@ export class MarketDataPump {
             const bidData = split(bid);
             const askData = split(ask);
 
+            const historyCountBefore = marketStore.hasBidHistory() ? marketStore.getNewestBidTime() : 0;
             marketStore.dispatch(marketCmd.mergeLatestHistory(bidData.history, askData.history));
+            const historyCountAfter = marketStore.hasBidHistory() ? marketStore.getNewestBidTime() : 0;
+
+            const currentBid = bidData.current;
+            const liveBefore = this.feed.getLiveBidSnapshot();
             this.feed.mergeExternalData(bidData.current, askData.current);
+            const liveAfter = this.feed.getLiveBidSnapshot();
+
+            serverLog('sync-result', {
+                historyCandles: bidData.history.length,
+                historyExtended: historyCountAfter !== historyCountBefore,
+                newestHistoryTime: historyCountAfter,
+                currentFromApi: currentBid ? { time: currentBid.time, o: currentBid.open, h: currentBid.high, l: currentBid.low, c: currentBid.close } : null,
+                liveBefore: liveBefore ? { time: liveBefore.time, o: liveBefore.open, c: liveBefore.close } : null,
+                liveAfter: liveAfter ? { time: liveAfter.time, o: liveAfter.open, c: liveAfter.close } : null,
+                mergeChanged: liveBefore?.open !== liveAfter?.open || liveBefore?.high !== liveAfter?.high || liveBefore?.low !== liveAfter?.low,
+            });
 
         } catch (e) {
             log.warn("[MarketDataPump] History sync failed", e);

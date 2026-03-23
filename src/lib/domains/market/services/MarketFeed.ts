@@ -48,6 +48,11 @@ export class MarketFeed {
         }
     }
 
+    getLiveBidSnapshot(): ChartCandle | null {
+        const c = this.bidAgg.getLiveCandle();
+        return c ? { ...c } : null;
+    }
+
     mergeExternalData(bidCandle: ChartCandle | null, askCandle: ChartCandle | null) {
         let changed = false;
         if (bidCandle) changed = this.bidAgg.merge(bidCandle) || changed;
