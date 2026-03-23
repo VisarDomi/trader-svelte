@@ -11,7 +11,7 @@ import type { UTCTimestamp } from 'lightweight-charts';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
-import { log, serverLog } from '$lib/shared/utils/log.js';
+import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 const STALE_THRESHOLD_MS = 10000;
 const LIVENESS_CHECK_INTERVAL = 2000;
@@ -169,7 +169,8 @@ export class MarketDataPump {
         if (tokens) {
             const seedBid = marketStore.getLiveBidCandle();
             const seedAsk = marketStore.getLiveAskCandle();
-            serverLog('connect-seed', {
+            serverLog({
+                tag: LogEvent.ConnectSeed,
                 epic: this.epic,
                 bidTime: seedBid?.time ?? null,
                 bidOHLC: seedBid ? { o: seedBid.open, h: seedBid.high, l: seedBid.low, c: seedBid.close } : null,
@@ -236,7 +237,8 @@ export class MarketDataPump {
     private handleFeedUpdate(u: FeedUpdate) {
         if (this.pendingSyncOnTick) {
             this.pendingSyncOnTick = false;
-            serverLog('first-tick-after-reconnect', {
+            serverLog({
+                tag: LogEvent.FirstTick,
                 bid: u.bid,
                 offer: u.offer,
                 liveBidTime: u.liveBid?.time ?? null,
@@ -281,7 +283,8 @@ export class MarketDataPump {
             this.feed.mergeExternalData(bidData.current, askData.current);
             const liveAfter = this.feed.getLiveBidSnapshot();
 
-            serverLog('sync-result', {
+            serverLog({
+                tag: LogEvent.SyncResult,
                 historyCandles: bidData.history.length,
                 historyExtended: historyCountAfter !== historyCountBefore,
                 newestHistoryTime: historyCountAfter,

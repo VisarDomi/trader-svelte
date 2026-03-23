@@ -1,6 +1,6 @@
 import type { ChartCandle } from '$lib/shared/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
-import { serverLog } from '$lib/shared/utils/log.js';
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class CandleAggregator {
     private liveCandle: ChartCandle | null = null;
@@ -31,7 +31,8 @@ export class CandleAggregator {
                 || before.low !== this.liveCandle.low;
 
             if (changed) {
-                serverLog('candle-merge', {
+                serverLog({
+                    tag: LogEvent.CandleMerge,
                     time: this.liveCandle.time,
                     before: { o: before.open, h: before.high, l: before.low, c: before.close },
                     after: { o: this.liveCandle.open, h: this.liveCandle.high, l: this.liveCandle.low, c: this.liveCandle.close },
