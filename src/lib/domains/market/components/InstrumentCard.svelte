@@ -53,6 +53,9 @@
             </div>
         </div>
         <div class="header-right">
+            {#if collapsed}
+                <span class="collapsed-price">{fmt.formatPrice(market.snapshot.offer, market.snapshot.decimalPlacesFactor)}</span>
+            {/if}
             <div
                     class="status"
                     style="color: {fmt.getMarketStatusColor(market.snapshot.marketStatus)}"
@@ -193,6 +196,8 @@
     .name { font-size: 1.2rem; font-weight: bold; color: white; }
     .meta { color: #888; font-size: 0.8rem; margin-top: 0.2rem; }
     .status { font-size: 1rem; font-weight: bold; }
+
+    .collapsed-price { color: #26a69a; font-size: 0.95rem; font-weight: bold; }
 
     .remove-btn {
         background: #333;
