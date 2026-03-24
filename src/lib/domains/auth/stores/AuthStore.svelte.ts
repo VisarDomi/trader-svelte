@@ -8,7 +8,7 @@ import type { URL_TYPE } from '$lib/shared/types/url.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import * as API from '$lib/shared/constants/api.js';
 import { AuthError } from '$lib/core/api/ApiClient.js';
-import { log } from '$lib/shared/utils/log.js';
+import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class AuthStore extends BaseStore {
     // Form State
@@ -86,6 +86,8 @@ export class AuthStore extends BaseStore {
                     await this.performLogin(mode);
                     return;
                 } catch (loginErr) {
+                    const msg = loginErr instanceof Error ? loginErr.message : String(loginErr);
+                    serverLog({ tag: LogEvent.AuthFailure, phase: `refresh-${mode}`, error: msg });
                     throw loginErr instanceof AuthError ? loginErr : new AuthError("Refresh failed");
                 }
             }

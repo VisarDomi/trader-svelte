@@ -1,8 +1,20 @@
-/** Console output — always on for DevTools debugging. */
+/** Forwards a message to the server log endpoint. Fire-and-forget. */
+function forward(level: 'warn' | 'error', args: unknown[]): void {
+    const message = args.map(a =>
+        a instanceof Error ? a.message : typeof a === 'string' ? a : JSON.stringify(a)
+    ).join(' ');
+    fetch('/api/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: level, data: { message } }),
+    }).catch(() => {});
+}
+
+/** Console output — always on for DevTools debugging. warn/error also forward to server. */
 export const log = {
     info: console.log.bind(console),
-    warn: console.warn.bind(console),
-    error: console.error.bind(console),
+    warn(...args: unknown[]) { console.warn(...args); forward('warn', args); },
+    error(...args: unknown[]) { console.error(...args); forward('error', args); },
 };
 
 // --- Typed Server Logging ---
@@ -13,6 +25,7 @@ interface PriceSnapshot { time: number; o: number; c: number }
 
 export const LogEvent = {
     AppRestore: 'app-restore',
+    AuthFailure: 'auth-failure',
     ConnectSeed: 'connect-seed',
     FirstTick: 'first-tick-after-reconnect',
     SyncResult: 'sync-result',
@@ -21,6 +34,7 @@ export const LogEvent = {
 
 export type LogEntry =
     | { tag: typeof LogEvent.AppRestore; elapsedMs: number; fromStatus: string }
+    | { tag: typeof LogEvent.AuthFailure; phase: string; error: string }
     | { tag: typeof LogEvent.ConnectSeed; epic: string; bidTime: number | null; bidOHLC: OHLC | null; staleMs: number | null }
     | { tag: typeof LogEvent.FirstTick; bid: number; offer: number; liveBidTime: number | null; completedBid: PriceSnapshot | null }
     | { tag: typeof LogEvent.SyncResult; historyCandles: number; historyExtended: boolean; newestHistoryTime: number; currentFromApi: OHLCWithTime | null; liveBefore: PriceSnapshot | null; liveAfter: PriceSnapshot | null; mergeChanged: boolean }

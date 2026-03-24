@@ -70,6 +70,7 @@ class AppEngine {
         } catch (e) {
             if (e instanceof AuthError) {
                 log.warn('[AppEngine] Boot Auth failed:', e.message);
+                serverLog({ tag: LogEvent.AuthFailure, phase: 'boot', error: e.message });
                 this.status = 'UNAUTHENTICATED';
                 await goto('/login');
                 return;
@@ -85,6 +86,7 @@ class AppEngine {
         } catch (e) {
             // Handle fatal boot errors
             if (e instanceof AuthError || String(e).includes('401')) {
+                serverLog({ tag: LogEvent.AuthFailure, phase: 'boot-load', error: e instanceof Error ? e.message : String(e) });
                 this.status = 'UNAUTHENTICATED';
                 await goto('/login');
                 return;
@@ -206,6 +208,7 @@ class AppEngine {
                 await authStore.validateSession();
             } catch (e) {
                 if (e instanceof AuthError) {
+                    serverLog({ tag: LogEvent.AuthFailure, phase: 'resume', error: e.message });
                     this.status = 'UNAUTHENTICATED';
                     await goto('/login');
                     return;
