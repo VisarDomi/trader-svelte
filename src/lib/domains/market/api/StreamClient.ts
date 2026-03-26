@@ -2,7 +2,7 @@ import * as API from '$lib/shared/constants/api.js';
 import * as AUTH from '$lib/shared/constants/auth.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
 import type { QuoteMessage, WebSocketPayload } from '$lib/shared/types/market.js';
-import { log } from '$lib/shared/utils/log.js';
+import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 type PriceUpdateCallback = (msg: QuoteMessage) => void;
 
@@ -67,7 +67,7 @@ export class StreamClient {
     }
 
     private handleOpen = () => {
-        log.info(`[StreamClient] Connected to ${this.epic}`);
+        serverLog({ tag: LogEvent.StreamOpen, epic: this.epic });
         this.retryCount = 0; // Reset backoff on success
         this.subscribe();
         this.startPing();
@@ -96,9 +96,9 @@ export class StreamClient {
     private handleClose = (event: CloseEvent) => {
         this.stopPing();
         this.ws = null;
+        serverLog({ tag: LogEvent.StreamClose, epic: this.epic, code: event.code, intentional: this.isIntentionalClose });
 
         if (!this.isIntentionalClose) {
-            log.warn(`[StreamClient] Unexpected close (Code: ${event.code}). Reconnecting...`);
             this.scheduleReconnect();
         }
     };
@@ -106,12 +106,12 @@ export class StreamClient {
     private scheduleReconnect() {
         if (this.isIntentionalClose) return;
         if (this.retryCount >= this.MAX_RETRIES) {
-            log.error("[StreamClient] Max retries exceeded. Giving up.");
+            serverLog({ tag: LogEvent.StreamExhausted, epic: this.epic, attempts: this.MAX_RETRIES });
             return;
         }
 
         const delay = Math.min(this.BASE_DELAY * Math.pow(1.5, this.retryCount), 30000); // Cap at 30s
-        log.info(`[StreamClient] Retry attempt ${this.retryCount + 1} in ${delay}ms`);
+        serverLog({ tag: LogEvent.StreamRetry, epic: this.epic, attempt: this.retryCount + 1, delayMs: delay });
 
         this.reconnectTimer = setTimeout(() => {
             this.retryCount++;

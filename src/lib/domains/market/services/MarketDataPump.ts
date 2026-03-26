@@ -159,7 +159,10 @@ export class MarketDataPump {
 
     connect(targetEpic?: string) {
         if (targetEpic) this.epic = targetEpic;
-        if (!this.epic) return;
+        if (!this.epic) {
+            serverLog({ tag: LogEvent.ConnectAbort, reason: 'no-epic', epic: '' });
+            return;
+        }
 
         this.disconnect();
         this.syncInProgress = false;
@@ -178,6 +181,8 @@ export class MarketDataPump {
             });
             this.feed.initialize(seedBid, seedAsk);
             this.feed.connect(tokens, this.epic);
+        } else {
+            serverLog({ tag: LogEvent.ConnectAbort, reason: 'no-tokens', epic: this.epic });
         }
 
         this.lastSyncMinute = -1; // Reset so 30th-second sync fires on next eligible check

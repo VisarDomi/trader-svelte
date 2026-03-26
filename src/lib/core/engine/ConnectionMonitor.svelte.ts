@@ -6,7 +6,7 @@ export class ConnectionMonitor {
 
     constructor(
         private onConnectivityChange?: (online: boolean) => void,
-        private onVisibilityChange?: (visible: boolean) => void
+        private onVisibilityChange?: (visible: boolean, source: string) => void
     ) {
         if (browser) {
             this.isOnline = navigator.onLine;
@@ -29,21 +29,21 @@ export class ConnectionMonitor {
         document.addEventListener('visibilitychange', () => {
             const visible = document.visibilityState === 'visible';
             this.isVisible = visible;
-            this.onVisibilityChange?.(visible);
+            this.onVisibilityChange?.(visible, 'visibilitychange');
         });
 
         // iOS PWA: backup signals when visibilitychange doesn't fire on screen unlock
         window.addEventListener('pageshow', () => {
             if (document.visibilityState === 'visible' && !this.isVisible) {
                 this.isVisible = true;
-                this.onVisibilityChange?.(true);
+                this.onVisibilityChange?.(true, 'pageshow');
             }
         });
 
         window.addEventListener('focus', () => {
             if (!this.isVisible) {
                 this.isVisible = true;
-                this.onVisibilityChange?.(true);
+                this.onVisibilityChange?.(true, 'focus');
             }
         });
     }

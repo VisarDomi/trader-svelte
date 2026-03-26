@@ -43,7 +43,7 @@ class AppEngine {
     constructor() {
         this.monitor = new ConnectionMonitor(
             (online) => this.handleConnectivityChange(online),
-            (visible) => this.handleVisibilityChange(visible)
+            (visible, source) => this.handleVisibilityChange(visible, source)
         );
     }
 
@@ -104,6 +104,7 @@ class AppEngine {
      */
     private transitionTo(newStatus: AppStatus) {
         const oldStatus = this.status;
+        serverLog({ tag: LogEvent.StateTransition, from: oldStatus, to: newStatus });
 
         // EXIT: tear down services when leaving READY
         if (oldStatus === 'READY' && newStatus !== 'READY') {
@@ -123,14 +124,14 @@ class AppEngine {
     private handleConnectivityChange(isOnline: boolean) {
         if (isOnline) {
             notifications.info('Internet restored');
-            this.handleResume();
+            this.handleResume('online');
         } else {
             this.transitionTo('OFFLINE');
             notifications.error('No Internet Connection');
         }
     }
 
-    private handleVisibilityChange(isVisible: boolean) {
+    private handleVisibilityChange(isVisible: boolean, source: string) {
         if (!isVisible) {
             if (this.status === 'READY') {
                 this.backgroundedAt = Date.now();
@@ -139,7 +140,7 @@ class AppEngine {
             }
         } else {
             this.stopBackgroundSentinel();
-            this.handleResume();
+            this.handleResume(source);
         }
     }
 
@@ -147,9 +148,15 @@ class AppEngine {
      * Single resume entry point — all signals (visibility, focus, pageshow, sentinel, online)
      * funnel here. Re-entrancy guard prevents concurrent recovery from rapid-fire signals.
      */
-    private handleResume() {
-        if (this.status !== 'BACKGROUND' && this.status !== 'OFFLINE') return;
-        if (this.resumeInProgress) return;
+    private handleResume(source: string) {
+        if (this.status !== 'BACKGROUND' && this.status !== 'OFFLINE') {
+            serverLog({ tag: LogEvent.ResumeAttempt, source, status: this.status, elapsedMs: 0, path: 'skipped', reason: 'wrong-status' });
+            return;
+        }
+        if (this.resumeInProgress) {
+            serverLog({ tag: LogEvent.ResumeAttempt, source, status: this.status, elapsedMs: 0, path: 'skipped', reason: 'in-progress' });
+            return;
+        }
         this.resumeInProgress = true;
 
         const elapsed = Date.now() - this.backgroundedAt;
@@ -157,8 +164,10 @@ class AppEngine {
         this.stopBackgroundSentinel();
 
         if (elapsed > RESUME_RECOVERY_MS) {
+            serverLog({ tag: LogEvent.ResumeAttempt, source, status: this.status, elapsedMs: elapsed, path: 'full' });
             void this.resumeFromSleep(elapsed);
         } else {
+            serverLog({ tag: LogEvent.ResumeAttempt, source, status: this.status, elapsedMs: elapsed, path: 'short' });
             this.transitionTo('READY');
             this.resumeInProgress = false;
         }
@@ -182,7 +191,7 @@ class AppEngine {
             // Only act if page is actually visible (screen unlocked) and we're still stuck in BACKGROUND.
             if (delta > 3000 && this.status === 'BACKGROUND' && document.visibilityState === 'visible') {
                 log.warn(`[AppEngine] Sentinel: visibilitychange missed, forcing resume (frozen ${Math.round(delta / 1000)}s)`);
-                this.handleResume();
+                this.handleResume('sentinel');
             }
         }, 1000);
     }
