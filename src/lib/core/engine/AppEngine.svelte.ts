@@ -12,6 +12,7 @@ import { notifications } from '$lib/core/services/NotificationService.svelte.js'
 // Domain Imports for Boot
 import { authStore } from '$lib/domains/auth/stores/AuthStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
+import { session } from '$lib/core/services/SessionManager.js';
 import { AuthError } from '$lib/core/api/ApiClient.js';
 import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
@@ -54,7 +55,12 @@ class AppEngine {
      * Called from +layout.svelte onMount.
      */
     async boot() {
-        log.info('[AppEngine] Booting...');
+        serverLog({
+            tag: LogEvent.Boot,
+            hasTokens: session.isAuthenticated(),
+            hasEpic: !!session.lastEpic,
+            lastEpic: session.lastEpic,
+        });
 
         viewport.init();
         this.status = 'AUTH_CHECK';
@@ -82,7 +88,7 @@ class AppEngine {
         try {
             await accountStore.loadAll();
             this.transitionTo('READY');
-            log.info('[AppEngine] Ready');
+            log.flush();
         } catch (e) {
             // Handle fatal boot errors
             if (e instanceof AuthError || String(e).includes('401')) {
@@ -226,13 +232,16 @@ class AppEngine {
                 log.warn('[AppEngine] Session validation failed on resume', e);
             }
 
-            // Restart services with (potentially refreshed) tokens
             this.transitionTo('READY');
+            log.flush();
 
-            // Refresh account balance — may have changed while backgrounded
             void accountStore.refreshActive();
 
+            serverLog({ tag: LogEvent.ResumeComplete, elapsedMs: elapsed });
             notifications.info('Session restored');
+        } catch (e) {
+            serverLog({ tag: LogEvent.ResumeError, error: e instanceof Error ? e.message : String(e) });
+            this.transitionTo('READY');
         } finally {
             this.resumeInProgress = false;
         }

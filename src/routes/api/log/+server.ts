@@ -1,10 +1,22 @@
 import type { RequestHandler } from './$types';
 
+interface LogEntry {
+    event: string;
+    data?: unknown;
+    ts?: number;
+}
+
 export const POST: RequestHandler = async ({ request }) => {
-    const { event, data } = await request.json();
-    if (!event || typeof event !== 'string') {
-        return new Response(null, { status: 400 });
+    const body = await request.json();
+    const entries: LogEntry[] = Array.isArray(body) ? body : [body];
+    const now = Date.now();
+
+    for (const { event, data, ts } of entries) {
+        if (!event || typeof event !== 'string') continue;
+        const delaySec = ts ? Math.round((now - ts) / 1000) : 0;
+        const delayed = delaySec > 5 ? ` [delayed ${delaySec}s]` : '';
+        console.log(`[Frontend] ${event}${delayed}`, data ? JSON.stringify(data) : '');
     }
-    console.log(`[Frontend] ${event}`, data ? JSON.stringify(data) : '');
+
     return new Response(null, { status: 204 });
 };
