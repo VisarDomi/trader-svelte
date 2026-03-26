@@ -6,26 +6,21 @@ import { MarketCmd, type MarketCommand } from './MarketCommands.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 
 export class MarketStore extends BaseStore {
-    // Current Prices
+
     bid = $state(0);
     offer = $state(0);
 
-    // Candle Data
     lastCandle = $state.raw<ChartCandle | null>(null);
     history = $state.raw<ChartCandle[]>([]);
 
-    // State Flags
     isLoaded = $state(false);
     updateTrigger = $state(0);
 
-    // Config
     dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
 
-    // Status
     marketStatus = $state("CLOSED");
     epic = $state("");
 
-    // Internal State
     private _bidHistory: ChartCandle[] = [];
     private _askHistory: ChartCandle[] = [];
     private _liveBidCandle: ChartCandle | null = null;
@@ -38,8 +33,6 @@ export class MarketStore extends BaseStore {
     get currentPrice() {
         return this.dataSource === TRADING.CHART_DATA_SOURCE_OFR ? this.offer : this.bid;
     }
-
-    // --- Read-only Queries ---
 
     hasBidHistory(): boolean {
         return this._bidHistory.length > 0;
@@ -60,8 +53,6 @@ export class MarketStore extends BaseStore {
     getLiveAskCandle(): ChartCandle | null {
         return this._liveAskCandle;
     }
-
-    // --- Command Dispatch ---
 
     dispatch(cmd: MarketCommand) {
         switch (cmd.tag) {
@@ -91,8 +82,6 @@ export class MarketStore extends BaseStore {
                 break;
         }
     }
-
-    // --- Private Mutations ---
 
     private _reset(dataSource: ChartData) {
         this.isLoaded = false;
@@ -127,25 +116,18 @@ export class MarketStore extends BaseStore {
     }
 
     private _prependHistory(bid: ChartCandle[], ask: ChartCandle[]) {
-        // Prepend new older data
+
         this._bidHistory = [...bid, ...this._bidHistory];
         this._askHistory = [...ask, ...this._askHistory];
 
         this.syncViewToSource();
-        // We do NOT trigger recalcLiveState here as live data is at the end
+
         this.updateTrigger++;
     }
 
-    /**
-     * Merges a fresh batch of recent history (e.g. from Sync) into the existing history.
-     * Preserves older data that isn't in the new batch.
-     */
     private _mergeLatestHistory(newBid: ChartCandle[], newAsk: ChartCandle[]) {
         if (newBid.length === 0) return;
 
-        // If server data doesn't extend beyond what we already have, skip entirely.
-        // Completed candles don't change — tick-built local data is authoritative.
-        // This prevents unnecessary series.setData() calls that cause chart flicker.
         const lastExistingTime = this._bidHistory.length > 0
             ? this._bidHistory[this._bidHistory.length - 1].time
             : 0;
@@ -156,25 +138,19 @@ export class MarketStore extends BaseStore {
             if (oldArr.length === 0) return newArr;
             const firstNewTime = newArr[0].time;
 
-            // Find index of first candle in oldArr that is >= firstNewTime
             const cutOffIndex = oldArr.findIndex(c => c.time >= firstNewTime);
 
             if (cutOffIndex === -1) {
-                // All old data is older than new data -> Append
+
                 return [...oldArr, ...newArr];
             }
 
-            // Keep old data before the overlap, append new data
             return [...oldArr.slice(0, cutOffIndex), ...newArr];
         };
 
         this._bidHistory = merge(this._bidHistory, newBid);
         this._askHistory = merge(this._askHistory, newAsk);
 
-        // Do NOT call recalcLiveState() here — the live candle is maintained
-        // by the feed aggregator via updateLive(). Overwriting it with the last
-        // history candle causes the chart to briefly lose the current-minute bar,
-        // and series.update() re-adding it shifts the view right by one bar.
         this.syncViewToSource();
         this.updateTrigger++;
     }

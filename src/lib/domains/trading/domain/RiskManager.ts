@@ -4,10 +4,7 @@ import type { PositionBody } from '$lib/shared/types/trading.js';
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 
 export class RiskManager {
-    /**
-     * Checks if the current position's stop loss exceeds the safety ratio (50%) of the balance.
-     * Returns the corrected stop level if a violation is detected, otherwise null.
-     */
+
     calculateCorrection(
         position: PositionBody,
         market: MarketDetailsResponse,
@@ -49,20 +46,15 @@ export class RiskManager {
         const isBuy = position.direction === TRADING.BUY_DIRECTION;
         const entryPrice = position.level;
 
-        // 1. Calculate theoretical limit
         const exactDist = targetLoss / (position.size * lotSize);
         const limitPrice = isBuy
             ? entryPrice - exactDist
             : entryPrice + exactDist;
 
-        // 2. Identify candidates
         const floorTick = Math.floor(limitPrice / tickSize) * tickSize;
         const ceilTick = Math.ceil(limitPrice / tickSize) * tickSize;
 
         const candidates = [floorTick, ceilTick];
-
-        // 3. Pick optimal safe tick
-        // We want loss <= targetLoss, maximized
 
         let bestPrice = floorTick;
         let bestLossVal = -1;

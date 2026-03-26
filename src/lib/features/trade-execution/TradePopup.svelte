@@ -18,9 +18,6 @@
         onCancel: () => void;
     }>();
 
-    // Block crosshair via bus while popup is open.
-    // Chart pointer-events are left enabled so the user can tap
-    // elsewhere on the chart to re-plan at a different price.
     $effect(() => {
         if (!isOpen) return;
         bus.emit(EVENTS.OVERLAY_BLOCK_CROSSHAIR, undefined as never);

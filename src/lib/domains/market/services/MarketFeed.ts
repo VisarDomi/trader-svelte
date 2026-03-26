@@ -16,7 +16,6 @@ export interface FeedUpdate {
 export class MarketFeed {
     private stream: StreamClient | null = null;
 
-    // Heartbeat Tracking
     public lastUpdateTimestamp = 0;
 
     private bidAgg = new CandleAggregator();
@@ -29,7 +28,7 @@ export class MarketFeed {
     initialize(lastBidCandle: ChartCandle | null, lastAskCandle: ChartCandle | null) {
         this.bidAgg.seed(lastBidCandle);
         this.askAgg.seed(lastAskCandle);
-        // Reset heartbeat on init
+
         this.lastUpdateTimestamp = Date.now();
     }
 

@@ -29,34 +29,27 @@ export class CurrentPrice implements Types {
         const position = context.activePosition;
         const currentPrice = context.currentPrice;
 
-        // --- MODE 1: DEFAULT (No Position) ---
-        // Restore standard chart behavior: Native line ON, Custom line OFF
         if (!position || currentPrice === 0) {
             this.clearCustomLine();
 
             this.series.applyOptions({
                 priceLineVisible: true,
                 lastValueVisible: true,
-                title: BASE_SERIES_TITLE // Show "Current Price"
+                title: BASE_SERIES_TITLE
             });
             return;
         }
 
-        // --- MODE 2: ACTIVE TRADING ---
-        // Hide standard chart behavior: Native line OFF, Custom line ON
-
-        // 1. Hide Native Line & Label
         this.series.applyOptions({
             priceLineVisible: false,
             lastValueVisible: false,
-            title: "" // Clear title so it doesn't overlap or show in legend
+            title: ""
         });
 
         const body = position.position;
         const initialBalance = body.initialBalance || 0;
         const isLandscape = context.viewportWidth > context.viewportHeight;
 
-        // 2. Calculate Custom Data
         const data = calculateCurrentPriceLine(
             body,
             currentPrice,
@@ -66,7 +59,6 @@ export class CurrentPrice implements Types {
             isLandscape
         );
 
-        // 3. Draw Custom Line
         if (this.line) {
             this.line.applyOptions({
                 price: data.price,
@@ -78,7 +70,7 @@ export class CurrentPrice implements Types {
                 price: data.price,
                 color: data.color,
                 lineWidth: 2,
-                lineStyle: 0, // Solid
+                lineStyle: 0,
                 axisLabelVisible: true,
                 title: data.title,
             });

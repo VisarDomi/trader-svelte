@@ -47,7 +47,6 @@ export class TradeExecutor {
             initialBalance: currentBalance
         };
 
-        // Use the Mapper here as well for consistency
         const optimisticMarket = MarketMapper.toPositionMarket(market);
 
         return {

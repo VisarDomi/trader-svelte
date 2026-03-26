@@ -11,15 +11,14 @@
     onMount(async () => {
         await accountStore.loadAll();
 
-        // Handle scroll after data is loaded
         const hash = page.url.hash;
         if (hash) {
-            // Wait for DOM update
+
             await tick();
-            const id = hash.substring(1); // remove #
+            const id = hash.substring(1);
             const el = document.getElementById(id);
             if (el) {
-                // Ensure browser paint is complete for geometry to be valid
+
                 setTimeout(() => {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }, 50);
@@ -27,12 +26,10 @@
         }
     });
 
-    // Helper: Is this the account currently being used for this mode?
     function isTradingAccount(account: Account, type: string) {
         return accountStore.activeAccount?.accountId === account.accountId && session.mode === type;
     }
 
-    // Helper: Check if we have data to show
     function hasData() {
         return accountStore.realAccounts.length > 0 || accountStore.demoAccounts.length > 0;
     }

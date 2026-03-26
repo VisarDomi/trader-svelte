@@ -15,9 +15,6 @@
         bus.emit(EVENTS.OVERLAY_UNBLOCK_CROSSHAIR, undefined as never);
     }
 
-    // Block crosshair + chart pointer-events while position is closing.
-    // When close completes, the position section unmounts — iOS fires synthetic
-    // events at that point, same problem TradePopup solves with this pattern.
     $effect(() => {
         if (!overlay.isClosingPosition) return;
         const chart = document.getElementById(CHART_CONTAINER_ID);
@@ -134,11 +131,10 @@
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
-    /* Toggle Button */
     .toggle-btn {
         background: rgba(30, 30, 30, 0.95);
         border: 1px solid #444;
-        border-left: none; /* Handled by inline style for color */
+        border-left: none;
         padding: 0 0.25rem;
         width: 2rem;
         color: #d1d4dc;
@@ -152,16 +148,12 @@
         font-size: 0.6rem;
     }
 
-    /* Data Card Container */
     .data-card {
         background: rgba(20, 20, 20, 0.95);
         backdrop-filter: blur(4px);
         border: 1px solid #444;
         border-left: none;
 
-        /* Auto-rounded corners handling:
-           Overflow hidden ensures children don't bleed out,
-           so we don't need to manually radius the last child. */
         border-top-right-radius: 8px;
         border-bottom-right-radius: 8px;
         overflow: hidden;
@@ -174,14 +166,12 @@
         max-width: 85vw;
     }
 
-    /* Sections */
     .section {
         display: flex;
         flex-direction: column;
         justify-content: center;
     }
 
-    /* Automatic Separators */
     .section:not(:last-child) {
         border-right: 1px solid #444;
     }
@@ -195,7 +185,6 @@
         justify-content: center;
     }
 
-    /* Market Section */
     .market-section {
         min-width: 100px;
     }
@@ -217,7 +206,6 @@
         width: 100%;
     }
 
-    /* Account Section */
     .account-section {
         min-width: 90px;
         max-width: 140px;
@@ -242,7 +230,6 @@
         color: #fff;
     }
 
-    /* Position Section */
     .position-section {
         min-width: 60px;
     }
@@ -258,7 +245,6 @@
         line-height: 1.1;
     }
 
-    /* Close Position Button */
     .close-position-btn {
         background: rgba(239, 83, 80, 0.15);
         border: none;

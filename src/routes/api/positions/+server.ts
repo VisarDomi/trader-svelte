@@ -7,7 +7,7 @@ export const PUT: RequestHandler = async ({ request }) => {
 
     const targetUrl = body.url;
     const sessionTokens = body.sessionTokens;
-    // Payload specific to position updates
+
     const updateData = body.data;
 
     if (!targetUrl || !sessionTokens || !updateData) {
@@ -27,7 +27,7 @@ export const PUT: RequestHandler = async ({ request }) => {
 
         if (!response.ok) {
             const errBody = await response.json().catch(() => ({}));
-            // Pass through the broker error if possible
+
             error(response.status, errBody.errorCode || "Broker rejected position update");
         }
 

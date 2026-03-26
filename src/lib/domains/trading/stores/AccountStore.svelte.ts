@@ -33,19 +33,15 @@ export class AccountStore extends BaseStore {
             void this.refreshActive();
         });
 
-        // Optimistic update + Reconciliation
         bus.on(EVENTS.POSITION_CLOSED, ({ pnl }) => {
             this.dispatch(accountCmd.applyOptimistic(pnl));
             void this.pollBalanceUpdate();
         });
 
-        // Position closed externally (SL/TP hit or closed from another device)
         bus.on(EVENTS.POSITION_VANISHED, () => {
             void this.refreshActive();
         });
     }
-
-    // --- Command Dispatch ---
 
     dispatch(cmd: AccountCommand) {
         switch (cmd.tag) {
@@ -66,9 +62,6 @@ export class AccountStore extends BaseStore {
         await this.refreshActive();
     }
 
-    /**
-     * Loads accounts and enforces LocalStorage as the absolute Source of Truth.
-     */
     async loadAll() {
         this.isLoading = true;
         this.error = "";
@@ -116,15 +109,12 @@ export class AccountStore extends BaseStore {
             if (storedId) {
                 this.setActiveById(storedId);
             } else if (!this.activeAccount && list.length > 0) {
-                // Fallback: no stored account yet (e.g. first login via ChartLoader)
+
                 const fallback = list.find(a => a.preferred) || list[0];
                 this.activeAccount = fallback;
                 session.setLastAccountId(mode, fallback.accountId);
             }
 
-            // Server session may not match our localStorage selection
-            // (e.g. after a fresh login created a default-account session).
-            // Fix the mismatch so API calls return the correct account's data.
             if (this.activeAccount && !this.activeAccount.preferred) {
                 await this.enforceServerSwitch(this.activeAccount, mode);
             }
@@ -213,28 +203,20 @@ export class AccountStore extends BaseStore {
         if (this.error) notifications.error(this.error);
     }
 
-    /**
-     * Immediate local update to ensure TradePlanner sees correct funds
-     * instantly after a trade closes.
-     */
     private applyOptimisticUpdate(pnl: number) {
         if (!this.activeAccount) return;
 
-        // 1. Update Deposit (Realized PnL added)
         this.activeAccount.balance.deposit += pnl;
 
-        // 2. Reset Floating PnL (Since position is gone)
-        // Note: This assumes single-position mode.
         this.activeAccount.balance.profitLoss = 0;
 
-        // 3. Update Available (Deposit + 0 PnL)
         this.activeAccount.balance.available = this.activeAccount.balance.deposit;
 
         log.info(`[AccountStore] Optimistic Update applied. New Deposit: ${this.activeAccount.balance.deposit}`);
     }
 
     private async pollBalanceUpdate() {
-        // We keep the delay here for reconciliation to allow backend to settle
+
         for (let i = 0; i < 5; i++) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             await this.refreshActive();

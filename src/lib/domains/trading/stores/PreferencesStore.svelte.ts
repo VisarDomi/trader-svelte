@@ -13,7 +13,6 @@ export class PreferencesStore extends BaseStore {
     leverages = $state<Partial<Record<LeverageCategory, number>>>({});
     activeType = $state<URL_TYPE>(AUTH.REAL_TYPE);
 
-    // isSaving specific to preferences logic (separate from general isLoading)
     isSaving = $state(false);
 
     async init(type: URL_TYPE) {
@@ -35,12 +34,9 @@ export class PreferencesStore extends BaseStore {
 
             this.data = prefs;
 
-            // Strict Source of Truth Logic (matching AccountStore)
-            // 1. Check LS
             let storedId = session.getLastAccountId(type);
             let active = storedId ? accounts.find(a => a.accountId === storedId) : null;
 
-            // 2. If missing/invalid, fallback to server preferred and SAVE
             if (!active) {
                 active = accounts.find(a => a.preferred) || accounts[0];
                 if (active) {

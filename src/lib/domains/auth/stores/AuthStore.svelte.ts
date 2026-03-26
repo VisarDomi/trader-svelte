@@ -11,16 +11,14 @@ import { AuthError } from '$lib/core/api/ApiClient.js';
 import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class AuthStore extends BaseStore {
-    // Form State
+
     apiKey = $state("");
     identifier = $state("");
     password = $state("");
 
-    // Connection Status
     demoStatus = $state("Not Logged In");
     realStatus = $state("Not Logged In");
 
-    // Tokens
     demoTokens = $state<SessionTokens | null>(null);
     realTokens = $state<SessionTokens | null>(null);
 
@@ -31,9 +29,6 @@ export class AuthStore extends BaseStore {
         this.password = ENV.ENV_PASSWORD;
     }
 
-    /**
-     * Initializes state from local storage (synchronous)
-     */
     init() {
         try {
             const c = session.getCredentials();
@@ -41,7 +36,7 @@ export class AuthStore extends BaseStore {
             this.password = c.password;
             this.apiKey = c.apiKey;
         } catch {
-            // Ignore if no credentials saved
+
         }
 
         this.demoTokens = session.getTokens(AUTH.DEMO_TYPE);
@@ -51,22 +46,11 @@ export class AuthStore extends BaseStore {
         if (this.realTokens) this.realStatus = "Session Token Found";
     }
 
-    /**
-     * Checks if current tokens are actually valid on the server.
-     * Called by AppEngine on boot and reconnect.
-     *
-     * Validates BOTH modes (Real + Demo) so that loadAll() doesn't
-     * fail with stale tokens for the non-active mode.
-     *
-     * Throws AuthError if session is dead (re-login failed).
-     * Throws NetworkError if internet is dead.
-     */
     async validateSession(): Promise<void> {
         if (!this.realTokens && !this.demoTokens) {
             throw new AuthError("No session tokens available");
         }
 
-        // Validate all modes with stored tokens in parallel
         await Promise.all([
             this.realTokens ? this.validateMode(AUTH.REAL_TYPE) : Promise.resolve(),
             this.demoTokens ? this.validateMode(AUTH.DEMO_TYPE) : Promise.resolve()

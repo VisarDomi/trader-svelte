@@ -4,8 +4,6 @@ import { DEFAULT_ERROR } from '$lib/shared/constants/error.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
 
-// --- Error Classes ---
-
 export class NetworkError extends Error {
     constructor(message: string = "Network request failed") {
         super(message);
@@ -26,8 +24,6 @@ export class ApiError extends Error {
         this.name = "ApiError";
     }
 }
-
-// --- Client ---
 
 export class ApiClient {
     private readonly baseUrl: string;
@@ -66,17 +62,16 @@ export class ApiClient {
                 signal
             });
         } catch (e) {
-            // Fetch only throws on network failure (DNS, Offline, etc), not 4xx/5xx
+
             throw new NetworkError(e instanceof Error ? e.message : "Connection failed");
         }
 
         if (!response.ok) {
-            // Handle Authentication Errors Specifically
+
             if (response.status === 401 || response.status === 403) {
                 throw new AuthError();
             }
 
-            // Handle API Logic Errors
             const errorData = await response.json().catch(() => ({}));
             throw new ApiError(errorData.errorCode || DEFAULT_ERROR);
         }

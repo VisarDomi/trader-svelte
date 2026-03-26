@@ -10,8 +10,6 @@ import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 export class ChartInteractionManager {
     private tradingDomain = new TradingDomain();
 
-    // The logic needs access to the current MarketDetails to plan trades
-    // We pass it in or update it via a setter, similar to the state manager
     private marketDetails: MarketDetailsResponse | null = null;
     private userLeverage = 1;
 
@@ -23,7 +21,6 @@ export class ChartInteractionManager {
     handleChartClick(event: ChartClickEvent) {
         if (!this.marketDetails) return;
 
-        // If block logic is true, ignore click
         if (this.isInteractionBlocked()) return;
 
         const bid = marketStore.bid;
@@ -62,7 +59,7 @@ export class ChartInteractionManager {
 
     isInteractionBlocked(): boolean {
         if (tradeStore.isExecuting) return true;
-        // Block new trade planning if we already have an active position
+
         if (positionStore.anyActivePosition) return true;
         return false;
     }

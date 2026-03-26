@@ -5,8 +5,6 @@ import { DEFAULT_ERROR } from '$lib/shared/constants/error.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
 import type { SessionTokens, UserCredentials } from '$lib/shared/types/auth.js';
 
-// --- Types for Storage Objects ---
-
 interface SessionCache {
     timestamp: number;
     tokens: {
@@ -35,9 +33,6 @@ export class SessionManager {
         }
     }
 
-    /**
-     * CLEANUP: Removes old bloat
-     */
     private cleanupLegacy() {
         for (let i = localStorage.length - 1; i >= 0; i--) {
             const key = localStorage.key(i);
@@ -53,7 +48,6 @@ export class SessionManager {
         }
     }
 
-    // --- Helpers ---
     private getJSON<T>(key: string): T | null {
         if (typeof window === 'undefined') return null;
         const raw = localStorage.getItem(key);
@@ -66,9 +60,6 @@ export class SessionManager {
         localStorage.setItem(key, JSON.stringify(data));
     }
 
-    /**
-     * CREDENTIALS
-     */
     getCredentials(): UserCredentials {
         const c = this.getJSON<UserCredentials>(STORAGE.CREDENTIALS_KEY);
         if (c?.apiKey && c?.password && c?.identifier) {
@@ -81,9 +72,6 @@ export class SessionManager {
         this.setJSON(STORAGE.CREDENTIALS_KEY, c);
     }
 
-    /**
-     * SESSION (Tokens & Timestamp)
-     */
     private getSessionCache(): SessionCache {
         return this.getJSON<SessionCache>(STORAGE.SESSION_KEY) || { timestamp: 0, tokens: {} };
     }
@@ -112,9 +100,6 @@ export class SessionManager {
         return this.getTokens(type || this.mode) !== null;
     }
 
-    /**
-     * APP STATE (Mode, Epic, Account Selection)
-     */
     private getState(): AppState {
         return this.getJSON<AppState>(STORAGE.STATE_KEY) || {
             mode: AUTH.DEMO_TYPE,
@@ -153,9 +138,6 @@ export class SessionManager {
         this.setJSON(STORAGE.STATE_KEY, s);
     }
 
-    /**
-     * TRADE CONTEXT
-     */
     getInitialBalance(dealId: string): number | null {
         const ctx = this.getJSON<TradeContext>(STORAGE.TRADE_CONTEXT_KEY);
         if (ctx && ctx.dealId === dealId) {

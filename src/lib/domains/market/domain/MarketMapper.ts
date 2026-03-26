@@ -28,10 +28,6 @@ export class MarketMapper {
         };
     }
 
-    /**
-     * Converts a flat MarketSummary (from bulk API) into a rich MarketDetailsResponse structure.
-     * Missing details (Dealing Rules, Schedule) are filled with safe defaults or marked/hidden.
-     */
     static fromSummary(summary: MarketSummary): MarketDetailsResponse {
         if (!summary) {
             throw new Error("[MarketMapper] Cannot map undefined summary");
@@ -46,10 +42,10 @@ export class MarketMapper {
                 lotSize: summary.lotSize,
                 guaranteedStopAllowed: false,
                 streamingPricesAvailable: true,
-                currency: "USD", // Default assumption if missing in summary
+                currency: "USD",
                 marginFactor: 0,
                 marginFactorUnit: "PERCENTAGE",
-                openingHours: { zone: "UTC" }, // Empty schedule
+                openingHours: { zone: "UTC" },
                 overnightFee: undefined
             },
             dealingRules: {
@@ -70,7 +66,7 @@ export class MarketMapper {
                 offer: summary.offer,
                 high: summary.high,
                 low: summary.low,
-                decimalPlacesFactor: 2, // Default fallback
+                decimalPlacesFactor: 2,
                 scalingFactor: summary.scalingFactor,
                 marketModes: summary.marketModes
             }

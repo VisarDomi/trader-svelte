@@ -36,7 +36,7 @@ export class ViewportService {
                 this.maxWidth = cache.long;
                 this.maxHeight = cache.short;
             } catch {
-                // Ignore corrupt cache
+
             }
         }
     }

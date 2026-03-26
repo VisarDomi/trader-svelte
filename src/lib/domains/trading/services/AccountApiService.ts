@@ -12,7 +12,6 @@ export async function getAccounts(client: ApiClient): Promise<Account[]> {
     return data.accounts;
 }
 
-// Kept as raw fetch because it hits the Node Proxy (Backend), not Capital directly
 export async function switchAccount(type: URL_TYPE, tokens: SessionTokens, accountId: string): Promise<SessionTokens> {
     const brokerUrl = `${getBaseUrl(type)}${API.SESSION_ENDPOINT}`;
     const payload = {
@@ -38,7 +37,6 @@ export function getPreferences(client: ApiClient): Promise<AccountPreferences> {
     return client.get<AccountPreferences>(API.PREFERENCES_ENDPOINT);
 }
 
-// Kept as raw fetch because it hits the Node Proxy (Backend)
 export async function updatePreferences(
     type: URL_TYPE,
     tokens: SessionTokens,

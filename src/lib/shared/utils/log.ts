@@ -1,26 +1,24 @@
-// --- Typed Event Definitions ---
-
 interface OHLC { o: number; h: number; l: number; c: number }
 interface OHLCWithTime extends OHLC { time: number }
 interface PriceSnapshot { time: number; o: number; c: number }
 
 export const LogEvent = {
-    // Lifecycle
+
     Boot: 'boot',
     AppRestore: 'app-restore',
     ResumeComplete: 'resume-complete',
     ResumeError: 'resume-error',
-    // Auth
+
     AuthFailure: 'auth-failure',
-    // Market data
+
     ConnectSeed: 'connect-seed',
     FirstTick: 'first-tick-after-reconnect',
     SyncResult: 'sync-result',
     CandleMerge: 'candle-merge',
-    // Resume lifecycle
+
     ResumeAttempt: 'resume-attempt',
     StateTransition: 'state-transition',
-    // Connection lifecycle
+
     ConnectAbort: 'connect-abort',
     StreamOpen: 'stream-open',
     StreamClose: 'stream-close',
@@ -45,17 +43,6 @@ export type LogEntry =
     | { tag: typeof LogEvent.StreamClose; epic: string; code: number; intentional: boolean }
     | { tag: typeof LogEvent.StreamRetry; epic: string; attempt: number; delayMs: number }
     | { tag: typeof LogEvent.StreamExhausted; epic: string; attempts: number };
-
-// --- LogBuffer: single owner of all entries until delivered ---
-//
-// Ownership model:
-//   buffer[]   — entries waiting to be sent (owned by the buffer)
-//   inFlight[] — entries currently in a fetch() call (temporarily transferred)
-//
-// On fetch success: inFlight is dropped (entries delivered).
-// On fetch failure: inFlight is reclaimed back into buffer.
-// On page hide: getAllPending() (inFlight + buffer) is persisted to
-//   sessionStorage and beacon-flushed — no entry is ever unowned.
 
 const LOG_STORAGE_KEY = 'mt_log_buffer';
 const FLUSH_INTERVAL_MS = 2000;
@@ -95,12 +82,9 @@ class LogBuffer {
         this.schedulePersist();
     }
 
-    /** Trigger immediate delivery — call after proving network is up. */
     flush(): void {
         void this.deliverBatch();
     }
-
-    // --- Storage Recovery ---
 
     private recoverFromStorage(): number {
         try {
@@ -116,8 +100,6 @@ class LogBuffer {
         }
     }
 
-    // --- Periodic Flush ---
-
     private startFlusher(): void {
         this.flushTimer = setInterval(() => void this.deliverBatch(), FLUSH_INTERVAL_MS);
     }
@@ -126,7 +108,6 @@ class LogBuffer {
         if (this.flushInProgress || this.buffer.length === 0) return;
         this.flushInProgress = true;
 
-        // Transfer ownership: buffer → inFlight
         this.inFlight = this.buffer;
         this.buffer = [];
 
@@ -148,18 +129,13 @@ class LogBuffer {
         }
     }
 
-    /** Delivery failed — reclaim entries back into buffer. */
     private reclaimInFlight(): void {
         this.buffer = [...this.inFlight, ...this.buffer];
         this.inFlight = [];
     }
 
-    // --- Lifecycle Hooks ---
-
     private setupLifecycleHooks(): void {
-        // When page goes hidden (iOS freeze imminent), persist + beacon.
-        // queueMicrotask ensures logs pushed by other visibilitychange handlers
-        // (AppEngine, ConnectionMonitor) are captured before we flush.
+
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
                 queueMicrotask(() => {
@@ -170,12 +146,6 @@ class LogBuffer {
         });
     }
 
-    // --- Persistence ---
-
-    /**
-     * Coalesced persist: multiple push() calls within the same microtask
-     * result in a single sessionStorage write.
-     */
     private schedulePersist(): void {
         if (this.persistQueued) return;
         this.persistQueued = true;
@@ -185,7 +155,6 @@ class LogBuffer {
         });
     }
 
-    /** All entries that haven't been confirmed delivered. */
     private getAllPending(): BufferedEntry[] {
         if (this.inFlight.length === 0) return this.buffer;
         if (this.buffer.length === 0) return this.inFlight;
@@ -200,14 +169,9 @@ class LogBuffer {
             } else {
                 sessionStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(all));
             }
-        } catch { /* storage full — best effort */ }
+        } catch {  }
     }
 
-    /**
-     * sendBeacon: browser guarantees delivery attempt even during page teardown.
-     * On success, all pending entries are consumed.
-     * On failure, sessionStorage still has them for next boot.
-     */
     private beaconFlush(): void {
         const all = this.getAllPending();
         if (all.length === 0) return;
@@ -225,8 +189,6 @@ class LogBuffer {
 
 const logBuffer: LogBuffer | null = typeof window !== 'undefined' ? new LogBuffer() : null;
 
-// --- Public API ---
-
 function format(args: unknown[]): string {
     return args.map(a =>
         a instanceof Error ? `${a.message}${a.stack ? '\n' + a.stack : ''}`
@@ -235,19 +197,14 @@ function format(args: unknown[]): string {
     ).join(' ');
 }
 
-/** Untyped logging — for free-form diagnostic messages. */
 export const log = {
     info(...args: unknown[]) { logBuffer?.push('info', { message: format(args) }); },
     warn(...args: unknown[]) { logBuffer?.push('warn', { message: format(args) }); },
     error(...args: unknown[]) { logBuffer?.push('error', { message: format(args) }); },
-    /** Force immediate delivery of buffered logs. */
+
     flush() { logBuffer?.flush(); },
 };
 
-/**
- * Typed event logging — discriminated union guarantees every call site
- * produces a valid shape. Entries are buffered and delivered reliably.
- */
 export function serverLog(entry: LogEntry): void {
     const { tag, ...data } = entry;
     logBuffer?.push(tag, data);

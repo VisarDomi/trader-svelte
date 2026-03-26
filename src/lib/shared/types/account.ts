@@ -23,7 +23,6 @@ export interface Account {
     symbol: string;
 }
 
-// NEW: Named interface for leverage settings
 export interface LeverageSetting {
     current: number;
     available: number[];

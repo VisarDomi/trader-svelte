@@ -14,21 +14,15 @@ import { log } from '$lib/shared/utils/log.js';
 export class MarketRepository {
     constructor(private client: ApiClient) {}
 
-    /**
-     * Fetch initial history (Latest N candles)
-     */
     async getHistory(epic: string, signal?: AbortSignal): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
-        // "TO" is Now.
+
         const toStr = this.formatDateForApi(DateTime.utc());
         log.info(`[MarketRepository] Fetching INITIAL history for ${epic} up to ${toStr}`);
         return this.fetchAndMap(epic, toStr, signal);
     }
 
-    /**
-     * Fetch older history (N candles BEFORE a specific time)
-     */
     async getHistoryBefore(epic: string, beforeTime: UTCTimestamp, signal?: AbortSignal): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
-        // Convert Timestamp to ISO for API
+
         const dt = DateTime.fromSeconds(beforeTime, { zone: 'utc' });
         const toStr = this.formatDateForApi(dt);
 
@@ -37,36 +31,31 @@ export class MarketRepository {
     }
 
     private formatDateForApi(dt: DateTime): string {
-        // MATCHING THE SUCCESSFUL TEST FORMAT: YYYY-MM-DDTHH:mm:ss
-        // No Milliseconds, No 'Z' suffix.
+
         return dt.toFormat("yyyy-MM-dd'T'HH:mm:ss");
     }
 
     private async fetchAndMap(epic: string, toStr: string, signal?: AbortSignal) {
-        // CLEVER REQUEST PATTERN:
-        // We do NOT send 'from'. We send 'to' and 'max'.
-        // The server counts backwards 'max' rows from 'to'.
+
         const params = {
             [API.RESOLUTION_KEY]: API.RESOLUTION_MINUTE,
-            [API.MAX_KEY]: API.MAX_ROWS, // 1000
+            [API.MAX_KEY]: API.MAX_ROWS,
             [API.TO_KEY]: toStr
         };
 
         const endpoint = `${API.PRICES_ENDPOINT}/${epic}`;
 
         try {
-            // Debug Log
+
             log.info(`[MarketRepository] GET ${endpoint}`, JSON.stringify(params));
 
             const data = await this.client.get<MarketPriceResponse>(endpoint, params, signal);
 
-            // Handle 404/Empty by returning empty lists (handled gracefully by pump)
             if (!data.prices || data.prices.length === 0) {
                 log.warn("[MarketRepository] Received 0 prices.");
                 return { bid: [], ask: [] };
             }
 
-            // Sort ascending (Oldest -> Newest) because API might return them descending or mixed
             const sorted = data.prices.sort((a, b) =>
                 new Date(a.snapshotTimeUTC).getTime() - new Date(b.snapshotTimeUTC).getTime()
             );
@@ -81,8 +70,7 @@ export class MarketRepository {
             };
 
         } catch (e) {
-            // If 404 or bad request, assume end of history or format error
-            // We log the full error now to debug 'error.invalid.to' specifically
+
             log.error("[MarketRepository] Fetch failed details:", e);
             return { bid: [], ask: [] };
         }
@@ -97,7 +85,6 @@ export class MarketRepository {
                 o: p.openPrice.bid, h: p.highPrice.bid, l: p.lowPrice.bid, c: p.closePrice.bid
             };
 
-            // Safety: Ensure valid numbers
             const close = target.c || 0;
             const open = target.o || close;
             const high = target.h || Math.max(open, close);

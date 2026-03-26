@@ -16,23 +16,12 @@ import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 const STALE_THRESHOLD_MS = 10000;
 const LIVENESS_CHECK_INTERVAL = 2000;
 
-// Direct Interface for the Chart Controller to allow synchronous updates
 type ChartPrependCallback = (data: ChartCandle[], offset: number) => void;
 
-/**
- * ARCHITECTURE NOTE:
- * This class bypasses the standard Svelte reactivity loop for performance.
- *
- * It uses a direct 'chartAdapter' callback to inject history into the chart
- * synchronously. This is required to prevent scroll-glitching on iOS.
- *
- * DO NOT REFACTOR TO USE STORES FOR HISTORICAL DATA INJECTION.
- */
 export class MarketDataPump {
     private feed: MarketFeed;
     private epic: string = "";
 
-    // Sync State
     private syncInterval: ReturnType<typeof setInterval> | null = null;
     private livenessInterval: ReturnType<typeof setInterval> | null = null;
     private abortController: AbortController | null = null;
@@ -41,22 +30,15 @@ export class MarketDataPump {
     private syncInProgress = false;
     private hasPreviousBarGap = false;
 
-    // Infinite Scroll State
     isLoadingHistory = false;
     isHistoryExhausted = false;
 
-    // Direct Pipe to Chart Controller (Architecture Bypass)
     private chartAdapter: ChartPrependCallback | null = null;
 
     constructor() {
         this.feed = new MarketFeed((update) => this.handleFeedUpdate(update));
     }
 
-    /**
-     * Registers a callback to the UI layer (ChartController).
-     * This allows the pump to perform atomic visual updates when loading history,
-     * bypassing the slower Svelte reactivity loop.
-     */
     registerChartAdapter(callback: ChartPrependCallback) {
         this.chartAdapter = callback;
     }
@@ -67,7 +49,7 @@ export class MarketDataPump {
 
     async load(epic: string, dataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID) {
         this.epic = epic;
-        this.isHistoryExhausted = false; // Reset flag
+        this.isHistoryExhausted = false;
 
         marketStore.dispatch(marketCmd.reset(dataSource));
 
@@ -76,7 +58,7 @@ export class MarketDataPump {
 
         try {
             const repo = new MarketRepository(client);
-            // New "Latest" fetch
+
             const { bid, ask } = await repo.getHistory(epic);
 
             marketStore.dispatch(marketCmd.setHistory(bid, ask));
@@ -92,13 +74,9 @@ export class MarketDataPump {
         }
     }
 
-    /**
-     * Called by HistoryLoaderPlugin when scrolling back
-     */
     async loadMoreHistory() {
         if (this.isLoadingHistory || this.isHistoryExhausted || !this.epic) return;
 
-        // 1. Get Anchor (Oldest Candle)
         if (!marketStore.hasBidHistory()) return;
 
         const anchorTime = marketStore.getOldestBidTime();
@@ -129,14 +107,10 @@ export class MarketDataPump {
                 } else {
                     log.info(`[MarketDataPump] Prepending ${filteredBid.length} new candles.`);
 
-                    // 1. Update State (Reactive Store)
                     marketStore.dispatch(marketCmd.prependHistory(filteredBid, filteredAsk));
 
-                    // 2. Direct Visual Update (Synchronous)
-                    // We invoke this IMMEDIATELY after state update to fix the scroll position
-                    // before the browser paints the "Index 0" glitch.
                     if (this.chartAdapter) {
-                        const activeHistory = marketStore.history; // Get the newly merged full list
+                        const activeHistory = marketStore.history;
                         this.chartAdapter(activeHistory, filteredBid.length);
                     }
                 }
@@ -149,10 +123,6 @@ export class MarketDataPump {
         }
     }
 
-    /**
-     * Arms the first-tick sync without a full reconnect.
-     * Used when navigating to /chart while the websocket is already connected.
-     */
     requestSyncOnNextTick() {
         this.pendingSyncOnTick = true;
     }
@@ -185,11 +155,10 @@ export class MarketDataPump {
             serverLog({ tag: LogEvent.ConnectAbort, reason: 'no-tokens', epic: this.epic });
         }
 
-        this.lastSyncMinute = -1; // Reset so 30th-second sync fires on next eligible check
+        this.lastSyncMinute = -1;
         this.startHistorySync();
         this.startLivenessCheck();
 
-        // Sync will fire on the first live tick (see handleFeedUpdate)
         this.pendingSyncOnTick = true;
     }
 
@@ -211,7 +180,7 @@ export class MarketDataPump {
 
     private startHistorySync() {
         this.syncInterval = setInterval(() => {
-            // Aggressive 1-second sync when previous bar is missing from history
+
             if (this.hasPreviousBarGap) {
                 void this.syncHistory();
                 return;
@@ -219,7 +188,7 @@ export class MarketDataPump {
 
             const now = new Date();
             const sec = now.getSeconds();
-            // Sync roughly every minute at the 30s mark
+
             if (sec >= 30 && sec <= 35 && this.lastSyncMinute !== now.getMinutes()) {
                 this.lastSyncMinute = now.getMinutes();
                 void this.syncHistory();
@@ -307,16 +276,12 @@ export class MarketDataPump {
         }
     }
 
-    /**
-     * Detects if there's a missing bar between the last history candle and the live candle.
-     * When a gap exists, startHistorySync polls every second until the API catches up.
-     */
     private checkForPreviousBarGap() {
         const lastHistoryTime = marketStore.getNewestBidTime();
         const liveTime = marketStore.getLiveBidCandle()?.time ?? 0;
 
         const hadGap = this.hasPreviousBarGap;
-        // Consecutive 1-minute candles are 60s apart; anything more means missing bars
+
         this.hasPreviousBarGap = liveTime > 0 && lastHistoryTime > 0 && (liveTime - lastHistoryTime) > 60;
 
         if (hadGap && !this.hasPreviousBarGap) {

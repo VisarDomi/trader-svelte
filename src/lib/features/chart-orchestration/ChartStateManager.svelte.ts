@@ -5,16 +5,12 @@ import type { ChartUI } from '$lib/components/chart-engine/ChartResizer.svelte.j
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { log } from '$lib/shared/utils/log.js';
 
-const STALE_VIEW_THRESHOLD_S = 24 * 60 * 60; // 24 hours in seconds
+const STALE_VIEW_THRESHOLD_S = 24 * 60 * 60;
 
 interface EnhancedViewState extends ViewState {
     lastDataTimeAtSave: number;
 }
 
-/**
- * REFACTORED: Now a passive data access object.
- * Logic for "When to restore" has moved to the Renderer/Orchestrator to avoid race conditions.
- */
 export class ChartStateManager {
     private currentEpic = $state("");
     private saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -31,10 +27,6 @@ export class ChartStateManager {
         }
     }
 
-    /**
-     * Called by the Renderer immediately after data load.
-     * Returns the state if it exists, otherwise null.
-     */
     loadState(): ViewState | null {
         if (typeof window === 'undefined' || !this.currentEpic) return null;
 
@@ -44,8 +36,6 @@ export class ChartStateManager {
         try {
             const saved: EnhancedViewState = JSON.parse(raw);
 
-            // Ownership: this class owns the saved state, so it owns the staleness check.
-            // If the last data at save time is >24h old, the view is stale — discard it.
             if (saved.lastDataTimeAtSave) {
                 const ageSeconds = (Date.now() / 1000) - saved.lastDataTimeAtSave;
                 if (ageSeconds > STALE_VIEW_THRESHOLD_S) {
@@ -97,7 +87,6 @@ export class ChartStateManager {
     private saveZoom() {
         if (typeof window === 'undefined' || !this.currentEpic) return;
 
-        // Only save if data is loaded to prevent saving an empty state during transition
         if (!marketStore.isLoaded) return;
 
         const state = this.controller.camera.getViewState();

@@ -14,7 +14,6 @@ export class ClockPlugin implements Types {
         this.container = document.getElementById(CHART.CHART_CONTAINER_ID);
         if (!this.container) return;
 
-        // Ensure container allows absolute positioning of children relative to it
         const currentPos = window.getComputedStyle(this.container).position;
         if (currentPos === 'static') {
             this.container.style.position = 'relative';
@@ -22,11 +21,10 @@ export class ClockPlugin implements Types {
 
         this.clockEl = document.createElement('div');
 
-        // Initial Base Styles
         Object.assign(this.clockEl.style, {
             position: 'absolute',
             right: '20px',
-            bottom: '5px', // Default (Portrait/Safe)
+            bottom: '5px',
             zIndex: '20',
             color: '#777',
             fontSize: '14px',
@@ -41,17 +39,11 @@ export class ClockPlugin implements Types {
         this.start();
     }
 
-    /**
-     * The system passes the context (including viewport dimensions) here.
-     * The Clock simply reacts to the provided state rather than calculating it.
-     */
     update(context: ChartContext): void {
         if (!this.clockEl) return;
 
         const isLandscape = context.viewportWidth > context.viewportHeight;
 
-        // Portrait: 20px (Taller scale area)
-        // Landscape: 5px (Shorter scale area)
         this.clockEl.style.bottom = isLandscape ? '5px' : '20px';
     }
 
@@ -76,7 +68,7 @@ export class ClockPlugin implements Types {
         };
 
         update();
-        // Align next tick to the start of the second for better precision
+
         const now = new Date();
         const msUntilNextSecond = 1000 - now.getMilliseconds();
 

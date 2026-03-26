@@ -25,7 +25,6 @@ export class ChartInputHandler {
         const price = this.series.coordinateToPrice(param.point.y);
         if (!price) return;
 
-        // Emit to global bus instead of calling a callback
         bus.emit(EVENTS.INPUT_CHART_CLICK, {
             price,
             time: param.time ? Number(param.time) : null

@@ -58,7 +58,7 @@ export class InstrumentFormatter {
         const sourceZone = schedule.zone || 'UTC';
 
         const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-        // Reference week: 2024-01-01 is a Monday
+
         const referenceWeekMap: Record<string, string> = {
             'mon': '2024-01-01', 'tue': '2024-01-02', 'wed': '2024-01-03',
             'thu': '2024-01-04', 'fri': '2024-01-05', 'sat': '2024-01-06', 'sun': '2024-01-07'
@@ -89,7 +89,7 @@ export class InstrumentFormatter {
         zone: string,
         buckets: BucketMap
     ) {
-        // Fix: Truncate seconds if present (e.g. "06:00:03" -> "06:00") to satisfy Luxon format
+
         const cleanStart = startStr.length > 5 ? startStr.substring(0, 5) : startStr;
         const cleanEnd = endStr.length > 5 ? endStr.substring(0, 5) : endStr;
 

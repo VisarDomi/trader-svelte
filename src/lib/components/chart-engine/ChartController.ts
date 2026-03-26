@@ -15,17 +15,6 @@ import { bus } from '$lib/core/events/globalBus.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { ChartCandle } from '$lib/shared/types/market.js';
 
-/**
- * ARCHITECTURE DECISION: ATOMIC HISTORY LOADING
- *
- * Standard LWC behavior resets the view to Index 0 when data is prepended.
- * Reactive updates via Svelte $effects are too slow (microtasks), causing
- * a visible "teleportation" glitch during scrolling.
- *
- * We solve this by bypassing the reactive render loop for history prepends.
- * The MarketDataPump calls `prependData` DIRECTLY.
- * This method updates the data and shifts the viewport in the SAME execution frame.
- */
 export class ChartController {
     private _chart: IChartApi | null = null;
     private _series: ISeriesApi<"Candlestick"> | null = null;
@@ -34,7 +23,6 @@ export class ChartController {
     private unblockTimer: ReturnType<typeof setTimeout> | null = null;
     private cleanupBus: (() => void)[] = [];
 
-    // Publicly expose the Camera for Orchestrators to use
     public readonly camera = new ChartCamera();
 
     get chart() {
@@ -62,15 +50,8 @@ export class ChartController {
 
         this._chart = createChart(container, getChartOptions(config));
 
-        // Hand over the instance to the Camera
         this.camera.init(this._chart);
 
-        // CROSSHAIR GUARD: Suppress crosshair when overlays are active.
-        // LWC attaches mousemove/pointermove listeners to the document, not just
-        // its canvas. iOS fires synthetic mouse events from overlay touches that
-        // reach those document-level listeners, bypassing any container-level
-        // event blocking. Instead of fighting DOM events, we let LWC process them
-        // but immediately clear the crosshair result when overlays are active.
         this._chart.subscribeCrosshairMove((param) => {
             if (this.crosshairBlocked && param.point) {
                 requestAnimationFrame(() => this._chart?.clearCrosshairPosition());
@@ -86,7 +67,7 @@ export class ChartController {
                 this.crosshairBlocked = true;
             }),
             bus.on(EVENTS.OVERLAY_UNBLOCK_CROSSHAIR, () => {
-                // Delay unblock to catch post-interaction synthetic events from iOS.
+
                 this.unblockTimer = setTimeout(() => {
                     this.crosshairBlocked = false;
                     this._chart?.clearCrosshairPosition();
@@ -95,26 +76,14 @@ export class ChartController {
         );
     }
 
-    /**
-     * SYNCHRONOUS HISTORY INJECTION
-     * Must be called directly by the data source, bypassing reactive effects.
-     *
-     * @param mergedData - The full dataset (Old + New History)
-     * @param newCandleCount - How many candles were added to the left
-     */
     prependData(mergedData: ChartCandle[], newCandleCount: number) {
         if (!this._chart || !this._series) return;
 
-        // 1. Capture current logical range (Where the user is looking)
         const timeScale = this._chart.timeScale();
         const currentRange = timeScale.getVisibleLogicalRange();
 
-        // 2. Atomic Update: Set Data
-        // This internally shifts the indices of existing bars by +newCandleCount
         this._series.setData(mergedData);
 
-        // 3. Atomic Update: Shift View
-        // We immediately correct the camera to look at the new indices of the *same* candles.
         if (currentRange) {
             timeScale.setVisibleLogicalRange({
                 from: currentRange.from + newCandleCount,
@@ -126,7 +95,6 @@ export class ChartController {
     createMainSeries(precision: number) {
         if (!this._chart) return;
 
-        // If series exists, just update its options
         if (this._series) {
             this._series.applyOptions(getBaseSeriesOptions(precision));
             return;

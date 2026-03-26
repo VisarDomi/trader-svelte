@@ -14,7 +14,6 @@ export class LineTitleFormatter {
         const absPnL = Math.abs(result.rawPnL).toFixed(2);
         const pnlMoney = `${sign}${this.currencySymbol}${absPnL}`;
 
-        // If no balance context, just return money value
         if (result.projectedBalance === 0 && result.percentage === 0) {
             return `${label} ${pnlMoney}`.trim();
         }
@@ -42,8 +41,6 @@ export class LineTitleFormatter {
     private formatOffset(offset: number, isProfit: boolean): string {
         if (offset === 0) return '';
 
-        // (+- 2.00%) for profit giveback
-        // (-+ 2.00%) for loss recovery
         const prefix = isProfit ? '+-' : '-+';
         return ` (${prefix}${offset.toFixed(2)}%)`;
     }

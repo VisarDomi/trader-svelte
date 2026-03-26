@@ -12,7 +12,7 @@ export class PositionPoller {
 
     setEpic(epic: string) {
         this.currentEpic = epic;
-        // If we are already running, trigger an immediate refresh to reflect the new epic filter
+
         if (this.isRunning) {
             void this.fetchAndSync();
         }
@@ -25,12 +25,11 @@ export class PositionPoller {
     start() {
         this.stop();
 
-        // Immediate check
         void this.fetchAndSync();
 
         this.intervalId = setInterval(() => {
             void this.fetchAndSync();
-        }, 15000); // 15 seconds
+        }, 15000);
     }
 
     stop() {
@@ -40,24 +39,18 @@ export class PositionPoller {
         }
     }
 
-    /**
-     * Public method to force a refresh (e.g. after trade execution)
-     */
     async refresh() {
         await this.fetchAndSync();
     }
 
     private async fetchAndSync() {
-        // Accessing the client via the API service wrapper
-        // If session is invalid, getClient returns null or we handle error inside api wrapper
+
         const client = api.client;
         if (!client) return;
 
         try {
             const list = await getPositions(client);
 
-            // Business Logic: Inject Initial Balance
-            // This relies on accountStore being up to date.
             if (accountStore.activeAccount) {
                 for (const p of list.positions) {
                     p.position.initialBalance = resolveInitialBalance(
@@ -69,12 +62,10 @@ export class PositionPoller {
 
             const globalPos = list.positions[0] || null;
 
-            // Filter for the specific chart we are looking at
             const localPos = this.currentEpic
                 ? list.positions.find(p => p.market.epic === this.currentEpic) || null
                 : null;
 
-            // Push to Store (State Sync)
             positionStore.dispatch(positionCmd.sync(globalPos, localPos));
 
         } catch (e) {

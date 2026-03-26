@@ -13,9 +13,9 @@ import type { PositionResponse } from '$lib/shared/types/trading.js';
 import { log } from '$lib/shared/utils/log.js';
 
 export class PositionStore extends BaseStore {
-    // The "Local" position (matching the current chart)
+
     activePosition = $state<PositionResponse | null>(null);
-    // The "Global" position (any open position, usually first found)
+
     anyActivePosition = $state<PositionResponse | null>(null);
 
     isClosing = $state(false);
@@ -28,8 +28,6 @@ export class PositionStore extends BaseStore {
             this.dispatch(positionCmd.setFromTrade(pos));
         });
     }
-
-    // --- Command Dispatch ---
 
     dispatch(cmd: PositionCommand) {
         switch (cmd.tag) {
@@ -59,8 +57,6 @@ export class PositionStore extends BaseStore {
         }
     }
 
-    // --- Actions (User Triggered) ---
-
     async close() {
         if (!this.anyActivePosition) return;
 
@@ -77,33 +73,27 @@ export class PositionStore extends BaseStore {
                 ? TRADING.SELL_DIRECTION
                 : TRADING.BUY_DIRECTION;
 
-            // 1. Send Request
             const res = await createPosition(client, {
                 epic: marketEpic,
                 direction: oppositeDir,
                 size: p.size
             });
 
-            // 2. Await Server Confirmation (contains execution price)
             const conf = await getConfirmation(client, res.dealReference);
 
-            // 3. Calculate Realized PnL locally
-            // We use the calculator to ensure logic matches the UI
             const result = this.calculator.calculatePnL(
-                p.level,            // Entry Price
-                conf.level,         // Exit Price (from confirmation)
-                p.size,             // Size
-                p.direction,        // Direction
-                0                   // Initial Balance irrelevant for raw PnL calculation
+                p.level,
+                conf.level,
+                p.size,
+                p.direction,
+                0
             );
 
             session.removeInitialBalance(p.dealId);
             notifications.success(`Position Closed. PnL: ${result.rawPnL.toFixed(2)}`);
 
-            // 4. Clear local state
             this.dispatch(positionCmd.clearPositions());
 
-            // 5. Emit Event with Realized PnL for AccountStore to consume
             bus.emit(EVENTS.POSITION_CLOSED, {
                 dealId: p.dealId,
                 pnl: result.rawPnL

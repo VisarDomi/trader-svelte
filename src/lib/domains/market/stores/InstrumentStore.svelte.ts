@@ -41,7 +41,7 @@ export class InstrumentStore extends BaseStore {
     }
 
     async load() {
-        this.loadFavorites(); // Ensure sync
+        this.loadFavorites();
 
         const client = this.getClient();
         if (!client) return;
@@ -52,10 +52,9 @@ export class InstrumentStore extends BaseStore {
         }
 
         await this.execute(async () => {
-            // 1. Fetch Preferences (once)
+
             const prefsPromise = getPreferences(client);
 
-            // 2. Batch Epics (Max 50 per request)
             const chunkSize = 50;
             const chunks = [];
             for (let i = 0; i < this.favorites.length; i += chunkSize) {
@@ -64,7 +63,6 @@ export class InstrumentStore extends BaseStore {
 
             const marketPromises = chunks.map(chunk => getMarketsByEpics(client, chunk));
 
-            // 3. Execute Parallel
             const [prefs, ...responses] = await Promise.all([
                 prefsPromise,
                 ...marketPromises
@@ -72,19 +70,17 @@ export class InstrumentStore extends BaseStore {
 
             this.userPreferences = prefs;
 
-            // 4. Merge and Map
             const listResponses = responses as MarketListResponse[];
             let finalInstruments: MarketDetailsResponse[] = [];
 
             listResponses.forEach((r, index) => {
-                // Case A: Response contains "marketDetails" (Full objects)
+
                 if (r.marketDetails && Array.isArray(r.marketDetails)) {
                     log.info(`[InstrumentStore] Chunk ${index} returned full marketDetails.`);
                     finalInstruments = [...finalInstruments, ...r.marketDetails];
                     return;
                 }
 
-                // Case B: Response contains "markets" (Flat summaries)
                 if (r.markets && Array.isArray(r.markets)) {
                     log.info(`[InstrumentStore] Chunk ${index} returned flat markets.`);
                     const mapped = r.markets.map(s => MarketMapper.fromSummary(s));
@@ -126,7 +122,6 @@ export class InstrumentStore extends BaseStore {
         this.favorites = this.favorites.filter(e => e !== epic);
         this.saveFavorites();
 
-        // Immediate UI update if we are viewing the list
         this.instruments = this.instruments.filter(i => i.instrument.epic !== epic);
     }
 

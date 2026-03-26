@@ -20,8 +20,6 @@ export class ChartOverlay {
         private readonly chartLogic: ChartLogic
     ) {}
 
-    // --- Derived View State ---
-
     get modeColor() {
         return this.session.mode === AUTH.REAL_TYPE ? '#26a69a' : '#ef5350';
     }
@@ -65,8 +63,6 @@ export class ChartOverlay {
         return this.positionStore.isClosing;
     }
 
-    // --- Actions ---
-
     async init(epic: string) {
         const client = api.client;
         if (client) {
@@ -84,7 +80,7 @@ export class ChartOverlay {
     }
 
     resetChart() {
-        // Simply delegate to Logic -> StateManager -> Camera
+
         this.chartLogic.resetChartZoom();
     }
 
@@ -107,6 +103,6 @@ export class ChartOverlay {
     }
 
     destroy() {
-        // No explicit cleanup needed
+
     }
 }

@@ -10,10 +10,7 @@ export interface TradeIntent {
 }
 
 export class TradingDomain {
-    /**
-     * Determines the trade direction and data source based on a user's click price
-     * relative to the current market bid/ask.
-     */
+
     determineIntent(
         clickPrice: number,
         bid: number,
@@ -23,11 +20,6 @@ export class TradingDomain {
 
         let direction: Direction | null = null;
         let source: ChartData | null = null;
-
-        // Logic:
-        // Click ABOVE Offer -> Buy (Expecting price to go up from Offer)
-        // Click BELOW Bid   -> Sell (Expecting price to go down from Bid)
-        // Click BETWEEN     -> Ambiguous (Ignore or default? We ignore for safety)
 
         if (clickPrice > offer) {
             direction = TRADING.BUY_DIRECTION;

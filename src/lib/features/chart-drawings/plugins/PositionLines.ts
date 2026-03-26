@@ -24,20 +24,16 @@ export class PositionLines implements Types {
 
     mount(chart: IChartApi, series: ISeriesApi<"Candlestick">): void {
         this.series = series;
-        // We defer formatter init until update when we have symbol data,
-        // or we could assume USD default.
+
     }
 
     update(context: ChartContext): void {
         if (!this.series) return;
 
-        // Ensure formatter exists
         if (!this.formatter) {
             this.formatter = new LineTitleFormatter(context.activeSymbol);
         }
 
-        // Determine which position to show (Actual or Planned)
-        // Note: Logic allows checking 'isPlanningTrade' from context if we map it
         const position = context.activePosition;
 
         if (!position) {
@@ -50,15 +46,12 @@ export class PositionLines implements Types {
         const initialBalance = body.initialBalance || 0;
         const isLandscape = context.viewportWidth > context.viewportHeight;
 
-        // 1. Entry Line
         const entryGen = new EntryLine(body, market.epic);
         this.updateLine(KEY_ENTRY, entryGen.getData(isLandscape));
 
-        // 2. Stop Loss Line
         const slGen = new StopLossLine(body, initialBalance, this.calculator, this.formatter);
         this.updateLine(KEY_SL, slGen.getData(isLandscape));
 
-        // 3. Take Profit Line
         const tpGen = new TakeProfitLine(body, initialBalance, this.calculator, this.formatter);
         this.updateLine(KEY_TP, tpGen.getData(isLandscape));
     }

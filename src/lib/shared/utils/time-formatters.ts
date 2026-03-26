@@ -8,15 +8,10 @@ const fastTimeFormatter = new Intl.DateTimeFormat('default', {
     hour12: false
 });
 
-/**
- * Optimized native formatter for Chart TimeScale ticks.
- * Avoids Luxon overhead in hot render loops.
- */
 export function formatTimestampToLocalTime(timestamp: UTCTimestamp): string {
     return fastTimeFormatter.format(timestamp * 1000);
 }
 
-// Keep Luxon for complex formatting (popups, etc)
 export function formatFullDateTime(timestamp: number): string {
     return DateTime.fromSeconds(timestamp, { zone: "system" }).toFormat(TIME.DATETIME_FORMAT);
 }

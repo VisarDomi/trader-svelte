@@ -12,8 +12,7 @@
         await authStore.loginBoth();
 
         if (authStore.realTokens && authStore.demoTokens) {
-            // Re-run boot so the full startup sequence completes
-            // (account loading, source-of-truth resolution, status → READY)
+
             await appEngine.boot();
             void goto('/chart');
         }

@@ -6,7 +6,7 @@
     let {
         market,
         preferences,
-        collapsed = false, // New prop
+        collapsed = false,
         onSelect,
         onRemove = undefined
     } = $props<{
@@ -19,10 +19,9 @@
 
     let fmt = $derived(new InstrumentFormatter(preferences));
 
-    // Safety check for detailed data
     let hasSchedule = $derived(
         market.instrument.openingHours &&
-        Object.keys(market.instrument.openingHours).length > 1 // zone + at least one day
+        Object.keys(market.instrument.openingHours).length > 1
     );
 
     let groupedHours = $derived(hasSchedule ? fmt.getGroupedHours(market) : []);
@@ -188,7 +187,6 @@
     }
     .header:hover { background: #2a2a2a; }
 
-    /* Remove border when body is hidden */
     .header.no-border { border-bottom: none; }
 
     .header-right { display: flex; align-items: center; gap: 1rem; }
@@ -226,7 +224,6 @@
 
     .separator { height: 1px; background: #333; margin: 0 -1.5rem; }
 
-    /* Layout for Details: 2 columns on desktop, 1 on mobile */
     .details-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -239,14 +236,12 @@
     .section-title { color: #d1d4dc; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: bold; }
     .full-width { grid-column: 1 / -1; }
 
-    /* Key-Value Lists */
     .key-val-list { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; }
     .kv-row { display: flex; justify-content: space-between; padding-bottom: 0.25rem; border-bottom: 1px solid #2a2a2a; }
     .kv-label { color: #aaa; }
     .kv-val { font-weight: bold; color: #fff; }
     .negative { color: #aaa; }
 
-    /* Hours specific layout */
     .hours-container { display: flex; flex-direction: column; gap: 0.5rem; }
     .hours-row { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 0.25rem; border-bottom: 1px solid #2a2a2a; }
     .days-label { color: #aaa; font-size: 0.9rem; }

@@ -6,16 +6,14 @@ import { ChartRenderer } from '$lib/features/chart-orchestration/ChartPluginMana
 import { ChartOverlay } from '$lib/features/chart-hud/ChartHudState.svelte.js';
 import { ChartInputHandler } from '$lib/components/chart-engine/ChartEvents.svelte.js';
 import { ChartLoader, type ChartContext as LoaderContext } from '$lib/features/chart-orchestration/ChartLoader.svelte.js';
-import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js'; // Import Pump
+import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js';
 
-// New Managers
 import { ChartStateManager } from '$lib/features/chart-orchestration/ChartStateManager.svelte.js';
 import { ChartInteractionManager } from '$lib/features/chart-orchestration/ChartInteractionManager.svelte.js';
 
 import { ChartContext } from '$lib/features/chart-orchestration/ChartContext.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 
-// Import Singletons
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
@@ -27,23 +25,20 @@ import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 import type { ChartCandle } from '$lib/shared/types/market.js';
 
 export class ChartLogic {
-    // Core Engine Components
+
     layout = new ChartUI(viewport);
     controller = new ChartController();
     overlay: ChartOverlay;
 
-    // Logic Delegates
     stateManager: ChartStateManager;
     interactionManager: ChartInteractionManager;
 
-    // Shared Render State
     context = new ChartContext();
 
     private renderer: ChartRenderer;
     private inputHandler: ChartInputHandler;
     private loader: ChartLoader;
 
-    // Local State
     private marketDetails = $state<MarketDetailsResponse | null>(null);
     private preResizeState: any | null = null;
     private cleanupEvents: (() => void)[] = [];
@@ -52,11 +47,9 @@ export class ChartLogic {
         this.overlay = new ChartOverlay(accountStore, positionStore, session, this);
         this.loader = new ChartLoader(accountStore, positionStore, marketStore);
 
-        // Initialize Managers first (dependencies)
         this.stateManager = new ChartStateManager(this.controller, this.layout);
         this.interactionManager = new ChartInteractionManager();
 
-        // Pass dependencies to Renderer, including StateManager for atomic coordination
         this.renderer = new ChartRenderer(
             this.controller.camera,
             this.stateManager,
@@ -72,7 +65,6 @@ export class ChartLogic {
 
         this.setupSubscriptions();
 
-        // Sync Context Effect
         $effect(() => this.syncContext());
     }
 
@@ -80,38 +72,31 @@ export class ChartLogic {
         const authorized = await this.loader.ensureSession();
         if (!authorized) return;
 
-        // Initialize engine
         this.controller.init(container);
         this.configureLayout(container);
         this.stateManager.initListeners();
 
-        // WIRING: Register Direct Chart Adapter for Infinite Scroll
         marketDataPump.registerChartAdapter((data: ChartCandle[], offset: number) => {
-            // This bypasses the Svelte Reactive Loop for performance
+
             this.controller.prependData(data, offset);
         });
 
-        // Load Initial Epic
         const lastEpic = session.lastEpic;
         if (lastEpic) {
             await this.loadAndApplyEpic(lastEpic);
         }
 
-        // Setup Interaction Layer
         this.initializeInteractions();
 
-        // Signal UI Ready
         this.layout.setDataLoaded(true);
 
-        // Arm first-tick sync so the next websocket tick refreshes history + positions.
-        // Services are already running via AppEngine — no need to restart them.
         marketDataPump.requestSyncOnNextTick();
     }
 
     destroy() {
         this.cleanupEvents.forEach(fn => fn());
 
-        marketDataPump.unregisterChartAdapter(); // Cleanup Adapter
+        marketDataPump.unregisterChartAdapter();
 
         this.stateManager.destroy();
         this.interactionManager.cancelPlanning();
@@ -123,8 +108,6 @@ export class ChartLogic {
         this.controller.unsubscribeClick(this.inputHandler.handleChartClick);
         this.controller.destroy();
     }
-
-    // --- Public Actions (called by UI) ---
 
     resetChartZoom() {
         this.stateManager.reset();
@@ -138,15 +121,12 @@ export class ChartLogic {
         this.interactionManager.cancelPlanning();
     }
 
-    // --- Private Orchestration ---
-
     private setupSubscriptions() {
-        // 1. Chart Clicks
+
         const offClick = bus.on(EVENTS.INPUT_CHART_CLICK, (event) => {
             this.interactionManager.handleChartClick(event);
         });
 
-        // 2. Context Switches
         const offMarket = bus.on(EVENTS.MARKET_SELECTED, (event) => {
             void this.handleEpicSwitch(event.epic);
         });
@@ -160,24 +140,19 @@ export class ChartLogic {
     }
 
     private async loadAndApplyEpic(epic: string) {
-        // 1. Update Managers
+
         this.stateManager.setEpic(epic);
 
-        // 2. Load Data
         const context = await this.loader.loadContext(epic);
         if (!context) return;
 
-        // 3. Apply Logic
         this.marketDetails = context.marketDetails;
         this.applyContext(context);
 
-        // 4. Update Interaction Logic
         this.interactionManager.updateContext(context.marketDetails, context.userLeverage);
 
-        // 5. Init Renderer
         this.initializeRenderer(context);
 
-        // 6. Init Overlay
         void this.overlay.init(epic);
     }
 
@@ -187,16 +162,15 @@ export class ChartLogic {
                 this.preResizeState = this.controller.camera.getViewState();
             },
             onAfterResize: () => {
-                // Resize logic handled by LWC + Camera
+
             }
         });
     }
 
     private applyContext(context: LoaderContext) {
-        // Update Controller with new Precision info
+
         this.controller.createMainSeries(context.precision);
 
-        // Handle 24h TimeScale extension if needed
         if (this.marketDetails?.instrument.overnightFee?.swapChargeTimestamp) {
             const currentPrice = this.marketDetails.snapshot.bid;
             if (currentPrice > 0) {

@@ -11,7 +11,6 @@
         onSelect: (category: LeverageCategory, value: number) => void
     }>();
 
-    // Use the proper shared type
     let categories = $derived(
         Object.entries(preferences.leverages) as [LeverageCategory, LeverageSetting][]
     );

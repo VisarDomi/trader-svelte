@@ -7,13 +7,11 @@ import type { ApiClient } from '$lib/core/api/ApiClient.js';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 import { marketDataPump } from '$lib/domains/market/services/MarketDataPump.js';
 
-// Stores types
 import type { AccountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import type { PositionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
-import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js'; // Use singleton directly
+import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
 import { marketCmd } from '$lib/domains/market/stores/MarketCommands.js';
 
-// Types
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 import type { AccountPreferences } from '$lib/shared/types/account.js';
 import type { ChartData } from "$lib/shared/types/trading";
@@ -41,8 +39,7 @@ export class ChartLoader {
     ) {}
 
     async ensureSession(): Promise<boolean> {
-        // Boot (AppEngine) has already validated/refreshed tokens.
-        // Just verify we have them — if not, redirect to login.
+
         if (!api.client) {
             await goto('/login');
             return false;
@@ -59,19 +56,15 @@ export class ChartLoader {
         try {
             const config = await this.fetchConfiguration(client, epic);
 
-            // Populate Metadata in MarketStore (Crucial for Liveness Checks)
             this.marketStoreRef.dispatch(marketCmd.setMetadata(
                 config.marketDetails.instrument.epic,
                 config.marketDetails.snapshot.marketStatus
             ));
 
-            // Determine initial data source based on position direction
             const activePos = this.positionStore.activePosition;
             const direction = activePos?.position.direction;
             const source = this.getDataSourceForDirection(direction);
 
-            // Initialize Market Data via Pump
-            // Pump handles fetching history and populating the store
             await marketDataPump.load(epic, source);
 
             return this.deriveContext(epic, config);
@@ -84,7 +77,6 @@ export class ChartLoader {
     private async initializeStores(epic: string) {
         await this.accountStore.init();
 
-        // Sync Position Store via Poller
         positionPoller.setEpic(epic);
         await positionPoller.refresh();
     }

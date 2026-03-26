@@ -25,14 +25,9 @@ export class RiskService {
         });
     }
 
-    /**
-     * Starts the global risk monitor.
-     * Should be called by AppEngine on boot.
-     */
     start() {
         this.stop();
-        // Run check every 10 seconds (approx) or aligned with minute start
-        // Using strict interval for simplicity
+
         this.interval = setInterval(() => this.checkRisk(), 10000);
     }
 
@@ -46,16 +41,12 @@ export class RiskService {
     private async checkRisk() {
         const position = positionStore.anyActivePosition;
 
-        // 1. No position? No risk.
         if (!position) return;
 
-        // 2. We need market details to calculate risk (lot size, etc)
-        // We try to use the one in MarketStore if it matches, otherwise we fetch/cache
         let details: MarketDetailsResponse | null = null;
 
         if (marketStore.epic === position.market.epic && marketStore.isLoaded) {
-            // If we are looking at the chart, we might want to grab details,
-            // but for now we rely on the cache or fetch to be safe/consistent.
+
         }
 
         if (!this.marketDetailsCache.has(position.market.epic)) {
@@ -74,10 +65,8 @@ export class RiskService {
         details = this.marketDetailsCache.get(position.market.epic) || null;
         if (!details) return;
 
-        // 3. Ensure account balance is fresh
         await accountStore.refreshActive();
 
-        // 4. Calculate
         const correction = this.manager.calculateCorrection(
             position.position,
             details,
@@ -87,7 +76,6 @@ export class RiskService {
         if (correction !== null) {
             const dealId = position.position.dealId;
 
-            // Only poll for readiness on freshly opened positions
             if (this.pendingDealId === dealId) {
                 log.info(`[RiskService] Correction needed. Waiting for broker to confirm position...`);
                 const confirmed = await this.waitForBrokerPosition(dealId);
@@ -100,15 +88,10 @@ export class RiskService {
         }
     }
 
-    /**
-     * Poll the broker until the dealId appears in the positions list.
-     * Prevents 404s when the broker hasn't persisted the position yet.
-     */
     private async waitForBrokerPosition(dealId: string): Promise<boolean> {
         const client = api.client;
         if (!client) return false;
 
-        // Exponential backoff: 100, 200, 400, 800, 1600, 3200ms (~6.3s total)
         let delay = 100;
         const maxDelay = 3200;
 
@@ -120,7 +103,7 @@ export class RiskService {
                     return true;
                 }
             } catch {
-                // Network error — keep trying
+
             }
             log.info(`[RiskService] Position ${dealId} not yet at broker (waited ${delay}ms)`);
             delay *= 2;

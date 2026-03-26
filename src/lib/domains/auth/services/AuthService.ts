@@ -37,7 +37,7 @@ export async function login(type: URL_TYPE): Promise<SessionTokens> {
 }
 
 export async function authenticateAndStoreSession(): Promise<void> {
-    // Check if we even have credentials saved, will throw if not
+
     session.getCredentials();
 
     const lastLogin = session.getTimestamp();
@@ -45,7 +45,6 @@ export async function authenticateAndStoreSession(): Promise<void> {
     const hasDemo = session.isAuthenticated(AUTH.DEMO_TYPE);
     const now = Date.now();
 
-    // Throttle: If we have tokens and were active recently, skip re-login
     if (hasReal && hasDemo && (now - lastLogin < AUTH.REST_PING_INTERVAL)) {
         return;
     }

@@ -9,31 +9,23 @@ export interface ViewState {
     priceSpan: number;
 }
 
-// Default to 2 hours if no span is known
 const DEFAULT_SPAN_SECONDS = 120 * 60;
 
 export class ChartCamera {
     private chart: IChartApi | null = null;
 
-    // "Tracking Mode" enforces the strict RESET layout (140px from right)
     private isTracking = true;
 
-    // We store the last known anchor to support resizing/restoring without new data
     private lastAnchorTime: number | null = null;
 
     init(chart: IChartApi) {
         this.chart = chart;
 
-        // Listen to user interaction to break strict tracking mode
         this.chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
             this.handleUserInteraction();
         });
     }
 
-    /**
-     * ATOMIC INITIALIZATION:
-     * Called strictly after MainSeries.setData() to fix the viewport immediately.
-     */
     initializeView(savedState: ViewState | null, liveTime: number) {
         if (!this.chart) return;
 
@@ -46,9 +38,6 @@ export class ChartCamera {
         }
     }
 
-    /**
-     * Called whenever history is prepended to the chart.
-     */
     maintainScrollPosition(barsAdded: number) {
         if (!this.chart || barsAdded <= 0) return;
 
@@ -63,14 +52,6 @@ export class ChartCamera {
         }
     }
 
-    /**
-     * Called by the system whenever new market data arrives (Live Tick).
-     *
-     * STRATEGY: "PASSIVE FOLLOW"
-     * 1. If strict `isTracking` is active, force the specific layout (Reset position).
-     * 2. If NOT tracking, check if the live candle is visible.
-     * 3. If visible, shift the view forward by the time difference to keep it in view relative to the screen.
-     */
     updateAnchor(newAnchorTime: number) {
         if (!newAnchorTime || !this.chart) return;
 
@@ -84,17 +65,12 @@ export class ChartCamera {
         }
     }
 
-    /**
-     * Resets the chart to the "Default" view:
-     * Sets strict tracking to TRUE.
-     */
     resetZoom(anchorTime: number) {
         if (!this.chart || !anchorTime) return;
 
         this.isTracking = true;
         this.lastAnchorTime = anchorTime;
 
-        // Force a specific span (Zoom Reset)
         const { from, to } = this.calculateTargetRange(anchorTime, DEFAULT_SPAN_SECONDS);
 
         this.chart.timeScale().setVisibleRange({
@@ -124,8 +100,6 @@ export class ChartCamera {
         this.chart = null;
     }
 
-    // --- Internal Logic ---
-
     private checkAndApplyPassiveFollow(oldTime: number, newTime: number) {
         if (!this.chart) return;
         const timeScale = this.chart.timeScale();
@@ -136,14 +110,11 @@ export class ChartCamera {
         const visibleFrom = range.from as number;
         const visibleTo = range.to as number;
 
-        // CHECK: Is the OLD live candle currently on screen?
-        // We use a small buffer to handle edge cases where it's just barely off-screen
-        const buffer = (visibleTo - visibleFrom) * 0.05; // 5% buffer
+        const buffer = (visibleTo - visibleFrom) * 0.05;
         const isLiveVisible = (oldTime >= visibleFrom - buffer) && (oldTime <= visibleTo + buffer);
 
         if (isLiveVisible) {
-            // PASSIVE FOLLOW: Shift the view forward by the exact time delta
-            // This makes the chart appear to "flow" without snapping the user's zoom or offset.
+
             const delta = newTime - oldTime;
 
             if (delta > 0) {
@@ -160,7 +131,6 @@ export class ChartCamera {
 
         this.restoreGeometry(state);
 
-        // Smart Resume: If the saved view was near the live edge, resume tracking.
         const distToLive = currentLiveTime - state.centerTime;
         const threshold = state.timeSpan / 2;
 
@@ -183,7 +153,6 @@ export class ChartCamera {
             const currentSpan = (range.to as number) - (range.from as number);
             const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, currentSpan);
 
-            // Tolerance check to see if user broke strict tracking
             const tolerance = currentSpan * 0.01;
             const drift = Math.abs((range.to as number) - idealTo);
 

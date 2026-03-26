@@ -9,13 +9,6 @@ export class CandleAggregator {
         this.liveCandle = candle ? { ...candle } : null;
     }
 
-    /**
-     * Merges server data into the live candle.
-     * API open is authoritative (real minute-start price).
-     * High/low take the best of both sources.
-     * Close is untouched — the latest tick is always more current.
-     * Returns true if the candle was actually modified.
-     */
     merge(external: ChartCandle): boolean {
         if (!this.liveCandle) {
             this.liveCandle = { ...external };
@@ -102,11 +95,6 @@ export class CandleAggregator {
         return a.time === b.time;
     }
 
-    /**
-     * API open is authoritative (first trade of the minute).
-     * High/low take the best of both sources (tick may have seen extremes API hasn't reported yet, or vice versa).
-     * Close is untouched — the latest tick is always more current than the API snapshot.
-     */
     private mergeCandleState(external: ChartCandle) {
         if (!this.liveCandle) return;
 

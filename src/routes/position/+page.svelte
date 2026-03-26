@@ -13,17 +13,16 @@
     onMount(async () => {
         const epic = session.lastEpic;
         if (epic) {
-            // Configure poller context
+
             positionPoller.setEpic(epic);
 
             await Promise.all([
                 accountStore.init(),
-                // Manual refresh on mount
+
                 positionPoller.refresh()
             ]);
         }
 
-        // Local polling for UI responsiveness
         pollInterval = setInterval(() => {
             positionPoller.refresh();
         }, 1000);

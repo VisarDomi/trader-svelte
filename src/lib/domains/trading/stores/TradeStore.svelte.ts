@@ -3,7 +3,7 @@ import { api } from '$lib/core/services/ApiService.svelte.js';
 import { TradePlanner, type PlannedTrade } from '$lib/features/trade-execution/TradePlanner.js';
 import { TradeExecutor } from '$lib/features/trade-execution/TradeExecutor.js';
 import { MarketMapper } from '$lib/domains/market/domain/MarketMapper.js';
-import { bus } from '$lib/core/events/globalBus.js'; // NEW: Event Bus
+import { bus } from '$lib/core/events/globalBus.js';
 
 import * as TRADING from '$lib/shared/constants/trading.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
@@ -12,7 +12,6 @@ import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 
 import { accountStore } from './AccountStore.svelte.js';
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
-// REMOVED: import { positionStore } from './position.svelte.js';
 
 interface TradeDraft {
     direction: Direction;
@@ -137,14 +136,13 @@ export class TradeStore {
 
             this.cancel();
 
-            // NEW: Emit event instead of modifying other stores directly
             bus.emit(EVENTS.TRADE_EXECUTED, result);
 
             return result;
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            // NEW: Emit failure event
+
             bus.emit(EVENTS.TRADE_FAILED, { reason: msg });
             notifications.error(msg);
             return null;

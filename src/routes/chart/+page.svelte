@@ -5,10 +5,8 @@
     import TradePopup from '$lib/features/trade-execution/TradePopup.svelte';
     import * as CHART_CONST from '$lib/shared/constants/chart.js';
 
-    // Singletons for template binding
     import { tradeManager } from '$lib/domains/trading/stores/TradeStore.svelte.js';
 
-    // We instantiate logic without args now
     const logic = new ChartLogic();
 
     let chartContainer: HTMLDivElement;

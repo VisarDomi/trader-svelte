@@ -10,7 +10,6 @@ export class StreamClient {
     private ws: WebSocket | null = null;
     private pingInterval: ReturnType<typeof setInterval> | null = null;
 
-    // Resilience State
     private isIntentionalClose = false;
     private retryCount = 0;
     private readonly MAX_RETRIES = 10;
@@ -53,7 +52,7 @@ export class StreamClient {
         }
 
         if (this.ws) {
-            // Remove listeners to prevent "onclose" triggering reconnect
+
             this.ws.onopen = null;
             this.ws.onmessage = null;
             this.ws.onerror = null;
@@ -68,7 +67,7 @@ export class StreamClient {
 
     private handleOpen = () => {
         serverLog({ tag: LogEvent.StreamOpen, epic: this.epic });
-        this.retryCount = 0; // Reset backoff on success
+        this.retryCount = 0;
         this.subscribe();
         this.startPing();
     };
@@ -89,7 +88,7 @@ export class StreamClient {
     };
 
     private handleError = (event: Event) => {
-        // WS errors are usually followed by Close, which handles the retry.
+
         log.warn("[StreamClient] Socket Error", event);
     };
 
@@ -110,7 +109,7 @@ export class StreamClient {
             return;
         }
 
-        const delay = Math.min(this.BASE_DELAY * Math.pow(1.5, this.retryCount), 30000); // Cap at 30s
+        const delay = Math.min(this.BASE_DELAY * Math.pow(1.5, this.retryCount), 30000);
         serverLog({ tag: LogEvent.StreamRetry, epic: this.epic, attempt: this.retryCount + 1, delayMs: delay });
 
         this.reconnectTimer = setTimeout(() => {

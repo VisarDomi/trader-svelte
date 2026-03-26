@@ -6,10 +6,6 @@ import type { LineData } from '$lib/features/chart-drawings/types';
 const PROFIT_COLOR = "#22958a";
 const LOSS_COLOR = "#bf4240";
 
-/**
- * Pure function to calculate current price line data.
- * Replaces the Class implementation to reduce object allocation in the hot render loop.
- */
 export function calculateCurrentPriceLine(
     position: PositionBody,
     currentPrice: number,

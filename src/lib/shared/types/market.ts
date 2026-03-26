@@ -43,11 +43,9 @@ export interface QuoteMessage {
         bidQty: number;
         ofr: number;
         ofrQty: number;
-        timestamp: number; // Milliseconds
+        timestamp: number;
     }
 }
-
-// --- Detailed Market Types ---
 
 export interface MarketOpeningHours {
     zone: string;
@@ -72,18 +70,18 @@ export interface MarketInstrument {
     symbol: string;
     name: string;
     lotSize: number;
-    type: string; // e.g., "COMMODITIES", "INDICES"
+    type: string;
     guaranteedStopAllowed: boolean;
     streamingPricesAvailable: boolean;
     currency: string;
     marginFactor: number;
-    marginFactorUnit: string; // "PERCENTAGE"
+    marginFactorUnit: string;
     openingHours: MarketOpeningHours;
     overnightFee?: MarketOvernightFee;
 }
 
 export interface DealingRuleValue {
-    unit: string; // "POINTS", "PERCENTAGE"
+    unit: string;
     value: number;
 }
 
@@ -100,7 +98,7 @@ export interface MarketDealingRules {
 }
 
 export interface MarketSnapshot {
-    marketStatus: string; // "TRADEABLE", "CLOSED"
+    marketStatus: string;
     netChange: number;
     percentageChange: number;
     updateTime: string;
@@ -119,8 +117,6 @@ export interface MarketDetailsResponse {
     dealingRules: MarketDealingRules;
     snapshot: MarketSnapshot;
 }
-
-// --- Bulk / Summary Types ---
 
 export interface MarketSummary {
     delayTime: number;

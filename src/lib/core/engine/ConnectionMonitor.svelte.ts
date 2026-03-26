@@ -32,7 +32,6 @@ export class ConnectionMonitor {
             this.onVisibilityChange?.(visible, 'visibilitychange');
         });
 
-        // iOS PWA: backup signals when visibilitychange doesn't fire on screen unlock
         window.addEventListener('pageshow', () => {
             if (document.visibilityState === 'visible' && !this.isVisible) {
                 this.isVisible = true;
@@ -50,6 +49,6 @@ export class ConnectionMonitor {
 
     destroy() {
         if (!browser) return;
-        // Cleanup if necessary (though usually this singleton lives forever)
+
     }
 }

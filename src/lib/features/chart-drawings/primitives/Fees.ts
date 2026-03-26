@@ -8,7 +8,6 @@ import {
 } from 'lightweight-charts';
 import * as CHART from '$lib/shared/constants/chart.js';
 
-// Shim for the fancy-canvas type used by lightweight-charts internal renderer
 interface CanvasRenderingTarget2D {
     useMediaCoordinateSpace: (
         callback: (scope: {
@@ -18,9 +17,8 @@ interface CanvasRenderingTarget2D {
     ) => void;
 }
 
-const FEE_LINE_COLOR = '#FF5252'; // Lighter, distinct red
+const FEE_LINE_COLOR = '#FF5252';
 const FEE_TEXT_COLOR = '#FFFFFF';
-
 
 class FeeLineRenderer implements IPrimitivePaneRenderer {
     constructor(
@@ -37,12 +35,11 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
 
             ctx.save();
 
-            // 1. Draw Vertical Line
             ctx.beginPath();
             ctx.strokeStyle = FEE_LINE_COLOR;
             ctx.lineWidth = 2;
             const dashPattern: number[] = [];
-            ctx.setLineDash(dashPattern); // no dash
+            ctx.setLineDash(dashPattern);
 
             const sharpX = Math.round(this.x as number) + 0.5;
 
@@ -50,17 +47,14 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
             ctx.lineTo(sharpX, height);
             ctx.stroke();
 
-            // 2. Draw Labels
             ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            // Draw Bottom Label (Time)
             if (this.bottomLabel) {
                 this.drawLabel(ctx, this.bottomLabel, sharpX, height - 20);
             }
 
-            // Draw Top Label (Fee Amount)
             if (this.topLabel) {
                 this.drawLabel(ctx, this.topLabel, sharpX, CHART.TOP_LABEL_OFFSET);
             }
@@ -79,10 +73,9 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
         const left = x - (boxWidth / 2);
         const top = y - (boxHeight / 2);
 
-        // Background Box (Rounded Rectangle)
         ctx.fillStyle = FEE_LINE_COLOR;
         ctx.beginPath();
-        const r = 4; // corner radius
+        const r = 4;
         ctx.moveTo(left + r, top);
         ctx.lineTo(left + boxWidth - r, top);
         ctx.quadraticCurveTo(left + boxWidth, top, left + boxWidth, top + r);
@@ -94,9 +87,8 @@ class FeeLineRenderer implements IPrimitivePaneRenderer {
         ctx.quadraticCurveTo(left, top, left + r, top);
         ctx.fill();
 
-        // Text
         ctx.fillStyle = FEE_TEXT_COLOR;
-        ctx.fillText(text, x, y + 1); // +1 for visual vertical alignment
+        ctx.fillText(text, x, y + 1);
     }
 }
 
@@ -116,7 +108,7 @@ class FeeLinePaneView implements IPrimitivePaneView {
         let x: number | null = null;
 
         if (time && chart) {
-            // Convert time to pixel coordinate
+
             x = chart.timeScale().timeToCoordinate(time as Time);
         }
 
@@ -145,8 +137,6 @@ export class Fees implements ISeriesPrimitive {
         this.formattedTime = formattedTime;
         this.label = label;
     }
-
-    // --- ISeriesPrimitive Implementation ---
 
     attached(param: SeriesAttachedParameter): void {
         this.chart = param.chart;
