@@ -8,13 +8,11 @@ import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class MarketStore extends BaseStore {
 
-    // --- High-frequency reactive state (every tick) ---
     bid = $state(0);
     offer = $state(0);
     lastCandle = $state.raw<ChartCandle | null>(null);
     updateTrigger = $state(0);
 
-    // --- Low-frequency reactive state (history mutations only) ---
     history = $state.raw<ChartCandle[]>([]);
     historyVersion = $state(0);
     pendingPrependCount = $state(0);
@@ -24,7 +22,6 @@ export class MarketStore extends BaseStore {
     marketStatus = $state("CLOSED");
     epic = $state("");
 
-    // --- Private backing data (mutable, never aliased to reactive state) ---
     private _bidHistory: ChartCandle[] = [];
     private _askHistory: ChartCandle[] = [];
     private _liveBidCandle: ChartCandle | null = null;
@@ -158,8 +155,6 @@ export class MarketStore extends BaseStore {
         this.bid = u.bid;
         this.offer = u.offer;
 
-        // Candle completion: append to backing arrays and publish new snapshot.
-        // This happens at most once per minute — the spread cost is negligible.
         const hasCompletion = u.completedBid || u.completedAsk;
         if (u.completedBid) this._bidHistory = [...this._bidHistory, u.completedBid];
         if (u.completedAsk) this._askHistory = [...this._askHistory, u.completedAsk];
@@ -190,7 +185,6 @@ export class MarketStore extends BaseStore {
         if (this._liveAskCandle) this.offer = this._liveAskCandle.close;
     }
 
-    /** Snapshot the active backing array into `history` — always a new reference. */
     private publishHistory() {
         const prevCandles = this.history.length;
 
@@ -203,7 +197,6 @@ export class MarketStore extends BaseStore {
         }
         this.historyVersion++;
 
-        // Log on initial load, first sync, or when candle count jumps (restore/gap fill)
         const delta = Math.abs(this.history.length - prevCandles);
         if (this.historyVersion <= 2 || delta > 5) {
             serverLog({
@@ -217,7 +210,6 @@ export class MarketStore extends BaseStore {
         }
     }
 
-    /** Update only the live candle — no history snapshot needed. */
     private publishLiveCandle() {
         if (this.dataSource === TRADING.CHART_DATA_SOURCE_OFR) {
             this.lastCandle = this._liveAskCandle;

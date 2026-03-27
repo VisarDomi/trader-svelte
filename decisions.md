@@ -10,6 +10,10 @@
 
 **AccountStore localStorage as source of truth**: AccountStore loads accounts from the API but enforces localStorage as the absolute source of truth for which account is active. Server session may not match our localStorage selection (e.g. after a fresh login created a default-account session) — we detect this mismatch and call switchAccount to fix it.
 
+**MarketStore backing arrays are never aliased to reactive state**: `_bidHistory`/`_askHistory` are private mutable arrays. `publishHistory()` always creates a new array via spread when assigning to `history` ($state.raw). This prevents the aliased-mutation bug where in-place `.push()` on the backing array is invisible to Svelte's reference-equality tracking. High-frequency ticks only update `lastCandle` via `publishLiveCandle()` — no history snapshot needed. Candle completion (once/minute) is the only tick-path that calls `publishHistory()`.
+
+**ChartRenderer uses historyVersion, not array heuristics**: The chart tracks `renderedVersion` against `marketStore.historyVersion` to decide when to call `setData()`. No epic comparison, no `hasInitializedView` flag, no `lastFirstTime` — just version mismatch = render.
+
 **ChartStateManager owns staleness check**: This class owns the saved state, so it owns the staleness check. If the last data at save time is >24h old, the view is stale — discard it rather than restoring a misleading viewport.
 
 **LiveEdgePlugin is a sensor, not an actor**: It detects new data and notifies the Camera. It does NOT manipulate the chart directly. The Camera owns the viewport.
@@ -18,11 +22,9 @@
 
 ## iOS PWA Workarounds
 
-**MarketDataPump bypasses Svelte reactivity for history injection**: The chartAdapter callback injects history into the chart synchronously. Reactive updates via Svelte $effects are too slow (microtasks), causing visible scroll-glitching on iOS. DO NOT REFACTOR TO USE STORES FOR HISTORICAL DATA INJECTION.
+**Chart history prepend scroll correction**: LWC resets the view to Index 0 when data is prepended via setData(). MarketStore tracks `pendingPrependCount` and ChartRenderer calls `camera.maintainScrollPosition()` in the same effect that calls setData() — both happen in one Svelte effect tick, so the viewport shift is atomic from the user's perspective.
 
-**ChartController atomic history loading**: Standard LWC behavior resets the view to Index 0 when data is prepended. We solve this by calling setData() and shifting the camera viewport in the SAME execution frame, bypassing the reactive render loop.
-
-**ChartPluginManager skips setData for prepends**: The MarketDataPump + ChartController have already handled the data update and viewport shift atomically via a direct callback. Doing it again in $effect would cause a "teleport" glitch due to async nature.
+**TOP_LABEL_OFFSET is 50px**: Increased from 20 to provide iOS safe area inset for the chart HUD.
 
 **ChartController crosshair guard**: LWC attaches mousemove/pointermove listeners to the document, not just its canvas. iOS fires synthetic mouse events from overlay touches that reach those document-level listeners. Instead of fighting DOM events, we let LWC process them but immediately clear the crosshair result when overlays are active.
 
@@ -45,6 +47,8 @@
 **AuthStore validates both modes**: validateSession validates BOTH Real and Demo modes so that loadAll() doesn't fail with stale tokens for the non-active mode.
 
 ## Logging
+
+**No log.info — all server logging goes through typed serverLog events**: `log.info` was removed. If something is worth logging to the server, it must have a typed `LogEntry` variant in the discriminated union. `log.warn` and `log.error` remain for boundary failures that can't be predicted at design time. `history-publish` and `chart-render` events are throttled to only fire on initial load, first sync, or significant candle count changes.
 
 **LogBuffer ownership model**: buffer[] holds entries waiting to be sent. inFlight[] holds entries currently in a fetch() call (temporarily transferred). On fetch success, inFlight is dropped. On fetch failure, inFlight is reclaimed back into buffer. On page hide, getAllPending() (inFlight + buffer) is persisted to sessionStorage and beacon-flushed — no entry is ever unowned.
 

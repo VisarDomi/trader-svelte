@@ -1,1 +1,1 @@
-export const DEFAULT_ERROR = "error ..." // TODO: add logging, but not now
+export const DEFAULT_ERROR = "error ..."

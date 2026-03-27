@@ -22,7 +22,7 @@ export interface PositionBody {
     profitLevel?: number;
     stopDistance?: number;
     profitDistance?: number;
-    initialBalance?: number; // Injected client-side
+    initialBalance?: number;
 }
 
 export interface PositionMarket {

@@ -44,7 +44,6 @@ export class ChartRenderer {
         this.features.push(new LiveEdgePlugin(this.camera));
         this.features.push(new ClockPlugin());
 
-        // High-frequency: update live candle + plugins on every tick
         $effect(() => {
             if (!this.context || !this.series) return;
 
@@ -62,7 +61,6 @@ export class ChartRenderer {
             }
         });
 
-        // Low-frequency: setData when historyVersion changes
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
             const history = this.marketStore.history;
