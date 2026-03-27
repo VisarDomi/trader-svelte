@@ -13,8 +13,6 @@ import { viewport } from "$lib/core/services/ViewportService.svelte.js";
 import { ChartCamera } from "$lib/components/chart-engine/ChartCamera.js";
 import { bus } from '$lib/core/events/globalBus.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
-import type { ChartCandle } from '$lib/shared/types/market.js';
-
 export class ChartController {
     private _chart: IChartApi | null = null;
     private _series: ISeriesApi<"Candlestick"> | null = null;
@@ -74,22 +72,6 @@ export class ChartController {
                 }, 400);
             })
         );
-    }
-
-    prependData(mergedData: ChartCandle[], newCandleCount: number) {
-        if (!this._chart || !this._series) return;
-
-        const timeScale = this._chart.timeScale();
-        const currentRange = timeScale.getVisibleLogicalRange();
-
-        this._series.setData(mergedData);
-
-        if (currentRange) {
-            timeScale.setVisibleLogicalRange({
-                from: currentRange.from + newCandleCount,
-                to: currentRange.to + newCandleCount
-            });
-        }
     }
 
     createMainSeries(precision: number) {

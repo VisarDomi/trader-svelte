@@ -16,8 +16,6 @@ import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 const STALE_THRESHOLD_MS = 10000;
 const LIVENESS_CHECK_INTERVAL = 2000;
 
-type ChartPrependCallback = (data: ChartCandle[], offset: number) => void;
-
 export class MarketDataPump {
     private feed: MarketFeed;
     private epic: string = "";
@@ -33,18 +31,8 @@ export class MarketDataPump {
     isLoadingHistory = false;
     isHistoryExhausted = false;
 
-    private chartAdapter: ChartPrependCallback | null = null;
-
     constructor() {
         this.feed = new MarketFeed((update) => this.handleFeedUpdate(update));
-    }
-
-    registerChartAdapter(callback: ChartPrependCallback) {
-        this.chartAdapter = callback;
-    }
-
-    unregisterChartAdapter() {
-        this.chartAdapter = null;
     }
 
     async load(epic: string, dataSource: ChartData = TRADING.CHART_DATA_SOURCE_BID) {
@@ -106,13 +94,7 @@ export class MarketDataPump {
                     this.isHistoryExhausted = true;
                 } else {
                     log.info(`[MarketDataPump] Prepending ${filteredBid.length} new candles.`);
-
                     marketStore.dispatch(marketCmd.prependHistory(filteredBid, filteredAsk));
-
-                    if (this.chartAdapter) {
-                        const activeHistory = marketStore.history;
-                        this.chartAdapter(activeHistory, filteredBid.length);
-                    }
                 }
             }
 

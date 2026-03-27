@@ -24,6 +24,9 @@ export const LogEvent = {
     StreamClose: 'stream-close',
     StreamRetry: 'stream-retry',
     StreamExhausted: 'stream-exhausted',
+
+    HistoryPublish: 'history-publish',
+    ChartRender: 'chart-render',
 } as const;
 
 export type LogEntry =
@@ -42,7 +45,9 @@ export type LogEntry =
     | { tag: typeof LogEvent.StreamOpen; epic: string }
     | { tag: typeof LogEvent.StreamClose; epic: string; code: number; intentional: boolean }
     | { tag: typeof LogEvent.StreamRetry; epic: string; attempt: number; delayMs: number }
-    | { tag: typeof LogEvent.StreamExhausted; epic: string; attempts: number };
+    | { tag: typeof LogEvent.StreamExhausted; epic: string; attempts: number }
+    | { tag: typeof LogEvent.HistoryPublish; source: string; version: number; candles: number; oldestTime: number; newestTime: number }
+    | { tag: typeof LogEvent.ChartRender; version: number; candles: number; isFirstRender: boolean; prependCount: number };
 
 const LOG_STORAGE_KEY = 'mt_log_buffer';
 const FLUSH_INTERVAL_MS = 2000;

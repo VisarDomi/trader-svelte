@@ -4,23 +4,27 @@ import type { ChartCandle } from '$lib/shared/types/market.js';
 import type { FeedUpdate } from '$lib/domains/market/services/MarketFeed.js';
 import { MarketCmd, type MarketCommand } from './MarketCommands.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class MarketStore extends BaseStore {
 
+    // --- High-frequency reactive state (every tick) ---
     bid = $state(0);
     offer = $state(0);
-
     lastCandle = $state.raw<ChartCandle | null>(null);
-    history = $state.raw<ChartCandle[]>([]);
-
-    isLoaded = $state(false);
     updateTrigger = $state(0);
 
-    dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
+    // --- Low-frequency reactive state (history mutations only) ---
+    history = $state.raw<ChartCandle[]>([]);
+    historyVersion = $state(0);
+    pendingPrependCount = $state(0);
 
+    isLoaded = $state(false);
+    dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
     marketStatus = $state("CLOSED");
     epic = $state("");
 
+    // --- Private backing data (mutable, never aliased to reactive state) ---
     private _bidHistory: ChartCandle[] = [];
     private _askHistory: ChartCandle[] = [];
     private _liveBidCandle: ChartCandle | null = null;
@@ -90,6 +94,8 @@ export class MarketStore extends BaseStore {
         this.lastCandle = null;
         this.updateTrigger = 0;
         this.history = [];
+        this.historyVersion = 0;
+        this.pendingPrependCount = 0;
         this._bidHistory = [];
         this._askHistory = [];
         this._liveBidCandle = null;
@@ -111,17 +117,15 @@ export class MarketStore extends BaseStore {
         this._bidHistory = bid;
         this._askHistory = ask;
         this.recalcLiveState();
-        this.syncViewToSource();
+        this.publishHistory();
         this.updateTrigger++;
     }
 
     private _prependHistory(bid: ChartCandle[], ask: ChartCandle[]) {
-
         this._bidHistory = [...bid, ...this._bidHistory];
         this._askHistory = [...ask, ...this._askHistory];
-
-        this.syncViewToSource();
-
+        this.pendingPrependCount = bid.length;
+        this.publishHistory();
         this.updateTrigger++;
     }
 
@@ -137,21 +141,16 @@ export class MarketStore extends BaseStore {
         const merge = (oldArr: ChartCandle[], newArr: ChartCandle[]) => {
             if (oldArr.length === 0) return newArr;
             const firstNewTime = newArr[0].time;
-
             const cutOffIndex = oldArr.findIndex(c => c.time >= firstNewTime);
-
             if (cutOffIndex === -1) {
-
                 return [...oldArr, ...newArr];
             }
-
             return [...oldArr.slice(0, cutOffIndex), ...newArr];
         };
 
         this._bidHistory = merge(this._bidHistory, newBid);
         this._askHistory = merge(this._askHistory, newAsk);
-
-        this.syncViewToSource();
+        this.publishHistory();
         this.updateTrigger++;
     }
 
@@ -159,14 +158,20 @@ export class MarketStore extends BaseStore {
         this.bid = u.bid;
         this.offer = u.offer;
 
-        if (u.completedBid) this._bidHistory.push(u.completedBid);
-        if (u.completedAsk) this._askHistory.push(u.completedAsk);
+        // Candle completion: append to backing arrays and publish new snapshot.
+        // This happens at most once per minute — the spread cost is negligible.
+        const hasCompletion = u.completedBid || u.completedAsk;
+        if (u.completedBid) this._bidHistory = [...this._bidHistory, u.completedBid];
+        if (u.completedAsk) this._askHistory = [...this._askHistory, u.completedAsk];
 
         this._liveBidCandle = u.liveBid;
         this._liveAskCandle = u.liveAsk;
 
         if (this.isLoaded) {
-            this.syncViewToSource();
+            if (hasCompletion) {
+                this.publishHistory();
+            }
+            this.publishLiveCandle();
             this.updateTrigger++;
         }
     }
@@ -174,7 +179,7 @@ export class MarketStore extends BaseStore {
     private _setDataSource(source: ChartData) {
         if (this.dataSource === source) return;
         this.dataSource = source;
-        this.syncViewToSource();
+        this.publishHistory();
     }
 
     private recalcLiveState() {
@@ -185,12 +190,31 @@ export class MarketStore extends BaseStore {
         if (this._liveAskCandle) this.offer = this._liveAskCandle.close;
     }
 
-    private syncViewToSource() {
+    /** Snapshot the active backing array into `history` — always a new reference. */
+    private publishHistory() {
         if (this.dataSource === TRADING.CHART_DATA_SOURCE_OFR) {
-            this.history = this._askHistory;
+            this.history = [...this._askHistory];
             this.lastCandle = this._liveAskCandle;
         } else {
-            this.history = this._bidHistory;
+            this.history = [...this._bidHistory];
+            this.lastCandle = this._liveBidCandle;
+        }
+        this.historyVersion++;
+        serverLog({
+            tag: LogEvent.HistoryPublish,
+            source: this.dataSource,
+            version: this.historyVersion,
+            candles: this.history.length,
+            oldestTime: this.history.length > 0 ? this.history[0].time : 0,
+            newestTime: this.history.length > 0 ? this.history[this.history.length - 1].time : 0,
+        });
+    }
+
+    /** Update only the live candle — no history snapshot needed. */
+    private publishLiveCandle() {
+        if (this.dataSource === TRADING.CHART_DATA_SOURCE_OFR) {
+            this.lastCandle = this._liveAskCandle;
+        } else {
             this.lastCandle = this._liveBidCandle;
         }
     }

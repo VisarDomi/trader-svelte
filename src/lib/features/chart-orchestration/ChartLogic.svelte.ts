@@ -22,7 +22,6 @@ import { session } from '$lib/core/services/SessionManager.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
-import type { ChartCandle } from '$lib/shared/types/market.js';
 
 export class ChartLogic {
 
@@ -76,11 +75,6 @@ export class ChartLogic {
         this.configureLayout(container);
         this.stateManager.initListeners();
 
-        marketDataPump.registerChartAdapter((data: ChartCandle[], offset: number) => {
-
-            this.controller.prependData(data, offset);
-        });
-
         const lastEpic = session.lastEpic;
         if (lastEpic) {
             await this.loadAndApplyEpic(lastEpic);
@@ -95,8 +89,6 @@ export class ChartLogic {
 
     destroy() {
         this.cleanupEvents.forEach(fn => fn());
-
-        marketDataPump.unregisterChartAdapter();
 
         this.stateManager.destroy();
         this.interactionManager.cancelPlanning();

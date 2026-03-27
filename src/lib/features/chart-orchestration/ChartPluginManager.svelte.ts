@@ -8,6 +8,7 @@ import type { AccountStore } from '$lib/domains/trading/stores/AccountStore.svel
 import type { PositionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
 import type { TradeStore } from '$lib/domains/trading/stores/TradeStore.svelte.js';
 import type { ChartStateManager } from "$lib/features/chart-orchestration/ChartStateManager.svelte.js";
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 import { PositionLines } from "$lib/features/chart-drawings/plugins/PositionLines.js";
 import { CurrentPrice } from "$lib/features/chart-drawings/plugins/CurrentPrice.js";
@@ -22,10 +23,8 @@ export class ChartRenderer {
     private series = $state<ISeriesApi<"Candlestick"> | null>(null);
     private context = $state<ChartContext | null>(null);
 
-    private currentEpic = "";
-    private hasInitializedView = false;
-
-    private lastFirstTime = 0;
+    private renderedVersion = 0;
+    private viewInitialized = false;
 
     private features: Types[] = [];
 
@@ -45,6 +44,7 @@ export class ChartRenderer {
         this.features.push(new LiveEdgePlugin(this.camera));
         this.features.push(new ClockPlugin());
 
+        // High-frequency: update live candle + plugins on every tick
         $effect(() => {
             if (!this.context || !this.series) return;
 
@@ -62,41 +62,36 @@ export class ChartRenderer {
             }
         });
 
+        // Low-frequency: setData when historyVersion changes
         $effect(() => {
             const loaded = this.marketStore.isLoaded;
-
             const history = this.marketStore.history;
-            const epic = this.marketStore.epic;
+            const version = this.marketStore.historyVersion;
 
-            if (epic !== this.currentEpic) {
-                this.currentEpic = epic;
-                this.hasInitializedView = false;
-                this.lastFirstTime = 0;
-            }
+            if (!this.series || !loaded || history.length === 0) return;
+            if (version === this.renderedVersion) return;
 
-            if (this.series && loaded && history.length > 0) {
-                const currentFirstTime = Number(history[0].time);
+            const isFirstRender = this.renderedVersion === 0;
+            this.renderedVersion = version;
 
-                if (!this.hasInitializedView) {
-                    this.series.setData(history);
+            const prependCount = this.marketStore.pendingPrependCount;
+            this.series.setData(history);
+            serverLog({
+                tag: LogEvent.ChartRender,
+                version,
+                candles: history.length,
+                isFirstRender,
+                prependCount,
+            });
 
-                    const savedState = this.stateManager.loadState();
-                    const lastTime = Number(history[history.length - 1].time);
-
-                    this.camera.initializeView(savedState, lastTime);
-                    this.hasInitializedView = true;
-                    this.lastFirstTime = currentFirstTime;
-                    return;
-                }
-
-                if (currentFirstTime < this.lastFirstTime) {
-
-                    this.lastFirstTime = currentFirstTime;
-                    return;
-                }
-
-                this.series.setData(history);
-                this.lastFirstTime = currentFirstTime;
+            if (isFirstRender || !this.viewInitialized) {
+                const savedState = this.stateManager.loadState();
+                const lastTime = Number(history[history.length - 1].time);
+                this.camera.initializeView(savedState, lastTime);
+                this.viewInitialized = true;
+            } else if (prependCount > 0) {
+                this.camera.maintainScrollPosition(prependCount);
+                this.marketStore.pendingPrependCount = 0;
             }
         });
     }
@@ -105,6 +100,8 @@ export class ChartRenderer {
         this.chart = chart;
         this.series = series;
         this.context = context;
+        this.renderedVersion = 0;
+        this.viewInitialized = false;
 
         for (const feature of this.features) {
             feature.mount(chart, series);
