@@ -192,6 +192,8 @@ export class MarketStore extends BaseStore {
 
     /** Snapshot the active backing array into `history` — always a new reference. */
     private publishHistory() {
+        const prevCandles = this.history.length;
+
         if (this.dataSource === TRADING.CHART_DATA_SOURCE_OFR) {
             this.history = [...this._askHistory];
             this.lastCandle = this._liveAskCandle;
@@ -200,14 +202,19 @@ export class MarketStore extends BaseStore {
             this.lastCandle = this._liveBidCandle;
         }
         this.historyVersion++;
-        serverLog({
-            tag: LogEvent.HistoryPublish,
-            source: this.dataSource,
-            version: this.historyVersion,
-            candles: this.history.length,
-            oldestTime: this.history.length > 0 ? this.history[0].time : 0,
-            newestTime: this.history.length > 0 ? this.history[this.history.length - 1].time : 0,
-        });
+
+        // Log on initial load, first sync, or when candle count jumps (restore/gap fill)
+        const delta = Math.abs(this.history.length - prevCandles);
+        if (this.historyVersion <= 2 || delta > 5) {
+            serverLog({
+                tag: LogEvent.HistoryPublish,
+                source: this.dataSource,
+                version: this.historyVersion,
+                candles: this.history.length,
+                oldestTime: this.history.length > 0 ? this.history[0].time : 0,
+                newestTime: this.history.length > 0 ? this.history[this.history.length - 1].time : 0,
+            });
+        }
     }
 
     /** Update only the live candle — no history snapshot needed. */

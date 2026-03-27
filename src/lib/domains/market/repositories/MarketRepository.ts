@@ -15,28 +15,21 @@ export class MarketRepository {
     constructor(private client: ApiClient) {}
 
     async getHistory(epic: string, signal?: AbortSignal): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
-
         const toStr = this.formatDateForApi(DateTime.utc());
-        log.info(`[MarketRepository] Fetching INITIAL history for ${epic} up to ${toStr}`);
         return this.fetchAndMap(epic, toStr, signal);
     }
 
     async getHistoryBefore(epic: string, beforeTime: UTCTimestamp, signal?: AbortSignal): Promise<{ bid: ChartCandle[], ask: ChartCandle[] }> {
-
         const dt = DateTime.fromSeconds(beforeTime, { zone: 'utc' });
         const toStr = this.formatDateForApi(dt);
-
-        log.info(`[MarketRepository] Fetching OLDER history for ${epic} ending at ${toStr} (Unix: ${beforeTime})`);
         return this.fetchAndMap(epic, toStr, signal);
     }
 
     private formatDateForApi(dt: DateTime): string {
-
         return dt.toFormat("yyyy-MM-dd'T'HH:mm:ss");
     }
 
     private async fetchAndMap(epic: string, toStr: string, signal?: AbortSignal) {
-
         const params = {
             [API.RESOLUTION_KEY]: API.RESOLUTION_MINUTE,
             [API.MAX_KEY]: API.MAX_ROWS,
@@ -46,9 +39,6 @@ export class MarketRepository {
         const endpoint = `${API.PRICES_ENDPOINT}/${epic}`;
 
         try {
-
-            log.info(`[MarketRepository] GET ${endpoint}`, JSON.stringify(params));
-
             const data = await this.client.get<MarketPriceResponse>(endpoint, params, signal);
 
             if (!data.prices || data.prices.length === 0) {
@@ -60,18 +50,13 @@ export class MarketRepository {
                 new Date(a.snapshotTimeUTC).getTime() - new Date(b.snapshotTimeUTC).getTime()
             );
 
-            const first = sorted[0].snapshotTimeUTC;
-            const last = sorted[sorted.length - 1].snapshotTimeUTC;
-            log.info(`[MarketRepository] Received ${data.prices.length} candles. Range: ${first} -> ${last}`);
-
             return {
                 bid: this.mapToCandles(sorted, TRADING.CHART_DATA_SOURCE_BID),
                 ask: this.mapToCandles(sorted, TRADING.CHART_DATA_SOURCE_OFR)
             };
 
         } catch (e) {
-
-            log.error("[MarketRepository] Fetch failed details:", e);
+            log.error("[MarketRepository] Fetch failed:", e);
             return { bid: [], ask: [] };
         }
     }

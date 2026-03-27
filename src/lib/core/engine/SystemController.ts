@@ -7,13 +7,10 @@ import { marketCmd } from '$lib/domains/market/stores/MarketCommands.js';
 import { bus } from '$lib/core/events/globalBus.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
-import { log } from '$lib/shared/utils/log.js';
 
 export class SystemController {
 
     static wakeUp() {
-        log.info('[SystemController] Waking up...');
-
         if (session.lastEpic) {
             positionPoller.setEpic(session.lastEpic);
         }
@@ -27,8 +24,6 @@ export class SystemController {
     }
 
     static hibernate() {
-        log.info('[SystemController] Hibernating...');
-
         positionPoller.stop();
 
         riskService.stop();
@@ -38,8 +33,6 @@ export class SystemController {
 
     static switchContext(newEpic: string) {
         if (session.lastEpic === newEpic && marketStore.isLoaded) return;
-
-        log.info(`[SystemController] Switching Context to ${newEpic}`);
 
         this.hibernate();
 
@@ -53,7 +46,6 @@ export class SystemController {
     }
 
     static restart() {
-        log.info('[SystemController] Restarting system...');
         this.hibernate();
 
         if (session.lastEpic) {

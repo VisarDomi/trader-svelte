@@ -76,13 +76,16 @@ export class ChartRenderer {
 
             const prependCount = this.marketStore.pendingPrependCount;
             this.series.setData(history);
-            serverLog({
-                tag: LogEvent.ChartRender,
-                version,
-                candles: history.length,
-                isFirstRender,
-                prependCount,
-            });
+
+            if (isFirstRender || version <= 2 || prependCount > 0) {
+                serverLog({
+                    tag: LogEvent.ChartRender,
+                    version,
+                    candles: history.length,
+                    isFirstRender,
+                    prependCount,
+                });
+            }
 
             if (isFirstRender || !this.viewInitialized) {
                 const savedState = this.stateManager.loadState();

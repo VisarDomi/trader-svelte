@@ -78,8 +78,6 @@ export class MarketDataPump {
             return;
         }
 
-        log.info(`[MarketDataPump] Triggering history fetch. Anchor: ${anchorTime}`);
-
         try {
             const repo = new MarketRepository(client);
             const { bid, ask } = await repo.getHistoryBefore(this.epic, requestTime, this.abortController?.signal);
@@ -93,7 +91,6 @@ export class MarketDataPump {
                 if (filteredBid.length === 0) {
                     this.isHistoryExhausted = true;
                 } else {
-                    log.info(`[MarketDataPump] Prepending ${filteredBid.length} new candles.`);
                     marketStore.dispatch(marketCmd.prependHistory(filteredBid, filteredAsk));
                 }
             }
@@ -184,7 +181,7 @@ export class MarketDataPump {
             const gap = now - this.feed.lastUpdateTimestamp;
 
             if (gap > STALE_THRESHOLD_MS && marketStore.isLoaded && marketStore.marketStatus === 'TRADEABLE') {
-                log.warn(`[MarketDataPump] Zombie socket detected (Gap: ${gap}ms). Restarting...`);
+                serverLog({ tag: LogEvent.ZombieSocket, gapMs: gap });
                 this.connect();
             }
         }, LIVENESS_CHECK_INTERVAL);
@@ -267,9 +264,9 @@ export class MarketDataPump {
         this.hasPreviousBarGap = liveTime > 0 && lastHistoryTime > 0 && (liveTime - lastHistoryTime) > 60;
 
         if (hadGap && !this.hasPreviousBarGap) {
-            log.info('[MarketDataPump] Previous bar gap filled');
+            serverLog({ tag: LogEvent.BarGap, state: 'filled', historyTime: lastHistoryTime, liveTime });
         } else if (!hadGap && this.hasPreviousBarGap) {
-            log.info(`[MarketDataPump] Previous bar gap detected (history: ${lastHistoryTime}, live: ${liveTime})`);
+            serverLog({ tag: LogEvent.BarGap, state: 'detected', historyTime: lastHistoryTime, liveTime });
         }
     }
 }

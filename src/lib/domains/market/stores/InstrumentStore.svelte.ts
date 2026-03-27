@@ -74,15 +74,12 @@ export class InstrumentStore extends BaseStore {
             let finalInstruments: MarketDetailsResponse[] = [];
 
             listResponses.forEach((r, index) => {
-
                 if (r.marketDetails && Array.isArray(r.marketDetails)) {
-                    log.info(`[InstrumentStore] Chunk ${index} returned full marketDetails.`);
                     finalInstruments = [...finalInstruments, ...r.marketDetails];
                     return;
                 }
 
                 if (r.markets && Array.isArray(r.markets)) {
-                    log.info(`[InstrumentStore] Chunk ${index} returned flat markets.`);
                     const mapped = r.markets.map(s => MarketMapper.fromSummary(s));
                     finalInstruments = [...finalInstruments, ...mapped];
                     return;

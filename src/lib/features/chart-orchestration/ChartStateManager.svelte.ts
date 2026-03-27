@@ -3,8 +3,6 @@ import type { ChartController } from '$lib/components/chart-engine/ChartControll
 import type { ViewState } from '$lib/components/chart-engine/ChartCamera.js';
 import type { ChartUI } from '$lib/components/chart-engine/ChartResizer.svelte.js';
 import { marketStore } from '$lib/domains/market/stores/MarketStore.svelte.js';
-import { log } from '$lib/shared/utils/log.js';
-
 const STALE_VIEW_THRESHOLD_S = 24 * 60 * 60;
 
 interface EnhancedViewState extends ViewState {
@@ -39,7 +37,6 @@ export class ChartStateManager {
             if (saved.lastDataTimeAtSave) {
                 const ageSeconds = (Date.now() / 1000) - saved.lastDataTimeAtSave;
                 if (ageSeconds > STALE_VIEW_THRESHOLD_S) {
-                    log.info(`[ChartStateManager] Saved view stale (${Math.round(ageSeconds / 3600)}h old), resetting`);
                     localStorage.removeItem(this.getStorageKey());
                     return null;
                 }

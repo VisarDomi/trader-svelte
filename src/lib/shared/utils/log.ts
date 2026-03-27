@@ -27,6 +27,10 @@ export const LogEvent = {
 
     HistoryPublish: 'history-publish',
     ChartRender: 'chart-render',
+
+    BarGap: 'bar-gap',
+    RiskCorrection: 'risk-correction',
+    ZombieSocket: 'zombie-socket',
 } as const;
 
 export type LogEntry =
@@ -47,7 +51,10 @@ export type LogEntry =
     | { tag: typeof LogEvent.StreamRetry; epic: string; attempt: number; delayMs: number }
     | { tag: typeof LogEvent.StreamExhausted; epic: string; attempts: number }
     | { tag: typeof LogEvent.HistoryPublish; source: string; version: number; candles: number; oldestTime: number; newestTime: number }
-    | { tag: typeof LogEvent.ChartRender; version: number; candles: number; isFirstRender: boolean; prependCount: number };
+    | { tag: typeof LogEvent.ChartRender; version: number; candles: number; isFirstRender: boolean; prependCount: number }
+    | { tag: typeof LogEvent.BarGap; state: 'detected' | 'filled'; historyTime: number; liveTime: number }
+    | { tag: typeof LogEvent.RiskCorrection; dealId: string; newLevel: number }
+    | { tag: typeof LogEvent.ZombieSocket; gapMs: number };
 
 const LOG_STORAGE_KEY = 'mt_log_buffer';
 const FLUSH_INTERVAL_MS = 2000;
@@ -203,7 +210,6 @@ function format(args: unknown[]): string {
 }
 
 export const log = {
-    info(...args: unknown[]) { logBuffer?.push('info', { message: format(args) }); },
     warn(...args: unknown[]) { logBuffer?.push('warn', { message: format(args) }); },
     error(...args: unknown[]) { logBuffer?.push('error', { message: format(args) }); },
 

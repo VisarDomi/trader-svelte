@@ -212,7 +212,6 @@ export class AccountStore extends BaseStore {
 
         this.activeAccount.balance.available = this.activeAccount.balance.deposit;
 
-        log.info(`[AccountStore] Optimistic Update applied. New Deposit: ${this.activeAccount.balance.deposit}`);
     }
 
     private async pollBalanceUpdate() {

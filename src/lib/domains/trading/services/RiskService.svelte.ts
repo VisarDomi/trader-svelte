@@ -8,7 +8,7 @@ import { api } from '$lib/core/services/ApiService.svelte.js';
 import { bus } from '$lib/core/events/globalBus.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
-import { log } from '$lib/shared/utils/log.js';
+import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class RiskService {
     private manager = new RiskManager();
@@ -18,7 +18,6 @@ export class RiskService {
 
     constructor() {
         bus.on(EVENTS.TRADE_EXECUTED, () => {
-            log.info('[RiskService] Trade executed event received. Running immediate risk check.');
             const pos = positionStore.anyActivePosition;
             if (pos) this.pendingDealId = pos.position.dealId;
             setTimeout(() => void this.checkRisk(), 100);
@@ -77,13 +76,12 @@ export class RiskService {
             const dealId = position.position.dealId;
 
             if (this.pendingDealId === dealId) {
-                log.info(`[RiskService] Correction needed. Waiting for broker to confirm position...`);
                 const confirmed = await this.waitForBrokerPosition(dealId);
                 this.pendingDealId = null;
                 if (!confirmed) return;
             }
 
-            log.info(`[RiskService] Updating SL to ${correction}`);
+            serverLog({ tag: LogEvent.RiskCorrection, dealId, newLevel: correction });
             await positionStore.updateStopLoss(correction);
         }
     }
@@ -105,7 +103,6 @@ export class RiskService {
             } catch {
 
             }
-            log.info(`[RiskService] Position ${dealId} not yet at broker (waited ${delay}ms)`);
             delay *= 2;
         }
 

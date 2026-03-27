@@ -39,7 +39,6 @@ export class PositionStore extends BaseStore {
                 if (prev && !cmd.globalPos && !this.isClosing) {
                     session.removeInitialBalance(prev.position.dealId);
                     bus.emit(EVENTS.POSITION_VANISHED, undefined as never);
-                    log.info('[PositionStore] Position vanished externally');
                 }
                 break;
             }
