@@ -70,11 +70,17 @@ export class ChartUI {
         const ts = this.chart.timeScale();
         const bs = ts.options().barSpacing;
         const lr = ts.getVisibleLogicalRange();
+        const tsWidth = ts.width();
+        const barsVisible = lr ? lr.to - lr.from : 0;
+        const effectiveBs = barsVisible > 0 && tsWidth > 0 ? tsWidth / barsVisible : 0;
         serverLog({
             tag: LogEvent.ChartResize,
             phase: label,
             barSpacing: bs,
-            logical: lr ? { from: lr.from, to: lr.to } : null,
+            tsWidth,
+            barsVisible: Math.round(barsVisible),
+            effectiveBs: Math.round(effectiveBs * 100) / 100,
+            logical: lr ? { from: Math.round(lr.from), to: Math.round(lr.to) } : null,
         });
     }
 
@@ -84,17 +90,15 @@ export class ChartUI {
 
         if (oldW === newW && oldH === newH) return;
 
-        this.readChartState(`1-before-cycle[${oldW}x${oldH}->${newW}x${newH}]`);
+        this.readChartState(`1-before[${oldW}x${oldH}->${newW}x${newH}]`);
 
         if (oldW > 0 && oldH > 0) {
             this.callbacks?.onBeforeResize?.(oldW, oldH);
         }
 
-        this.readChartState('2-after-capture');
-
         this.updateDimensions();
 
-        this.readChartState('3-after-chart-resize');
+        this.readChartState('2-after-resize');
 
         this.lastWidth = newW;
         this.lastHeight = newH;
@@ -103,21 +107,28 @@ export class ChartUI {
             this.callbacks?.onAfterResize?.(newW, newH);
         }
 
-        this.readChartState('4-after-apply-resize');
+        this.readChartState('3-after-apply');
 
         const chart = this.chart;
-        setTimeout(() => {
-            if (!chart) return;
-            const ts = chart.timeScale();
-            const bs = ts.options().barSpacing;
-            const lr = ts.getVisibleLogicalRange();
-            serverLog({
-                tag: LogEvent.ChartResize,
-                phase: '5-settled-100ms',
-                barSpacing: bs,
-                logical: lr ? { from: lr.from, to: lr.to } : null,
-            });
-        }, 100);
+        for (const delay of [50, 200, 500]) {
+            setTimeout(() => {
+                if (!chart) return;
+                const ts = chart.timeScale();
+                const bs = ts.options().barSpacing;
+                const lr = ts.getVisibleLogicalRange();
+                const tsWidth = ts.width();
+                const barsVisible = lr ? lr.to - lr.from : 0;
+                const effectiveBs = barsVisible > 0 && tsWidth > 0 ? tsWidth / barsVisible : 0;
+                serverLog({
+                    tag: LogEvent.ChartResize,
+                    phase: `4-settled-${delay}ms`,
+                    barSpacing: bs,
+                    tsWidth,
+                    barsVisible: Math.round(barsVisible),
+                    effectiveBs: Math.round(effectiveBs * 100) / 100,
+                });
+            }, delay);
+        }
     }
 
     private setupIosHacks() {
