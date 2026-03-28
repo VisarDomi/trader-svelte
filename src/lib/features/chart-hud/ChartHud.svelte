@@ -32,6 +32,13 @@
     });
 </script>
 
+{#if overlay.debugText}
+    <div class="debug-overlay">
+        <span>{overlay.debugText}</span>
+        <button class="debug-log-btn" onclick={() => overlay.logSnapshot()}>LOG</button>
+    </div>
+{/if}
+
 {#if overlay.hasActiveAccount}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -121,6 +128,32 @@
 {/if}
 
 <style>
+    .debug-overlay {
+        position: fixed;
+        bottom: 60px;
+        left: 4px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.85);
+        color: #0f0;
+        font-family: Monaco, monospace;
+        font-size: 10px;
+        padding: 4px 6px;
+        border-radius: 4px;
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .debug-log-btn {
+        background: #333;
+        color: #ff0;
+        border: 1px solid #ff0;
+        font-size: 10px;
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+    }
     .overlay-container {
         position: fixed;
         left: 0;
