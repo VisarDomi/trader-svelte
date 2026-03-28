@@ -5,8 +5,8 @@ import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import type { ViewportService } from "$lib/core/services/ViewportService.svelte.js";
 
 export interface ResizeCallbacks {
-    onBeforeResize?: () => void;
-    onAfterResize?: () => void;
+    onBeforeResize?: (oldWidth: number, oldHeight: number) => void;
+    onAfterResize?: (newWidth: number, newHeight: number) => void;
 }
 
 export class ChartUI {
@@ -16,6 +16,8 @@ export class ChartUI {
     private chart: IChartApi | null = null;
     private container: HTMLDivElement | null = null;
     private callbacks: ResizeCallbacks | null = null;
+    private lastWidth = 0;
+    private lastHeight = 0;
 
     constructor(private readonly viewportService: ViewportService) {
         if (typeof window !== 'undefined') {
@@ -23,11 +25,11 @@ export class ChartUI {
         }
 
         $effect(() => {
-            const _w = this.viewportService.width;
-            const _h = this.viewportService.height;
+            const newW = this.viewportService.width;
+            const newH = this.viewportService.height;
 
             if (this.container && this.chart) {
-                this.handleResizeCycle();
+                this.handleResizeCycle(newW, newH);
             }
         });
     }
@@ -41,6 +43,8 @@ export class ChartUI {
             this.setupIosHacks();
         }
 
+        this.lastWidth = this.viewportService.width;
+        this.lastHeight = this.viewportService.height;
         this.updateDimensions();
         this.initBarSpacing();
         this.removeTradingViewLogo();
@@ -60,15 +64,21 @@ export class ChartUI {
         window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
     }
 
-    private handleResizeCycle() {
-        if (this.callbacks?.onBeforeResize) {
-            this.callbacks.onBeforeResize();
+    private handleResizeCycle(newW: number, newH: number) {
+        const oldW = this.lastWidth;
+        const oldH = this.lastHeight;
+
+        if (oldW > 0 && oldH > 0) {
+            this.callbacks?.onBeforeResize?.(oldW, oldH);
         }
 
         this.updateDimensions();
 
-        if (this.callbacks?.onAfterResize) {
-            this.callbacks.onAfterResize();
+        this.lastWidth = newW;
+        this.lastHeight = newH;
+
+        if (oldW > 0 && oldH > 0) {
+            this.callbacks?.onAfterResize?.(newW, newH);
         }
     }
 

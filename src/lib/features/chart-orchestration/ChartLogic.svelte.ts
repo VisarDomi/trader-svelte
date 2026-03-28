@@ -150,25 +150,21 @@ export class ChartLogic {
     }
 
     private configureLayout(container: HTMLDivElement) {
-        let preWidth = 0;
-        let prePriceAreaHeight = 0;
+        let oldW = 0;
+        let oldPriceH = 0;
         let captured: ReturnType<typeof this.controller.camera.captureViewport> = null;
         const isPwa = isIOS();
 
         this.layout.init(this.controller.chart, container, {
-            onBeforeResize: () => {
-                preWidth = viewport.width;
-                const preIsLandscape = viewport.width > viewport.height;
-                prePriceAreaHeight = viewport.height - getTimeScaleHeight(isPwa, preIsLandscape);
+            onBeforeResize: (oldWidth, oldHeight) => {
+                oldW = oldWidth;
+                oldPriceH = oldHeight - getTimeScaleHeight(isPwa, oldWidth > oldHeight);
                 captured = this.controller.camera.captureViewport();
             },
-            onAfterResize: () => {
+            onAfterResize: (newWidth, newHeight) => {
                 if (captured) {
-                    const newWidth = viewport.width;
-                    const newHeight = viewport.height;
-                    const newIsLandscape = newWidth > newHeight;
-                    const newPriceAreaHeight = newHeight - getTimeScaleHeight(isPwa, newIsLandscape);
-                    this.controller.camera.applyResize(captured, preWidth, newWidth, prePriceAreaHeight, newPriceAreaHeight);
+                    const newPriceH = newHeight - getTimeScaleHeight(isPwa, newWidth > newHeight);
+                    this.controller.camera.applyResize(captured, oldW, newWidth, oldPriceH, newPriceH);
                 }
             }
         });
