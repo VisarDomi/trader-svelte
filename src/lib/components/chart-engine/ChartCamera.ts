@@ -11,7 +11,7 @@ export interface ViewState {
 }
 
 export interface CapturedViewport {
-    timeRange: IRange<Time>;
+    barSpacing: number;
     priceRange: IRange<number> | null;
 }
 
@@ -105,35 +105,25 @@ export class ChartCamera {
     captureViewport(): CapturedViewport | null {
         if (!this.chart) return null;
 
-        const timeRange = this.chart.timeScale().getVisibleRange();
+        const barSpacing = this.chart.timeScale().options().barSpacing;
         const priceRange = this.chart.priceScale('right').getVisibleRange();
-        if (!timeRange) return null;
 
-        return { timeRange, priceRange };
+        return { barSpacing, priceRange };
     }
 
-    applyResize(captured: CapturedViewport, oldWidth: number, newWidth: number, oldHeight: number, newHeight: number) {
-        if (!this.chart || oldWidth <= 0 || newWidth <= 0 || oldHeight <= 0 || newHeight <= 0) return;
+    applyResize(captured: CapturedViewport, oldPriceH: number, newPriceH: number) {
+        if (!this.chart || oldPriceH <= 0 || newPriceH <= 0) return;
 
-        const oldFrom = captured.timeRange.from as number;
-        const oldTo = captured.timeRange.to as number;
-        const oldTimeSpan = oldTo - oldFrom;
-        const newTimeSpan = oldTimeSpan * (newWidth / oldWidth);
-        const newTimeTo = oldFrom + newTimeSpan;
-
-        this.chart.timeScale().setVisibleRange({
-            from: oldFrom as UTCTimestamp,
-            to: newTimeTo as UTCTimestamp
+        this.chart.applyOptions({
+            timeScale: { barSpacing: captured.barSpacing }
         });
 
         let newPriceRange: { from: number; to: number } | null = null;
 
         if (captured.priceRange) {
-            const oldPriceMin = captured.priceRange.from;
-            const oldPriceMax = captured.priceRange.to;
-            const oldPriceSpan = oldPriceMax - oldPriceMin;
-            const newPriceSpan = oldPriceSpan * (oldHeight / newHeight);
-            const center = oldPriceMin + oldPriceSpan / 2;
+            const oldPriceSpan = captured.priceRange.to - captured.priceRange.from;
+            const newPriceSpan = oldPriceSpan * (oldPriceH / newPriceH);
+            const center = captured.priceRange.from + oldPriceSpan / 2;
             newPriceRange = { from: center - newPriceSpan / 2, to: center + newPriceSpan / 2 };
 
             this.chart.priceScale('right').applyOptions({ autoScale: false });
@@ -142,13 +132,9 @@ export class ChartCamera {
 
         serverLog({
             tag: LogEvent.ChartResize,
-            oldWidth,
-            newWidth,
-            oldPriceH: oldHeight,
-            newPriceH: newHeight,
-            timeFrom: oldFrom,
-            oldTimeTo: oldTo,
-            newTimeTo,
+            barSpacing: captured.barSpacing,
+            oldPriceH,
+            newPriceH,
             oldPriceRange: captured.priceRange ? { from: captured.priceRange.from, to: captured.priceRange.to } : null,
             newPriceRange,
         });

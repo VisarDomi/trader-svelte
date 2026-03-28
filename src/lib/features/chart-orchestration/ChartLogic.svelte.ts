@@ -150,21 +150,19 @@ export class ChartLogic {
     }
 
     private configureLayout(container: HTMLDivElement) {
-        let oldW = 0;
         let oldPriceH = 0;
         let captured: ReturnType<typeof this.controller.camera.captureViewport> = null;
         const isPwa = isIOS();
 
         this.layout.init(this.controller.chart, container, {
             onBeforeResize: (oldWidth, oldHeight) => {
-                oldW = oldWidth;
                 oldPriceH = oldHeight - getTimeScaleHeight(isPwa, oldWidth > oldHeight);
                 captured = this.controller.camera.captureViewport();
             },
             onAfterResize: (newWidth, newHeight) => {
                 if (captured) {
                     const newPriceH = newHeight - getTimeScaleHeight(isPwa, newWidth > newHeight);
-                    this.controller.camera.applyResize(captured, oldW, newWidth, oldPriceH, newPriceH);
+                    this.controller.camera.applyResize(captured, oldPriceH, newPriceH);
                 }
             }
         });
