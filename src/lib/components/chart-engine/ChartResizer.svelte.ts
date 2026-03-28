@@ -3,6 +3,7 @@ import { isIOS } from "$lib/core/utils/platform.js";
 import { getTimeScaleHeight } from "$lib/components/chart-engine/config.js";
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import type { ViewportService } from "$lib/core/services/ViewportService.svelte.js";
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export interface ResizeCallbacks {
     onBeforeResize?: (oldWidth: number, oldHeight: number) => void;
@@ -64,15 +65,36 @@ export class ChartUI {
         window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
     }
 
+    private readChartState(label: string) {
+        if (!this.chart) return;
+        const ts = this.chart.timeScale();
+        const bs = ts.options().barSpacing;
+        const lr = ts.getVisibleLogicalRange();
+        serverLog({
+            tag: LogEvent.ChartResize,
+            phase: label,
+            barSpacing: bs,
+            logical: lr ? { from: lr.from, to: lr.to } : null,
+        });
+    }
+
     private handleResizeCycle(newW: number, newH: number) {
         const oldW = this.lastWidth;
         const oldH = this.lastHeight;
+
+        if (oldW === newW && oldH === newH) return;
+
+        this.readChartState(`1-before-cycle[${oldW}x${oldH}->${newW}x${newH}]`);
 
         if (oldW > 0 && oldH > 0) {
             this.callbacks?.onBeforeResize?.(oldW, oldH);
         }
 
+        this.readChartState('2-after-capture');
+
         this.updateDimensions();
+
+        this.readChartState('3-after-chart-resize');
 
         this.lastWidth = newW;
         this.lastHeight = newH;
@@ -80,6 +102,22 @@ export class ChartUI {
         if (oldW > 0 && oldH > 0) {
             this.callbacks?.onAfterResize?.(newW, newH);
         }
+
+        this.readChartState('4-after-apply-resize');
+
+        const chart = this.chart;
+        setTimeout(() => {
+            if (!chart) return;
+            const ts = chart.timeScale();
+            const bs = ts.options().barSpacing;
+            const lr = ts.getVisibleLogicalRange();
+            serverLog({
+                tag: LogEvent.ChartResize,
+                phase: '5-settled-100ms',
+                barSpacing: bs,
+                logical: lr ? { from: lr.from, to: lr.to } : null,
+            });
+        }, 100);
     }
 
     private setupIosHacks() {

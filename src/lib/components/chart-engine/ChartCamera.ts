@@ -114,53 +114,21 @@ export class ChartCamera {
     applyResize(captured: CapturedViewport, oldPriceH: number, newPriceH: number) {
         if (!this.chart || oldPriceH <= 0 || newPriceH <= 0) return;
 
-        const ts = this.chart.timeScale();
-        const logicalBefore = ts.getVisibleLogicalRange();
-        const barSpacingBefore = ts.options().barSpacing;
-
         this.chart.applyOptions({
             timeScale: { barSpacing: captured.barSpacing }
         });
-
-        const barSpacingAfterApply = ts.options().barSpacing;
-        const logicalAfterApply = ts.getVisibleLogicalRange();
-
-        let newPriceRange: { from: number; to: number } | null = null;
 
         if (captured.priceRange) {
             const oldPriceSpan = captured.priceRange.to - captured.priceRange.from;
             const newPriceSpan = oldPriceSpan * (oldPriceH / newPriceH);
             const center = captured.priceRange.from + oldPriceSpan / 2;
-            newPriceRange = { from: center - newPriceSpan / 2, to: center + newPriceSpan / 2 };
 
             this.chart.priceScale('right').applyOptions({ autoScale: false });
-            this.chart.priceScale('right').setVisibleRange(newPriceRange);
-        }
-
-        serverLog({
-            tag: LogEvent.ChartResize,
-            phase: 'apply',
-            capturedBarSpacing: captured.barSpacing,
-            barSpacingBefore,
-            barSpacingAfterApply,
-            logicalBefore: logicalBefore ? { from: logicalBefore.from, to: logicalBefore.to } : null,
-            logicalAfterApply: logicalAfterApply ? { from: logicalAfterApply.from, to: logicalAfterApply.to } : null,
-            oldPriceH,
-            newPriceH,
-        });
-
-        const chart = this.chart;
-        requestAnimationFrame(() => {
-            if (!chart) return;
-            const barSpacingSettled = chart.timeScale().options().barSpacing;
-            const logicalSettled = chart.timeScale().getVisibleLogicalRange();
-            serverLog({
-                tag: LogEvent.ChartResize,
-                phase: 'settled',
-                barSpacingSettled,
-                logicalSettled: logicalSettled ? { from: logicalSettled.from, to: logicalSettled.to } : null,
+            this.chart.priceScale('right').setVisibleRange({
+                from: center - newPriceSpan / 2,
+                to: center + newPriceSpan / 2
             });
-        });
+        }
     }
 
     destroy() {
@@ -239,12 +207,25 @@ export class ChartCamera {
             ? (range.to as number) - (range.from as number)
             : DEFAULT_SPAN_SECONDS);
 
+        const bsBefore = timeScale.options().barSpacing;
         const { from, to } = this.calculateTargetRange(anchorTime, span);
 
         timeScale.setVisibleRange({
             from: from as UTCTimestamp,
             to: to as UTCTimestamp
         });
+
+        const bsAfter = timeScale.options().barSpacing;
+        if (Math.abs(bsAfter - bsBefore) > 0.01) {
+            serverLog({
+                tag: LogEvent.ChartResize,
+                phase: 'enforceLive-changed-bs',
+                bsBefore,
+                bsAfter,
+                span,
+                viewportWidth: viewport.width,
+            });
+        }
     }
 
     private calculateTargetRange(anchorTime: number, span: number) {
