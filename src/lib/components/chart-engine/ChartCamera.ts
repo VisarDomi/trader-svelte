@@ -14,6 +14,7 @@ export interface CapturedViewport {
     barSpacing: number;
     apiPriceFrom: number;
     apiPriceTo: number;
+    priceAreaH: number;
 }
 
 const DEFAULT_SPAN_SECONDS = 120 * 60;
@@ -108,10 +109,13 @@ export class ChartCamera {
 
         const barSpacing = this.chart.timeScale().options().barSpacing;
         const apiRange = this.chart.priceScale('right').getVisibleRange();
+        const chartH = this.chart.chartElement().clientHeight;
+        const tsH = this.chart.timeScale().height();
+        const priceAreaH = chartH - tsH;
 
-        if (!apiRange) return null;
+        if (!apiRange || priceAreaH <= 0) return null;
 
-        return { barSpacing, apiPriceFrom: apiRange.from, apiPriceTo: apiRange.to };
+        return { barSpacing, apiPriceFrom: apiRange.from, apiPriceTo: apiRange.to, priceAreaH };
     }
 
     applyResize(captured: CapturedViewport) {
@@ -121,16 +125,30 @@ export class ChartCamera {
             timeScale: { barSpacing: captured.barSpacing }
         });
 
+        const newChartH = this.chart.chartElement().clientHeight;
+        const newTsH = this.chart.timeScale().height();
+        const newPriceAreaH = newChartH - newTsH;
+
+        if (newPriceAreaH <= 0) return;
+
+        const oldSpan = captured.apiPriceTo - captured.apiPriceFrom;
+        const newSpan = oldSpan * (newPriceAreaH / captured.priceAreaH);
+        const center = captured.apiPriceFrom + oldSpan / 2;
+
         this.chart.priceScale('right').applyOptions({ autoScale: false });
         this.chart.priceScale('right').setVisibleRange({
-            from: captured.apiPriceFrom,
-            to: captured.apiPriceTo
+            from: center - newSpan / 2,
+            to: center + newSpan / 2
         });
 
         serverLog({
             tag: LogEvent.ChartResize,
             phase: 'apply',
-            set: { top: Math.round(captured.apiPriceTo), bot: Math.round(captured.apiPriceFrom), span: Math.round(captured.apiPriceTo - captured.apiPriceFrom) },
+            oldPriceAreaH: captured.priceAreaH,
+            newPriceAreaH,
+            oldSpan: Math.round(oldSpan),
+            newSpan: Math.round(newSpan),
+            set: { top: Math.round(center + newSpan / 2), bot: Math.round(center - newSpan / 2) },
         });
     }
 
