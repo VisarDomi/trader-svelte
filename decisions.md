@@ -50,6 +50,8 @@
 
 **No log.info — all server logging goes through typed serverLog events**: `log.info` was removed. If something is worth logging to the server, it must have a typed `LogEntry` variant in the discriminated union. `log.warn` and `log.error` remain for boundary failures that can't be predicted at design time. `history-publish` and `chart-render` events are throttled to only fire on initial load, first sync, or significant candle count changes.
 
+**Prepend observability chain**: Three log events form a complete audit trail for back-history scroll correction: (1) `prepend-stamp` — store logs the version-to-count binding when created, (2) `chart-render` — effect logs that it consumed the prepend count for a given version, (3) `prepend-apply` — effect logs the viewport logical range before/after `maintainScrollPosition`. A canary `log.warn` fires if candle count grows by >100 with no prepend found — the signature of a regression where the count was lost or consumed by the wrong version.
+
 **LogBuffer ownership model**: buffer[] holds entries waiting to be sent. inFlight[] holds entries currently in a fetch() call (temporarily transferred). On fetch success, inFlight is dropped. On fetch failure, inFlight is reclaimed back into buffer. On page hide, getAllPending() (inFlight + buffer) is persisted to sessionStorage and beacon-flushed — no entry is ever unowned.
 
 **LogBuffer queueMicrotask on visibilitychange:hidden**: Ensures logs pushed by other visibilitychange handlers (AppEngine, ConnectionMonitor) are captured before the persist + beacon flush runs.

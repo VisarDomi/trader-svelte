@@ -129,6 +129,7 @@ export class MarketStore extends BaseStore {
         this._askHistory = [...ask, ...this._askHistory];
         this.publishHistory();
         this._prependAtVersion.set(this.historyVersion, bid.length);
+        serverLog({ tag: LogEvent.PrependStamp, version: this.historyVersion, count: bid.length, totalCandles: this._bidHistory.length });
         this.updateTrigger++;
     }
 

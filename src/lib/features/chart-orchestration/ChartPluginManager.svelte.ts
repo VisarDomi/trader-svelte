@@ -8,7 +8,7 @@ import type { AccountStore } from '$lib/domains/trading/stores/AccountStore.svel
 import type { PositionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
 import type { TradeStore } from '$lib/domains/trading/stores/TradeStore.svelte.js';
 import type { ChartStateManager } from "$lib/features/chart-orchestration/ChartStateManager.svelte.js";
-import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
+import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 import { PositionLines } from "$lib/features/chart-drawings/plugins/PositionLines.js";
 import { CurrentPrice } from "$lib/features/chart-drawings/plugins/CurrentPrice.js";
@@ -25,6 +25,7 @@ export class ChartRenderer {
 
     private renderedVersion = 0;
     private viewInitialized = false;
+    private lastRenderedCandles = 0;
 
     private features: Types[] = [];
 
@@ -70,10 +71,12 @@ export class ChartRenderer {
             if (version === this.renderedVersion) return;
 
             const isFirstRender = this.renderedVersion === 0;
+            const prevCandles = this.lastRenderedCandles;
             this.renderedVersion = version;
 
             const prependCount = this.marketStore.consumePrependCount(version);
             this.series.setData(history);
+            this.lastRenderedCandles = history.length;
 
             if (isFirstRender || version <= 2 || prependCount > 0) {
                 serverLog({
@@ -91,7 +94,10 @@ export class ChartRenderer {
                 this.camera.initializeView(savedState, lastTime);
                 this.viewInitialized = true;
             } else if (prependCount > 0) {
-                this.camera.maintainScrollPosition(prependCount);
+                const { before, after } = this.camera.maintainScrollPosition(prependCount);
+                serverLog({ tag: LogEvent.PrependApply, version, count: prependCount, rangeBefore: before, rangeAfter: after });
+            } else if (prevCandles > 0 && history.length - prevCandles > 100) {
+                log.warn(`[ChartRenderer] Large candle growth (${prevCandles} → ${history.length}) at version ${version} with no prepend — possible regression`);
             }
         });
     }
@@ -102,6 +108,7 @@ export class ChartRenderer {
         this.context = context;
         this.renderedVersion = 0;
         this.viewInitialized = false;
+        this.lastRenderedCandles = 0;
 
         for (const feature of this.features) {
             feature.mount(chart, series);

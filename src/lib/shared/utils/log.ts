@@ -26,7 +26,9 @@ export const LogEvent = {
     StreamExhausted: 'stream-exhausted',
 
     HistoryPublish: 'history-publish',
+    PrependStamp: 'prepend-stamp',
     ChartRender: 'chart-render',
+    PrependApply: 'prepend-apply',
 
     BarGap: 'bar-gap',
     RiskCorrection: 'risk-correction',
@@ -51,7 +53,10 @@ export type LogEntry =
     | { tag: typeof LogEvent.StreamRetry; epic: string; attempt: number; delayMs: number }
     | { tag: typeof LogEvent.StreamExhausted; epic: string; attempts: number }
     | { tag: typeof LogEvent.HistoryPublish; source: string; version: number; candles: number; oldestTime: number; newestTime: number }
+    | { tag: typeof LogEvent.PrependStamp; version: number; count: number; totalCandles: number }
     | { tag: typeof LogEvent.ChartRender; version: number; candles: number; isFirstRender: boolean; prependCount: number }
+    | { tag: typeof LogEvent.PrependApply; version: number; count: number; rangeBefore: { from: number; to: number } | null; rangeAfter: { from: number; to: number } | null }
+
     | { tag: typeof LogEvent.BarGap; state: 'detected' | 'filled'; historyTime: number; liveTime: number }
     | { tag: typeof LogEvent.RiskCorrection; dealId: string; newLevel: number }
     | { tag: typeof LogEvent.ZombieSocket; gapMs: number };

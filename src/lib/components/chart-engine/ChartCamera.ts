@@ -38,18 +38,18 @@ export class ChartCamera {
         }
     }
 
-    maintainScrollPosition(barsAdded: number) {
-        if (!this.chart || barsAdded <= 0) return;
+    maintainScrollPosition(barsAdded: number): { before: { from: number; to: number } | null; after: { from: number; to: number } | null } {
+        if (!this.chart || barsAdded <= 0) return { before: null, after: null };
 
         const timeScale = this.chart.timeScale();
         const currentRange = timeScale.getVisibleLogicalRange();
 
-        if (currentRange) {
-            timeScale.setVisibleLogicalRange({
-                from: currentRange.from + barsAdded,
-                to: currentRange.to + barsAdded
-            });
-        }
+        if (!currentRange) return { before: null, after: null };
+
+        const before = { from: currentRange.from, to: currentRange.to };
+        const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
+        timeScale.setVisibleLogicalRange(newRange);
+        return { before, after: newRange };
     }
 
     updateAnchor(newAnchorTime: number) {
