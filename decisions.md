@@ -83,3 +83,21 @@
 **calcPriceLine is a pure function**: Replaces a class implementation to reduce object allocation in the hot render loop.
 
 **ChartCamera passive follow**: If strict tracking is active, force the reset layout position. If NOT tracking, check if the live candle is visible. If visible, shift the view forward by the time delta to keep it in view. This makes the chart appear to "flow" without snapping the user's zoom or offset.
+
+## Rotation / Resize View Preservation
+
+**ChartUI owns physical dimensions, Camera owns logical viewport**: ChartUI tracks `lastWidth`/`lastHeight` as plain fields (not $state) and provides `onBeforeResize`/`onAfterResize` callbacks. Camera's `captureViewport()`/`applyResize()` handle the logical viewport transition. No cross-ownership.
+
+**ChartUI tracks previous dimensions as plain fields**: The resize `$effect` fires because `viewportService.width`/`height` $state already changed. Reading viewport in `onBeforeResize` returns the new value, not old. ChartUI tracks `lastWidth`/`lastHeight` as plain fields updated at the end of each resize cycle, passed as old dimensions to `onBeforeResize`.
+
+**barSpacing is set once at init, never on resize**: `ChartUI.initBarSpacing()` sets `barSpacing` on chart creation. `updateTimeScaleOptions()` only updates `minimumHeight` on resize (legitimately changes between landscape/portrait). barSpacing is the user's zoom state — overwriting it on resize destroys the view.
+
+**chart.resize() is asynchronous**: LWC's `chart.resize()` does not reflow synchronously. The logical range and `timeScale().width()` remain stale until LWC's deferred reflow (~50ms later). Any corrections must account for this — barSpacing set via `applyOptions` before the reflow will be respected by the deferred reflow.
+
+**LWC priceScale.getVisibleRange() lies after resize**: The API returns stale values that don't match what's rendered on screen. `series.coordinateToPrice()` returns pixel-truth but operates in a different coordinate system (full chartElement height including time scale) than `setVisibleRange` (price area only). Mixing the two compounds errors on every rotation.
+
+**Price capture and restore must use the same coordinate system**: Capture with `priceScale.getVisibleRange()` (API), restore with `priceScale.setVisibleRange()` (API). The API is internally consistent — lies cancel out in the round-trip. Never mix `coordinateToPrice` (pixel truth) with `setVisibleRange` (API truth) — different coordinate systems cause compounding drift.
+
+**Price range scales by height ratio to preserve bar aspect ratio**: `newSpan = oldSpan × (newPriceAreaH / oldPriceAreaH)`, centered on the same midpoint. Price area height = `chartElement().clientHeight - timeScale().height()`. This keeps price-per-pixel constant — bars maintain their visual height. Landscape chops top/bottom of the price range, portrait extends it.
+
+**barSpacing preservation keeps bar width constant**: Camera captures `timeScale().options().barSpacing` before resize and restores it via `applyOptions` after `chart.resize()`. LWC's deferred reflow respects this value and adjusts the visible logical range to fit — more bars visible in landscape, fewer in portrait. The right edge stays pinned, the left edge extends/contracts.
