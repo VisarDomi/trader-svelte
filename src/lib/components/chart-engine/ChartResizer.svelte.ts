@@ -3,7 +3,6 @@ import { isIOS } from "$lib/core/utils/platform.js";
 import { getTimeScaleHeight } from "$lib/components/chart-engine/config.js";
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import type { ViewportService } from "$lib/core/services/ViewportService.svelte.js";
-import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export interface ResizeCallbacks {
     onBeforeResize?: () => void;
@@ -65,38 +64,11 @@ export class ChartUI {
         window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
     }
 
-    private readChartState(label: string, series?: import("lightweight-charts").ISeriesApi<"Candlestick">) {
-        if (!this.chart) return;
-        const ts = this.chart.timeScale();
-        const timeRange = ts.getVisibleRange();
-        const priceRange = this.chart.priceScale('right').getVisibleRange();
-        const lr = ts.getVisibleLogicalRange();
-
-        const toTime = (t: number) => {
-            const d = new Date(t * 1000);
-            return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
-        };
-
-        serverLog({
-            tag: LogEvent.ChartResize,
-            phase: label,
-            barSpacing: ts.options().barSpacing,
-            tsWidth: ts.width(),
-            bars: lr ? Math.round(lr.to - lr.from) : 0,
-            timeLeft: timeRange ? toTime(timeRange.from as number) : null,
-            timeRight: timeRange ? toTime(timeRange.to as number) : null,
-            priceTop: priceRange ? Math.round(priceRange.to * 100) / 100 : null,
-            priceBot: priceRange ? Math.round(priceRange.from * 100) / 100 : null,
-        });
-    }
-
     private handleResizeCycle(newW: number, newH: number) {
         const oldW = this.lastWidth;
         const oldH = this.lastHeight;
 
         if (oldW === newW && oldH === newH) return;
-
-        this.readChartState(`1-before[${oldW}x${oldH}->${newW}x${newH}]`);
 
         if (oldW > 0 && oldH > 0) {
             this.callbacks?.onBeforeResize?.();
@@ -104,43 +76,11 @@ export class ChartUI {
 
         this.updateDimensions();
 
-        this.readChartState('2-after-resize');
-
         this.lastWidth = newW;
         this.lastHeight = newH;
 
         if (oldW > 0 && oldH > 0) {
             this.callbacks?.onAfterResize?.();
-        }
-
-        this.readChartState('3-after-apply');
-
-        const chart = this.chart;
-        for (const delay of [50, 200, 500]) {
-            setTimeout(() => {
-                if (!chart) return;
-                const ts = chart.timeScale();
-                const timeRange = ts.getVisibleRange();
-                const priceRange = chart.priceScale('right').getVisibleRange();
-                const lr = ts.getVisibleLogicalRange();
-
-                const toTime = (t: number) => {
-                    const d = new Date(t * 1000);
-                    return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
-                };
-
-                serverLog({
-                    tag: LogEvent.ChartResize,
-                    phase: `4-settled-${delay}ms`,
-                    barSpacing: ts.options().barSpacing,
-                    tsWidth: ts.width(),
-                    bars: lr ? Math.round(lr.to - lr.from) : 0,
-                    timeLeft: timeRange ? toTime(timeRange.from as number) : null,
-                    timeRight: timeRange ? toTime(timeRange.to as number) : null,
-                    priceTop: priceRange ? Math.round(priceRange.to * 100) / 100 : null,
-                    priceBot: priceRange ? Math.round(priceRange.from * 100) / 100 : null,
-                });
-            }, delay);
         }
     }
 

@@ -1,7 +1,6 @@
 import type { IChartApi, IRange, Time, UTCTimestamp } from 'lightweight-charts';
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
-import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export interface ViewState {
     centerTime: number;
@@ -140,16 +139,6 @@ export class ChartCamera {
             from: center - newSpan / 2,
             to: center + newSpan / 2
         });
-
-        serverLog({
-            tag: LogEvent.ChartResize,
-            phase: 'apply',
-            oldPriceAreaH: captured.priceAreaH,
-            newPriceAreaH,
-            oldSpan: Math.round(oldSpan),
-            newSpan: Math.round(newSpan),
-            set: { top: Math.round(center + newSpan / 2), bot: Math.round(center - newSpan / 2) },
-        });
     }
 
     destroy() {
@@ -228,25 +217,12 @@ export class ChartCamera {
             ? (range.to as number) - (range.from as number)
             : DEFAULT_SPAN_SECONDS);
 
-        const bsBefore = timeScale.options().barSpacing;
         const { from, to } = this.calculateTargetRange(anchorTime, span);
 
         timeScale.setVisibleRange({
             from: from as UTCTimestamp,
             to: to as UTCTimestamp
         });
-
-        const bsAfter = timeScale.options().barSpacing;
-        if (Math.abs(bsAfter - bsBefore) > 0.01) {
-            serverLog({
-                tag: LogEvent.ChartResize,
-                phase: 'enforceLive-changed-bs',
-                bsBefore,
-                bsAfter,
-                span,
-                viewportWidth: viewport.width,
-            });
-        }
     }
 
     private calculateTargetRange(anchorTime: number, span: number) {
