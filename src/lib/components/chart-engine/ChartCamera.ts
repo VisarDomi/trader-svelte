@@ -114,9 +114,16 @@ export class ChartCamera {
     applyResize(captured: CapturedViewport, oldPriceH: number, newPriceH: number) {
         if (!this.chart || oldPriceH <= 0 || newPriceH <= 0) return;
 
+        const ts = this.chart.timeScale();
+        const logicalBefore = ts.getVisibleLogicalRange();
+        const barSpacingBefore = ts.options().barSpacing;
+
         this.chart.applyOptions({
             timeScale: { barSpacing: captured.barSpacing }
         });
+
+        const barSpacingAfterApply = ts.options().barSpacing;
+        const logicalAfterApply = ts.getVisibleLogicalRange();
 
         let newPriceRange: { from: number; to: number } | null = null;
 
@@ -132,11 +139,27 @@ export class ChartCamera {
 
         serverLog({
             tag: LogEvent.ChartResize,
-            barSpacing: captured.barSpacing,
+            phase: 'apply',
+            capturedBarSpacing: captured.barSpacing,
+            barSpacingBefore,
+            barSpacingAfterApply,
+            logicalBefore: logicalBefore ? { from: logicalBefore.from, to: logicalBefore.to } : null,
+            logicalAfterApply: logicalAfterApply ? { from: logicalAfterApply.from, to: logicalAfterApply.to } : null,
             oldPriceH,
             newPriceH,
-            oldPriceRange: captured.priceRange ? { from: captured.priceRange.from, to: captured.priceRange.to } : null,
-            newPriceRange,
+        });
+
+        const chart = this.chart;
+        requestAnimationFrame(() => {
+            if (!chart) return;
+            const barSpacingSettled = chart.timeScale().options().barSpacing;
+            const logicalSettled = chart.timeScale().getVisibleLogicalRange();
+            serverLog({
+                tag: LogEvent.ChartResize,
+                phase: 'settled',
+                barSpacingSettled,
+                logicalSettled: logicalSettled ? { from: logicalSettled.from, to: logicalSettled.to } : null,
+            });
         });
     }
 
