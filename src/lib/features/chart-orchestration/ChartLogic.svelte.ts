@@ -152,15 +152,11 @@ export class ChartLogic {
 
         this.layout.init(this.controller.chart, container, {
             onBeforeResize: () => {
-                try {
-                    captured = this.controller.camera.captureViewport(this.controller.series);
-                } catch {
-                    captured = null;
-                }
+                captured = this.controller.camera.captureViewport();
             },
             onAfterResize: () => {
                 if (captured) {
-                    this.controller.camera.applyResize(this.controller.series, captured);
+                    this.controller.camera.applyResize(captured);
                 }
             }
         });

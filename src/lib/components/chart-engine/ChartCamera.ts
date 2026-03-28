@@ -1,4 +1,4 @@
-import type { IChartApi, IRange, ISeriesApi, Time, UTCTimestamp } from 'lightweight-charts';
+import type { IChartApi, IRange, Time, UTCTimestamp } from 'lightweight-charts';
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
@@ -12,8 +12,8 @@ export interface ViewState {
 
 export interface CapturedViewport {
     barSpacing: number;
-    priceTop: number;
-    priceBot: number;
+    apiPriceFrom: number;
+    apiPriceTo: number;
 }
 
 const DEFAULT_SPAN_SECONDS = 120 * 60;
@@ -103,33 +103,18 @@ export class ChartCamera {
         };
     }
 
-    captureViewport(series: ISeriesApi<"Candlestick">): CapturedViewport | null {
+    captureViewport(): CapturedViewport | null {
         if (!this.chart) return null;
 
         const barSpacing = this.chart.timeScale().options().barSpacing;
-        const chartH = this.chart.chartElement().clientHeight;
-        const priceTop = series.coordinateToPrice(0);
-        const priceBot = series.coordinateToPrice(chartH);
         const apiRange = this.chart.priceScale('right').getVisibleRange();
 
-        if (priceTop === null || priceBot === null) return null;
+        if (!apiRange) return null;
 
-        serverLog({
-            tag: LogEvent.ChartResize,
-            phase: 'capture',
-            chartH,
-            pxTop: Math.round(priceTop),
-            pxBot: Math.round(priceBot),
-            pxSpan: Math.round(priceTop - priceBot),
-            apiTop: apiRange ? Math.round(apiRange.to) : null,
-            apiBot: apiRange ? Math.round(apiRange.from) : null,
-            apiSpan: apiRange ? Math.round(apiRange.to - apiRange.from) : null,
-        });
-
-        return { barSpacing, priceTop, priceBot };
+        return { barSpacing, apiPriceFrom: apiRange.from, apiPriceTo: apiRange.to };
     }
 
-    applyResize(series: ISeriesApi<"Candlestick">, captured: CapturedViewport) {
+    applyResize(captured: CapturedViewport) {
         if (!this.chart) return;
 
         this.chart.applyOptions({
@@ -138,22 +123,14 @@ export class ChartCamera {
 
         this.chart.priceScale('right').applyOptions({ autoScale: false });
         this.chart.priceScale('right').setVisibleRange({
-            from: captured.priceBot,
-            to: captured.priceTop
+            from: captured.apiPriceFrom,
+            to: captured.apiPriceTo
         });
-
-        const chartH = this.chart.chartElement().clientHeight;
-        const afterPxTop = series.coordinateToPrice(0);
-        const afterPxBot = series.coordinateToPrice(chartH);
-        const afterApi = this.chart.priceScale('right').getVisibleRange();
 
         serverLog({
             tag: LogEvent.ChartResize,
-            phase: 'apply-result',
-            chartH,
-            weSet: { top: Math.round(captured.priceTop), bot: Math.round(captured.priceBot), span: Math.round(captured.priceTop - captured.priceBot) },
-            pxGot: { top: afterPxTop ? Math.round(afterPxTop) : null, bot: afterPxBot ? Math.round(afterPxBot) : null, span: afterPxTop && afterPxBot ? Math.round(afterPxTop - afterPxBot) : null },
-            apiGot: afterApi ? { top: Math.round(afterApi.to), bot: Math.round(afterApi.from), span: Math.round(afterApi.to - afterApi.from) } : null,
+            phase: 'apply',
+            set: { top: Math.round(captured.apiPriceTo), bot: Math.round(captured.apiPriceFrom), span: Math.round(captured.apiPriceTo - captured.apiPriceFrom) },
         });
     }
 
