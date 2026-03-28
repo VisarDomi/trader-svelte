@@ -22,7 +22,7 @@
 
 ## iOS PWA Workarounds
 
-**Chart history prepend scroll correction**: LWC resets the view to Index 0 when data is prepended via setData(). MarketStore tracks `pendingPrependCount` and ChartRenderer calls `camera.maintainScrollPosition()` in the same effect that calls setData() — both happen in one Svelte effect tick, so the viewport shift is atomic from the user's perspective.
+**Chart history prepend scroll correction**: LWC resets the view to Index 0 when data is prepended via setData(). MarketStore stamps each prepend with its `historyVersion` in a private Map (`_prependAtVersion`). ChartRenderer calls `consumePrependCount(version)` — a plain method, not a $state read — to atomically retrieve and delete the count for that specific version. This avoids $state read-after-write in the effect (Svelte 5 pitfall #6), eliminates the race where unrelated `publishHistory()` calls could clobber a shared `pendingPrependCount`, and ensures each prepend count is consumed exactly once by the version that produced it.
 
 **TOP_LABEL_OFFSET is 50px**: Increased from 20 to provide iOS safe area inset for the chart HUD.
 

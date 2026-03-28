@@ -15,7 +15,7 @@ export class MarketStore extends BaseStore {
 
     history = $state.raw<ChartCandle[]>([]);
     historyVersion = $state(0);
-    pendingPrependCount = $state(0);
+    private _prependAtVersion: Map<number, number> = new Map();
 
     isLoaded = $state(false);
     dataSource = $state<ChartData>(TRADING.CHART_DATA_SOURCE_BID);
@@ -55,6 +55,12 @@ export class MarketStore extends BaseStore {
         return this._liveAskCandle;
     }
 
+    consumePrependCount(version: number): number {
+        const count = this._prependAtVersion.get(version) ?? 0;
+        this._prependAtVersion.delete(version);
+        return count;
+    }
+
     dispatch(cmd: MarketCommand) {
         switch (cmd.tag) {
             case MarketCmd.Reset:
@@ -92,7 +98,7 @@ export class MarketStore extends BaseStore {
         this.updateTrigger = 0;
         this.history = [];
         this.historyVersion = 0;
-        this.pendingPrependCount = 0;
+        this._prependAtVersion.clear();
         this._bidHistory = [];
         this._askHistory = [];
         this._liveBidCandle = null;
@@ -121,8 +127,8 @@ export class MarketStore extends BaseStore {
     private _prependHistory(bid: ChartCandle[], ask: ChartCandle[]) {
         this._bidHistory = [...bid, ...this._bidHistory];
         this._askHistory = [...ask, ...this._askHistory];
-        this.pendingPrependCount = bid.length;
         this.publishHistory();
+        this._prependAtVersion.set(this.historyVersion, bid.length);
         this.updateTrigger++;
     }
 

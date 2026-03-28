@@ -72,7 +72,7 @@ export class ChartRenderer {
             const isFirstRender = this.renderedVersion === 0;
             this.renderedVersion = version;
 
-            const prependCount = this.marketStore.pendingPrependCount;
+            const prependCount = this.marketStore.consumePrependCount(version);
             this.series.setData(history);
 
             if (isFirstRender || version <= 2 || prependCount > 0) {
@@ -92,7 +92,6 @@ export class ChartRenderer {
                 this.viewInitialized = true;
             } else if (prependCount > 0) {
                 this.camera.maintainScrollPosition(prependCount);
-                this.marketStore.pendingPrependCount = 0;
             }
         });
     }
