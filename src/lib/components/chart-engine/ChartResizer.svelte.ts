@@ -65,22 +65,28 @@ export class ChartUI {
         window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
     }
 
-    private readChartState(label: string) {
+    private readChartState(label: string, series?: import("lightweight-charts").ISeriesApi<"Candlestick">) {
         if (!this.chart) return;
         const ts = this.chart.timeScale();
-        const bs = ts.options().barSpacing;
+        const timeRange = ts.getVisibleRange();
+        const priceRange = this.chart.priceScale('right').getVisibleRange();
         const lr = ts.getVisibleLogicalRange();
-        const tsWidth = ts.width();
-        const barsVisible = lr ? lr.to - lr.from : 0;
-        const effectiveBs = barsVisible > 0 && tsWidth > 0 ? tsWidth / barsVisible : 0;
+
+        const toTime = (t: number) => {
+            const d = new Date(t * 1000);
+            return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+        };
+
         serverLog({
             tag: LogEvent.ChartResize,
             phase: label,
-            barSpacing: bs,
-            tsWidth,
-            barsVisible: Math.round(barsVisible),
-            effectiveBs: Math.round(effectiveBs * 100) / 100,
-            logical: lr ? { from: Math.round(lr.from), to: Math.round(lr.to) } : null,
+            barSpacing: ts.options().barSpacing,
+            tsWidth: ts.width(),
+            bars: lr ? Math.round(lr.to - lr.from) : 0,
+            timeLeft: timeRange ? toTime(timeRange.from as number) : null,
+            timeRight: timeRange ? toTime(timeRange.to as number) : null,
+            priceTop: priceRange ? Math.round(priceRange.to * 100) / 100 : null,
+            priceBot: priceRange ? Math.round(priceRange.from * 100) / 100 : null,
         });
     }
 
@@ -114,18 +120,25 @@ export class ChartUI {
             setTimeout(() => {
                 if (!chart) return;
                 const ts = chart.timeScale();
-                const bs = ts.options().barSpacing;
+                const timeRange = ts.getVisibleRange();
+                const priceRange = chart.priceScale('right').getVisibleRange();
                 const lr = ts.getVisibleLogicalRange();
-                const tsWidth = ts.width();
-                const barsVisible = lr ? lr.to - lr.from : 0;
-                const effectiveBs = barsVisible > 0 && tsWidth > 0 ? tsWidth / barsVisible : 0;
+
+                const toTime = (t: number) => {
+                    const d = new Date(t * 1000);
+                    return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+                };
+
                 serverLog({
                     tag: LogEvent.ChartResize,
                     phase: `4-settled-${delay}ms`,
-                    barSpacing: bs,
-                    tsWidth,
-                    barsVisible: Math.round(barsVisible),
-                    effectiveBs: Math.round(effectiveBs * 100) / 100,
+                    barSpacing: ts.options().barSpacing,
+                    tsWidth: ts.width(),
+                    bars: lr ? Math.round(lr.to - lr.from) : 0,
+                    timeLeft: timeRange ? toTime(timeRange.from as number) : null,
+                    timeRight: timeRange ? toTime(timeRange.to as number) : null,
+                    priceTop: priceRange ? Math.round(priceRange.to * 100) / 100 : null,
+                    priceBot: priceRange ? Math.round(priceRange.from * 100) / 100 : null,
                 });
             }, delay);
         }
