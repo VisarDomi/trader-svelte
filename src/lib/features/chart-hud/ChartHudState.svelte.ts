@@ -121,6 +121,7 @@ export class ChartOverlay {
     private readChart(): Record<string, unknown> | null {
         try {
             const chart = this.chartLogic.controller.chart;
+            const series = this.chartLogic.controller.series;
             const ts = chart.timeScale();
             const timeRange = ts.getVisibleRange();
             const priceRange = chart.priceScale('right').getVisibleRange();
@@ -131,14 +132,19 @@ export class ChartOverlay {
                 return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
             };
 
+            const pixelTop = series.coordinateToPrice(0);
+            const pixelBot = series.coordinateToPrice(chart.chartElement().clientHeight);
+
             return {
                 bs: Math.round(ts.options().barSpacing * 100) / 100,
                 tsW: ts.width(),
                 bars: lr ? Math.round(lr.to - lr.from) : 0,
                 tL: timeRange ? toTime(timeRange.from as number) : '-',
                 tR: timeRange ? toTime(timeRange.to as number) : '-',
-                pT: priceRange ? Math.round(priceRange.to) : 0,
-                pB: priceRange ? Math.round(priceRange.from) : 0,
+                apiT: priceRange ? Math.round(priceRange.to) : 0,
+                apiB: priceRange ? Math.round(priceRange.from) : 0,
+                pxT: pixelTop ? Math.round(pixelTop) : 0,
+                pxB: pixelBot ? Math.round(pixelBot) : 0,
                 w: window.innerWidth,
                 h: window.innerHeight,
             };
@@ -150,6 +156,6 @@ export class ChartOverlay {
     private updateDebug() {
         const snap = this.readChart();
         if (!snap) { this.debugText = ''; return; }
-        this.debugText = `${snap.pT}—${snap.pB} | ${snap.tL}—${snap.tR} | ${snap.bars}b ${snap.bs}px | ${snap.w}x${snap.h}`;
+        this.debugText = `api:${snap.apiT}—${snap.apiB} px:${snap.pxT}—${snap.pxB} | ${snap.tL}—${snap.tR} | ${snap.w}x${snap.h}`;
     }
 }
