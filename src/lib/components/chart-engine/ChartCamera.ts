@@ -110,8 +110,21 @@ export class ChartCamera {
         const chartH = this.chart.chartElement().clientHeight;
         const priceTop = series.coordinateToPrice(0);
         const priceBot = series.coordinateToPrice(chartH);
+        const apiRange = this.chart.priceScale('right').getVisibleRange();
 
         if (priceTop === null || priceBot === null) return null;
+
+        serverLog({
+            tag: LogEvent.ChartResize,
+            phase: 'capture',
+            chartH,
+            pxTop: Math.round(priceTop),
+            pxBot: Math.round(priceBot),
+            pxSpan: Math.round(priceTop - priceBot),
+            apiTop: apiRange ? Math.round(apiRange.to) : null,
+            apiBot: apiRange ? Math.round(apiRange.from) : null,
+            apiSpan: apiRange ? Math.round(apiRange.to - apiRange.from) : null,
+        });
 
         return { barSpacing, priceTop, priceBot };
     }
@@ -127,6 +140,20 @@ export class ChartCamera {
         this.chart.priceScale('right').setVisibleRange({
             from: captured.priceBot,
             to: captured.priceTop
+        });
+
+        const chartH = this.chart.chartElement().clientHeight;
+        const afterPxTop = series.coordinateToPrice(0);
+        const afterPxBot = series.coordinateToPrice(chartH);
+        const afterApi = this.chart.priceScale('right').getVisibleRange();
+
+        serverLog({
+            tag: LogEvent.ChartResize,
+            phase: 'apply-result',
+            chartH,
+            weSet: { top: Math.round(captured.priceTop), bot: Math.round(captured.priceBot), span: Math.round(captured.priceTop - captured.priceBot) },
+            pxGot: { top: afterPxTop ? Math.round(afterPxTop) : null, bot: afterPxBot ? Math.round(afterPxBot) : null, span: afterPxTop && afterPxBot ? Math.round(afterPxTop - afterPxBot) : null },
+            apiGot: afterApi ? { top: Math.round(afterApi.to), bot: Math.round(afterApi.from), span: Math.round(afterApi.to - afterApi.from) } : null,
         });
     }
 
