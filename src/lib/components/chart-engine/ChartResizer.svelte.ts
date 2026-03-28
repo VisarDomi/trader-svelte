@@ -42,6 +42,7 @@ export class ChartUI {
         }
 
         this.updateDimensions();
+        this.initBarSpacing();
         this.removeTradingViewLogo();
     }
 
@@ -107,13 +108,21 @@ export class ChartUI {
     }
 
     private updateTimeScaleOptions(width: number, height: number) {
-        const isMobile = width <= 768;
         const isLandscape = width > height;
         const isAppMode = this.isIosDevice;
 
         this.chart?.applyOptions({
             timeScale: {
                 minimumHeight: getTimeScaleHeight(isAppMode, isLandscape),
+            }
+        });
+    }
+
+    private initBarSpacing() {
+        const isMobile = this.viewportService.width <= 768;
+
+        this.chart?.applyOptions({
+            timeScale: {
                 barSpacing: isMobile ? CHART_CONST.MOBILE_BAR_SPACING : CHART_CONST.BAR_SPACING
             }
         });

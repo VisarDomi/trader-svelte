@@ -39,7 +39,6 @@ export class ChartLogic {
     private loader: ChartLoader;
 
     private marketDetails = $state<MarketDetailsResponse | null>(null);
-    private preResizeState: any | null = null;
     private cleanupEvents: (() => void)[] = [];
 
     constructor() {
@@ -149,12 +148,14 @@ export class ChartLogic {
     }
 
     private configureLayout(container: HTMLDivElement) {
+        let preResizeWidth = 0;
+
         this.layout.init(this.controller.chart, container, {
             onBeforeResize: () => {
-                this.preResizeState = this.controller.camera.getViewState();
+                preResizeWidth = viewport.width;
             },
             onAfterResize: () => {
-
+                this.controller.camera.handleResize(preResizeWidth, viewport.width);
             }
         });
     }

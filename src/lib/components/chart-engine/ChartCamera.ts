@@ -96,6 +96,35 @@ export class ChartCamera {
         };
     }
 
+    handleResize(oldWidth: number, newWidth: number) {
+        if (!this.chart || oldWidth <= 0 || newWidth <= 0) return;
+
+        const timeScale = this.chart.timeScale();
+        const timeRange = timeScale.getVisibleRange();
+        const priceRange = this.chart.priceScale('right').getVisibleRange();
+        if (!timeRange) return;
+
+        const oldFrom = timeRange.from as number;
+        const oldTo = timeRange.to as number;
+        const oldSpan = oldTo - oldFrom;
+
+        const newSpan = oldSpan * (newWidth / oldWidth);
+        const newTo = oldFrom + newSpan;
+
+        timeScale.setVisibleRange({
+            from: oldFrom as UTCTimestamp,
+            to: newTo as UTCTimestamp
+        });
+
+        if (priceRange) {
+            this.chart.priceScale('right').applyOptions({ autoScale: false });
+            this.chart.priceScale('right').setVisibleRange({
+                from: priceRange.from,
+                to: priceRange.to
+            });
+        }
+    }
+
     destroy() {
         this.chart = null;
     }
