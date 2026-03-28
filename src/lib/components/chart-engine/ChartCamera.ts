@@ -1,4 +1,4 @@
-import type { IChartApi, IRange, Time, UTCTimestamp } from 'lightweight-charts';
+import type { IChartApi, IRange, ISeriesApi, Time, UTCTimestamp } from 'lightweight-charts';
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
@@ -12,7 +12,8 @@ export interface ViewState {
 
 export interface CapturedViewport {
     barSpacing: number;
-    priceRange: IRange<number> | null;
+    priceTop: number;
+    priceBot: number;
 }
 
 const DEFAULT_SPAN_SECONDS = 120 * 60;
@@ -102,33 +103,35 @@ export class ChartCamera {
         };
     }
 
-    captureViewport(): CapturedViewport | null {
+    captureViewport(series: ISeriesApi<"Candlestick">): CapturedViewport | null {
         if (!this.chart) return null;
 
         const barSpacing = this.chart.timeScale().options().barSpacing;
-        const priceRange = this.chart.priceScale('right').getVisibleRange();
+        const chartH = this.chart.chartElement().clientHeight;
+        const priceTop = series.coordinateToPrice(0);
+        const priceBot = series.coordinateToPrice(chartH);
 
-        return { barSpacing, priceRange };
+        if (priceTop === null || priceBot === null) return null;
+
+        return { barSpacing, priceTop, priceBot };
     }
 
-    applyResize(captured: CapturedViewport, oldPriceH: number, newPriceH: number) {
+    applyResize(series: ISeriesApi<"Candlestick">, captured: CapturedViewport, oldPriceH: number, newPriceH: number) {
         if (!this.chart || oldPriceH <= 0 || newPriceH <= 0) return;
 
         this.chart.applyOptions({
             timeScale: { barSpacing: captured.barSpacing }
         });
 
-        if (captured.priceRange) {
-            const oldPriceSpan = captured.priceRange.to - captured.priceRange.from;
-            const newPriceSpan = oldPriceSpan * (oldPriceH / newPriceH);
-            const center = captured.priceRange.from + oldPriceSpan / 2;
+        const oldPriceSpan = captured.priceTop - captured.priceBot;
+        const newPriceSpan = oldPriceSpan * (oldPriceH / newPriceH);
+        const center = captured.priceBot + oldPriceSpan / 2;
 
-            this.chart.priceScale('right').applyOptions({ autoScale: false });
-            this.chart.priceScale('right').setVisibleRange({
-                from: center - newPriceSpan / 2,
-                to: center + newPriceSpan / 2
-            });
-        }
+        this.chart.priceScale('right').applyOptions({ autoScale: false });
+        this.chart.priceScale('right').setVisibleRange({
+            from: center - newPriceSpan / 2,
+            to: center + newPriceSpan / 2
+        });
     }
 
     destroy() {

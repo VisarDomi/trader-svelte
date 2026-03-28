@@ -157,12 +157,16 @@ export class ChartLogic {
         this.layout.init(this.controller.chart, container, {
             onBeforeResize: (oldWidth, oldHeight) => {
                 oldPriceH = oldHeight - getTimeScaleHeight(isPwa, oldWidth > oldHeight);
-                captured = this.controller.camera.captureViewport();
+                try {
+                    captured = this.controller.camera.captureViewport(this.controller.series);
+                } catch {
+                    captured = null;
+                }
             },
             onAfterResize: (newWidth, newHeight) => {
                 if (captured) {
                     const newPriceH = newHeight - getTimeScaleHeight(isPwa, newWidth > newHeight);
-                    this.controller.camera.applyResize(captured, oldPriceH, newPriceH);
+                    this.controller.camera.applyResize(this.controller.series, captured, oldPriceH, newPriceH);
                 }
             }
         });
