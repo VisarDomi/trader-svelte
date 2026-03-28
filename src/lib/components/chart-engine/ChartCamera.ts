@@ -1,6 +1,7 @@
 import type { IChartApi, IRange, Time, UTCTimestamp } from 'lightweight-charts';
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export interface ViewState {
     centerTime: number;
@@ -118,11 +119,14 @@ export class ChartCamera {
         const oldTo = captured.timeRange.to as number;
         const oldTimeSpan = oldTo - oldFrom;
         const newTimeSpan = oldTimeSpan * (newWidth / oldWidth);
+        const newTimeTo = oldFrom + newTimeSpan;
 
         this.chart.timeScale().setVisibleRange({
             from: oldFrom as UTCTimestamp,
-            to: (oldFrom + newTimeSpan) as UTCTimestamp
+            to: newTimeTo as UTCTimestamp
         });
+
+        let newPriceRange: { from: number; to: number } | null = null;
 
         if (captured.priceRange) {
             const oldPriceMin = captured.priceRange.from;
@@ -130,13 +134,24 @@ export class ChartCamera {
             const oldPriceSpan = oldPriceMax - oldPriceMin;
             const newPriceSpan = oldPriceSpan * (oldHeight / newHeight);
             const center = oldPriceMin + oldPriceSpan / 2;
+            newPriceRange = { from: center - newPriceSpan / 2, to: center + newPriceSpan / 2 };
 
             this.chart.priceScale('right').applyOptions({ autoScale: false });
-            this.chart.priceScale('right').setVisibleRange({
-                from: center - newPriceSpan / 2,
-                to: center + newPriceSpan / 2
-            });
+            this.chart.priceScale('right').setVisibleRange(newPriceRange);
         }
+
+        serverLog({
+            tag: LogEvent.ChartResize,
+            oldWidth,
+            newWidth,
+            oldPriceH: oldHeight,
+            newPriceH: newHeight,
+            timeFrom: oldFrom,
+            oldTimeTo: oldTo,
+            newTimeTo,
+            oldPriceRange: captured.priceRange ? { from: captured.priceRange.from, to: captured.priceRange.to } : null,
+            newPriceRange,
+        });
     }
 
     destroy() {

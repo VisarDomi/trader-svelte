@@ -30,6 +30,7 @@ export const LogEvent = {
     ChartRender: 'chart-render',
     PrependApply: 'prepend-apply',
 
+    ChartResize: 'chart-resize',
     BarGap: 'bar-gap',
     RiskCorrection: 'risk-correction',
     ZombieSocket: 'zombie-socket',
@@ -57,6 +58,7 @@ export type LogEntry =
     | { tag: typeof LogEvent.ChartRender; version: number; candles: number; isFirstRender: boolean; prependCount: number }
     | { tag: typeof LogEvent.PrependApply; version: number; count: number; rangeBefore: { from: number; to: number } | null; rangeAfter: { from: number; to: number } | null }
 
+    | { tag: typeof LogEvent.ChartResize; oldWidth: number; newWidth: number; oldPriceH: number; newPriceH: number; timeFrom: number; oldTimeTo: number; newTimeTo: number; oldPriceRange: { from: number; to: number } | null; newPriceRange: { from: number; to: number } | null }
     | { tag: typeof LogEvent.BarGap; state: 'detected' | 'filled'; historyTime: number; liveTime: number }
     | { tag: typeof LogEvent.RiskCorrection; dealId: string; newLevel: number }
     | { tag: typeof LogEvent.ZombieSocket; gapMs: number };
