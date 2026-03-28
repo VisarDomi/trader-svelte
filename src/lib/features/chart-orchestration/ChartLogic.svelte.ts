@@ -2,6 +2,8 @@ import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 
 import { ChartController } from '$lib/components/chart-engine/ChartController.js';
 import { ChartUI } from '$lib/components/chart-engine/ChartResizer.svelte.js';
+import { getTimeScaleHeight } from '$lib/components/chart-engine/config.js';
+import { isIOS } from '$lib/core/utils/platform.js';
 import { ChartRenderer } from '$lib/features/chart-orchestration/ChartPluginManager.svelte.js';
 import { ChartOverlay } from '$lib/features/chart-hud/ChartHudState.svelte.js';
 import { ChartInputHandler } from '$lib/components/chart-engine/ChartEvents.svelte.js';
@@ -148,14 +150,26 @@ export class ChartLogic {
     }
 
     private configureLayout(container: HTMLDivElement) {
-        let preResizeWidth = 0;
+        let preWidth = 0;
+        let prePriceAreaHeight = 0;
+        let captured: ReturnType<typeof this.controller.camera.captureViewport> = null;
+        const isPwa = isIOS();
 
         this.layout.init(this.controller.chart, container, {
             onBeforeResize: () => {
-                preResizeWidth = viewport.width;
+                preWidth = viewport.width;
+                const preIsLandscape = viewport.width > viewport.height;
+                prePriceAreaHeight = viewport.height - getTimeScaleHeight(isPwa, preIsLandscape);
+                captured = this.controller.camera.captureViewport();
             },
             onAfterResize: () => {
-                this.controller.camera.handleResize(preResizeWidth, viewport.width);
+                if (captured) {
+                    const newWidth = viewport.width;
+                    const newHeight = viewport.height;
+                    const newIsLandscape = newWidth > newHeight;
+                    const newPriceAreaHeight = newHeight - getTimeScaleHeight(isPwa, newIsLandscape);
+                    this.controller.camera.applyResize(captured, preWidth, newWidth, prePriceAreaHeight, newPriceAreaHeight);
+                }
             }
         });
     }

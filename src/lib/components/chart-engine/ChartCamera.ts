@@ -9,6 +9,11 @@ export interface ViewState {
     priceSpan: number;
 }
 
+export interface CapturedViewport {
+    timeRange: IRange<Time>;
+    priceRange: IRange<number> | null;
+}
+
 const DEFAULT_SPAN_SECONDS = 120 * 60;
 
 export class ChartCamera {
@@ -96,31 +101,40 @@ export class ChartCamera {
         };
     }
 
-    handleResize(oldWidth: number, newWidth: number) {
-        if (!this.chart || oldWidth <= 0 || newWidth <= 0) return;
+    captureViewport(): CapturedViewport | null {
+        if (!this.chart) return null;
 
-        const timeScale = this.chart.timeScale();
-        const timeRange = timeScale.getVisibleRange();
+        const timeRange = this.chart.timeScale().getVisibleRange();
         const priceRange = this.chart.priceScale('right').getVisibleRange();
-        if (!timeRange) return;
+        if (!timeRange) return null;
 
-        const oldFrom = timeRange.from as number;
-        const oldTo = timeRange.to as number;
-        const oldSpan = oldTo - oldFrom;
+        return { timeRange, priceRange };
+    }
 
-        const newSpan = oldSpan * (newWidth / oldWidth);
-        const newTo = oldFrom + newSpan;
+    applyResize(captured: CapturedViewport, oldWidth: number, newWidth: number, oldHeight: number, newHeight: number) {
+        if (!this.chart || oldWidth <= 0 || newWidth <= 0 || oldHeight <= 0 || newHeight <= 0) return;
 
-        timeScale.setVisibleRange({
+        const oldFrom = captured.timeRange.from as number;
+        const oldTo = captured.timeRange.to as number;
+        const oldTimeSpan = oldTo - oldFrom;
+        const newTimeSpan = oldTimeSpan * (newWidth / oldWidth);
+
+        this.chart.timeScale().setVisibleRange({
             from: oldFrom as UTCTimestamp,
-            to: newTo as UTCTimestamp
+            to: (oldFrom + newTimeSpan) as UTCTimestamp
         });
 
-        if (priceRange) {
+        if (captured.priceRange) {
+            const oldPriceMin = captured.priceRange.from;
+            const oldPriceMax = captured.priceRange.to;
+            const oldPriceSpan = oldPriceMax - oldPriceMin;
+            const newPriceSpan = oldPriceSpan * (oldHeight / newHeight);
+            const center = oldPriceMin + oldPriceSpan / 2;
+
             this.chart.priceScale('right').applyOptions({ autoScale: false });
             this.chart.priceScale('right').setVisibleRange({
-                from: priceRange.from,
-                to: priceRange.to
+                from: center - newPriceSpan / 2,
+                to: center + newPriceSpan / 2
             });
         }
     }
