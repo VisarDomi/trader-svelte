@@ -116,21 +116,17 @@ export class ChartCamera {
         return { barSpacing, priceTop, priceBot };
     }
 
-    applyResize(series: ISeriesApi<"Candlestick">, captured: CapturedViewport, oldPriceH: number, newPriceH: number) {
-        if (!this.chart || oldPriceH <= 0 || newPriceH <= 0) return;
+    applyResize(series: ISeriesApi<"Candlestick">, captured: CapturedViewport) {
+        if (!this.chart) return;
 
         this.chart.applyOptions({
             timeScale: { barSpacing: captured.barSpacing }
         });
 
-        const oldPriceSpan = captured.priceTop - captured.priceBot;
-        const newPriceSpan = oldPriceSpan * (oldPriceH / newPriceH);
-        const center = captured.priceBot + oldPriceSpan / 2;
-
         this.chart.priceScale('right').applyOptions({ autoScale: false });
         this.chart.priceScale('right').setVisibleRange({
-            from: center - newPriceSpan / 2,
-            to: center + newPriceSpan / 2
+            from: captured.priceBot,
+            to: captured.priceTop
         });
     }
 

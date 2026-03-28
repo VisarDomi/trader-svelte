@@ -2,8 +2,6 @@ import { viewport } from '$lib/core/services/ViewportService.svelte.js';
 
 import { ChartController } from '$lib/components/chart-engine/ChartController.js';
 import { ChartUI } from '$lib/components/chart-engine/ChartResizer.svelte.js';
-import { getTimeScaleHeight } from '$lib/components/chart-engine/config.js';
-import { isIOS } from '$lib/core/utils/platform.js';
 import { ChartRenderer } from '$lib/features/chart-orchestration/ChartPluginManager.svelte.js';
 import { ChartOverlay } from '$lib/features/chart-hud/ChartHudState.svelte.js';
 import { ChartInputHandler } from '$lib/components/chart-engine/ChartEvents.svelte.js';
@@ -150,23 +148,19 @@ export class ChartLogic {
     }
 
     private configureLayout(container: HTMLDivElement) {
-        let oldPriceH = 0;
         let captured: ReturnType<typeof this.controller.camera.captureViewport> = null;
-        const isPwa = isIOS();
 
         this.layout.init(this.controller.chart, container, {
-            onBeforeResize: (oldWidth, oldHeight) => {
-                oldPriceH = oldHeight - getTimeScaleHeight(isPwa, oldWidth > oldHeight);
+            onBeforeResize: () => {
                 try {
                     captured = this.controller.camera.captureViewport(this.controller.series);
                 } catch {
                     captured = null;
                 }
             },
-            onAfterResize: (newWidth, newHeight) => {
+            onAfterResize: () => {
                 if (captured) {
-                    const newPriceH = newHeight - getTimeScaleHeight(isPwa, newWidth > newHeight);
-                    this.controller.camera.applyResize(this.controller.series, captured, oldPriceH, newPriceH);
+                    this.controller.camera.applyResize(this.controller.series, captured);
                 }
             }
         });

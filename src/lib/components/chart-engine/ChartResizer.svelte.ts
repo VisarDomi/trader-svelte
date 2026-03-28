@@ -6,8 +6,8 @@ import type { ViewportService } from "$lib/core/services/ViewportService.svelte.
 import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export interface ResizeCallbacks {
-    onBeforeResize?: (oldWidth: number, oldHeight: number) => void;
-    onAfterResize?: (newWidth: number, newHeight: number) => void;
+    onBeforeResize?: () => void;
+    onAfterResize?: () => void;
 }
 
 export class ChartUI {
@@ -99,7 +99,7 @@ export class ChartUI {
         this.readChartState(`1-before[${oldW}x${oldH}->${newW}x${newH}]`);
 
         if (oldW > 0 && oldH > 0) {
-            this.callbacks?.onBeforeResize?.(oldW, oldH);
+            this.callbacks?.onBeforeResize?.();
         }
 
         this.updateDimensions();
@@ -110,7 +110,7 @@ export class ChartUI {
         this.lastHeight = newH;
 
         if (oldW > 0 && oldH > 0) {
-            this.callbacks?.onAfterResize?.(newW, newH);
+            this.callbacks?.onAfterResize?.();
         }
 
         this.readChartState('3-after-apply');
