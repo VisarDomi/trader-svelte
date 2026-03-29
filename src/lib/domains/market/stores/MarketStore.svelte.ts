@@ -5,6 +5,7 @@ import type { FeedUpdate } from '$lib/domains/market/services/MarketFeed.js';
 import { MarketCmd, type MarketCommand } from './MarketCommands.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
+import { CandleTimeline } from '$lib/domains/market/CandleTimeline.js';
 
 export class MarketStore extends BaseStore {
 
@@ -22,8 +23,8 @@ export class MarketStore extends BaseStore {
     marketStatus = $state("CLOSED");
     epic = $state("");
 
-    private _bidHistory: ChartCandle[] = [];
-    private _askHistory: ChartCandle[] = [];
+    private _bidTimeline = new CandleTimeline();
+    private _askTimeline = new CandleTimeline();
     private _liveBidCandle: ChartCandle | null = null;
     private _liveAskCandle: ChartCandle | null = null;
 
@@ -36,15 +37,15 @@ export class MarketStore extends BaseStore {
     }
 
     hasBidHistory(): boolean {
-        return this._bidHistory.length > 0;
+        return this._bidTimeline.length > 0;
     }
 
     getOldestBidTime(): number {
-        return this._bidHistory.length > 0 ? this._bidHistory[0].time : 0;
+        return this._bidTimeline.oldest()?.time ?? 0;
     }
 
     getNewestBidTime(): number {
-        return this._bidHistory.length > 0 ? this._bidHistory[this._bidHistory.length - 1].time : 0;
+        return this._bidTimeline.newest()?.time ?? 0;
     }
 
     getLiveBidCandle(): ChartCandle | null {
@@ -99,8 +100,8 @@ export class MarketStore extends BaseStore {
         this.history = [];
         this.historyVersion = 0;
         this._prependAtVersion.clear();
-        this._bidHistory = [];
-        this._askHistory = [];
+        this._bidTimeline.clear();
+        this._askTimeline.clear();
         this._liveBidCandle = null;
         this._liveAskCandle = null;
         this.dataSource = dataSource;
@@ -117,43 +118,26 @@ export class MarketStore extends BaseStore {
     }
 
     private _setHistory(bid: ChartCandle[], ask: ChartCandle[]) {
-        this._bidHistory = bid;
-        this._askHistory = ask;
+        this._bidTimeline = CandleTimeline.from(bid);
+        this._askTimeline = CandleTimeline.from(ask);
         this.recalcLiveState();
         this.publishHistory();
         this.updateTrigger++;
     }
 
     private _prependHistory(bid: ChartCandle[], ask: ChartCandle[]) {
-        this._bidHistory = [...bid, ...this._bidHistory];
-        this._askHistory = [...ask, ...this._askHistory];
+        const addedBid = this._bidTimeline.prepend(bid);
+        this._askTimeline.prepend(ask);
         this.publishHistory();
-        this._prependAtVersion.set(this.historyVersion, bid.length);
-        serverLog({ tag: LogEvent.PrependStamp, version: this.historyVersion, count: bid.length, totalCandles: this._bidHistory.length });
+        this._prependAtVersion.set(this.historyVersion, addedBid);
+        serverLog({ tag: LogEvent.PrependStamp, version: this.historyVersion, count: addedBid, totalCandles: this._bidTimeline.length });
         this.updateTrigger++;
     }
 
     private _mergeLatestHistory(newBid: ChartCandle[], newAsk: ChartCandle[]) {
         if (newBid.length === 0) return;
-
-        const lastExistingTime = this._bidHistory.length > 0
-            ? this._bidHistory[this._bidHistory.length - 1].time
-            : 0;
-        const lastNewTime = newBid[newBid.length - 1].time;
-        if (lastNewTime <= lastExistingTime) return;
-
-        const merge = (oldArr: ChartCandle[], newArr: ChartCandle[]) => {
-            if (oldArr.length === 0) return newArr;
-            const firstNewTime = newArr[0].time;
-            const cutOffIndex = oldArr.findIndex(c => c.time >= firstNewTime);
-            if (cutOffIndex === -1) {
-                return [...oldArr, ...newArr];
-            }
-            return [...oldArr.slice(0, cutOffIndex), ...newArr];
-        };
-
-        this._bidHistory = merge(this._bidHistory, newBid);
-        this._askHistory = merge(this._askHistory, newAsk);
+        this._bidTimeline.merge(newBid);
+        this._askTimeline.merge(newAsk);
         this.publishHistory();
         this.updateTrigger++;
     }
@@ -163,8 +147,8 @@ export class MarketStore extends BaseStore {
         this.offer = u.offer;
 
         const hasCompletion = u.completedBid || u.completedAsk;
-        if (u.completedBid) this._bidHistory = [...this._bidHistory, u.completedBid];
-        if (u.completedAsk) this._askHistory = [...this._askHistory, u.completedAsk];
+        if (u.completedBid) this._bidTimeline.append(u.completedBid);
+        if (u.completedAsk) this._askTimeline.append(u.completedAsk);
 
         this._liveBidCandle = u.liveBid;
         this._liveAskCandle = u.liveAsk;
@@ -185,8 +169,8 @@ export class MarketStore extends BaseStore {
     }
 
     private recalcLiveState() {
-        this._liveBidCandle = this._bidHistory.length > 0 ? this._bidHistory[this._bidHistory.length - 1] : null;
-        this._liveAskCandle = this._askHistory.length > 0 ? this._askHistory[this._askHistory.length - 1] : null;
+        this._liveBidCandle = this._bidTimeline.newest() ?? null;
+        this._liveAskCandle = this._askTimeline.newest() ?? null;
 
         if (this._liveBidCandle) this.bid = this._liveBidCandle.close;
         if (this._liveAskCandle) this.offer = this._liveAskCandle.close;
@@ -196,10 +180,10 @@ export class MarketStore extends BaseStore {
         const prevCandles = this.history.length;
 
         if (this.dataSource === TRADING.CHART_DATA_SOURCE_OFR) {
-            this.history = [...this._askHistory];
+            this.history = this._askTimeline.toArray();
             this.lastCandle = this._liveAskCandle;
         } else {
-            this.history = [...this._bidHistory];
+            this.history = this._bidTimeline.toArray();
             this.lastCandle = this._liveBidCandle;
         }
         this.historyVersion++;

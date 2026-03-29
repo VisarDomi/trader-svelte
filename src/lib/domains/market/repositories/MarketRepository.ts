@@ -50,14 +50,9 @@ export class MarketRepository {
                 new Date(a.snapshotTimeUTC).getTime() - new Date(b.snapshotTimeUTC).getTime()
             );
 
-            const deduped = [...new Map(sorted.map(p => [p.snapshotTimeUTC, p])).values()];
-            if (deduped.length < sorted.length) {
-                log.warn(`[MarketRepository] Deduped ${sorted.length - deduped.length} duplicate timestamps`);
-            }
-
             return {
-                bid: this.mapToCandles(deduped, TRADING.CHART_DATA_SOURCE_BID),
-                ask: this.mapToCandles(deduped, TRADING.CHART_DATA_SOURCE_OFR)
+                bid: this.mapToCandles(sorted, TRADING.CHART_DATA_SOURCE_BID),
+                ask: this.mapToCandles(sorted, TRADING.CHART_DATA_SOURCE_OFR)
             };
 
         } catch (e) {
