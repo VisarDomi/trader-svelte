@@ -8,6 +8,7 @@ import type { AccountStore } from '$lib/domains/trading/stores/AccountStore.svel
 import type { PositionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
 import type { TradeStore } from '$lib/domains/trading/stores/TradeStore.svelte.js';
 import type { ChartStateManager } from "$lib/features/chart-orchestration/ChartStateManager.svelte.js";
+import type { ChartCandle } from '$lib/shared/types/market.js';
 import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 import { PositionLines } from "$lib/features/chart-drawings/plugins/PositionLines.js";
@@ -16,6 +17,15 @@ import { Fee } from "$lib/features/chart-drawings/plugins/Fee.js";
 import { HistoryLoaderPlugin } from "$lib/features/chart-drawings/plugins/HistoryLoaderPlugin.js";
 import { LiveEdgePlugin } from "$lib/features/chart-drawings/plugins/LiveEdgePlugin.js";
 import { ClockPlugin } from "$lib/features/chart-drawings/plugins/ClockPlugin.js";
+
+/** Captured by the $effect when historyVersion advances. Persists until RAF consumes it. */
+interface HistoryCommand {
+    history: ChartCandle[];
+    version: number;
+    isFirstRender: boolean;
+    prevCandles: number;
+    prependCount: number;
+}
 
 export class ChartRenderer {
 
@@ -26,6 +36,10 @@ export class ChartRenderer {
     private renderedVersion = 0;
     private viewInitialized = false;
     private lastRenderedCandles = 0;
+
+    // RAF adapter — $effect writes, RAF reads
+    private rafId = 0;
+    private pendingHistory: HistoryCommand | null = null;
 
     private features: Types[] = [];
 
@@ -45,61 +59,93 @@ export class ChartRenderer {
         this.features.push(new LiveEdgePlugin(this.camera));
         this.features.push(new ClockPlugin());
 
+        // Functional core: $effect subscribes to reactive state and captures
+        // render intent. All LWC imperative calls happen in the RAF shell.
         $effect(() => {
             if (!this.context || !this.series) return;
 
-            const loaded = this.context.isMarketLoaded;
-            const lastCandle = this.context.lastCandle;
-
+            // Subscribe to every change source that should trigger a render
+            const _loaded = this.context.isMarketLoaded;
+            const _lastCandle = this.context.lastCandle;
             const _trigger = this.marketStore.updateTrigger;
-
-            if (loaded && lastCandle) {
-                this.series.update(lastCandle);
-            }
-
-            for (const feature of this.features) {
-                feature.update(this.context);
-            }
-        });
-
-        $effect(() => {
-            const loaded = this.marketStore.isLoaded;
             const history = this.marketStore.history;
             const version = this.marketStore.historyVersion;
+            const marketLoaded = this.marketStore.isLoaded;
 
-            if (!this.series || !loaded || history.length === 0) return;
-            if (version === this.renderedVersion) return;
+            // Capture history change — persists in pendingHistory until RAF consumes it.
+            // Multiple $effect runs between RAFs won't lose this because renderedVersion
+            // is updated immediately, so subsequent runs skip this branch.
+            if (marketLoaded && history.length > 0 && version !== this.renderedVersion) {
+                const isFirstRender = this.renderedVersion === 0;
+                const prevCandles = this.lastRenderedCandles;
+                this.renderedVersion = version;
 
-            const isFirstRender = this.renderedVersion === 0;
-            const prevCandles = this.lastRenderedCandles;
-            this.renderedVersion = version;
+                this.pendingHistory = {
+                    history,
+                    version,
+                    isFirstRender,
+                    prevCandles,
+                    prependCount: this.marketStore.consumePrependCount(version),
+                };
+            }
 
-            const prependCount = this.marketStore.consumePrependCount(version);
-            this.series.setData(history);
-            this.lastRenderedCandles = history.length;
+            this.scheduleRender();
+        });
+    }
 
-            if (isFirstRender || version <= 2 || prependCount > 0) {
+    /** At most one RAF pending at a time. Multiple $effect runs coalesce into one render. */
+    private scheduleRender() {
+        if (this.rafId) return;
+        this.rafId = requestAnimationFrame(() => {
+            this.rafId = 0;
+            this.flush();
+        });
+    }
+
+    /** Imperative shell: all LWC API calls happen here, in one synchronous pass per frame. */
+    private flush() {
+        if (!this.series || !this.context) return;
+
+        // --- Phase 1: setData (history) ---
+        const h = this.pendingHistory;
+        if (h) {
+            this.pendingHistory = null;
+            this.series.setData(h.history);
+            this.lastRenderedCandles = h.history.length;
+
+            if (h.isFirstRender || h.version <= 2 || h.prependCount > 0) {
                 serverLog({
                     tag: LogEvent.ChartRender,
-                    version,
-                    candles: history.length,
-                    isFirstRender,
-                    prependCount,
+                    version: h.version,
+                    candles: h.history.length,
+                    isFirstRender: h.isFirstRender,
+                    prependCount: h.prependCount,
                 });
             }
 
-            if (isFirstRender || !this.viewInitialized) {
+            if (h.isFirstRender || !this.viewInitialized) {
                 const savedState = this.stateManager.loadState();
-                const lastTime = Number(history[history.length - 1].time);
+                const lastTime = Number(h.history[h.history.length - 1].time);
                 this.camera.initializeView(savedState, lastTime);
                 this.viewInitialized = true;
-            } else if (prependCount > 0) {
-                const { before, after } = this.camera.maintainScrollPosition(prependCount);
-                serverLog({ tag: LogEvent.PrependApply, version, count: prependCount, rangeBefore: before, rangeAfter: after });
-            } else if (prevCandles > 0 && history.length - prevCandles > 100) {
-                log.warn(`[ChartRenderer] Large candle growth (${prevCandles} → ${history.length}) at version ${version} with no prepend — possible regression`);
+            } else if (h.prependCount > 0) {
+                const { before, after } = this.camera.maintainScrollPosition(h.prependCount);
+                serverLog({ tag: LogEvent.PrependApply, version: h.version, count: h.prependCount, rangeBefore: before, rangeAfter: after });
+            } else if (h.prevCandles > 0 && h.history.length - h.prevCandles > 100) {
+                log.warn(`[ChartRenderer] Large candle growth (${h.prevCandles} → ${h.history.length}) at version ${h.version} with no prepend — possible regression`);
             }
-        });
+        }
+
+        // --- Phase 2: live candle (update) — always after setData ---
+        const lastCandle = this.context.lastCandle;
+        if (this.context.isMarketLoaded && lastCandle) {
+            this.series.update(lastCandle);
+        }
+
+        // --- Phase 3: plugins (camera anchor, price lines, etc.) ---
+        for (const feature of this.features) {
+            feature.update(this.context);
+        }
     }
 
     init(chart: IChartApi, series: ISeriesApi<"Candlestick">, context: ChartContext) {
@@ -116,6 +162,11 @@ export class ChartRenderer {
     }
 
     destroy() {
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = 0;
+        }
+        this.pendingHistory = null;
         for (const feature of this.features) {
             feature.destroy();
         }
