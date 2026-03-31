@@ -30,10 +30,10 @@ export class PositionPoller {
     start() {
         this.stop();
 
-        void this.fetchAndSync();
+        void this.fetchAndSync('refresh');
 
         this.intervalId = setInterval(() => {
-            void this.fetchAndSync();
+            void this.fetchAndSync('poll');
         }, 15000);
 
         // Subscribe to price truth from market domain. Trading domain owns
@@ -49,7 +49,7 @@ export class PositionPoller {
 
             if (detectBreach(bid, offer, pos.position)) {
                 this.breachTriggered = true;
-                void this.refresh();
+                void this.fetchAndSync('breach');
             }
         });
     }
@@ -67,10 +67,10 @@ export class PositionPoller {
     }
 
     async refresh() {
-        await this.fetchAndSync();
+        await this.fetchAndSync('refresh');
     }
 
-    private async fetchAndSync() {
+    private async fetchAndSync(source: 'breach' | 'poll' | 'refresh') {
 
         const client = api.client;
         if (!client) return;
@@ -104,6 +104,7 @@ export class PositionPoller {
                     tag: LogEvent.PositionAutoClose,
                     dealId: prev.position.dealId,
                     detectionLagMs: fetchMs,
+                    source,
                 });
             }
 

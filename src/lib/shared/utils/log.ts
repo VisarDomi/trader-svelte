@@ -69,7 +69,7 @@ export type LogEntry =
     | { tag: typeof LogEvent.TradeOpen; mode: string; balance: number; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; dealId: string; entryLevel: number }
     | { tag: typeof LogEvent.TradeClose; mode: string; balance: number; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; pnl: number; entryLevel: number; exitLevel: number }
     | { tag: typeof LogEvent.PositionPoll; fetchMs: number; hasPosition: boolean; epic: string | null }
-    | { tag: typeof LogEvent.PositionAutoClose; dealId: string; detectionLagMs: number };
+    | { tag: typeof LogEvent.PositionAutoClose; dealId: string; detectionLagMs: number; source: 'breach' | 'poll' | 'refresh' };
 
 const LOG_STORAGE_KEY = 'mt_log_buffer';
 const FLUSH_INTERVAL_MS = 2000;
