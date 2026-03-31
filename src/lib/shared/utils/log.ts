@@ -36,6 +36,8 @@ export const LogEvent = {
 
     TradeOpen: 'trade-open',
     TradeClose: 'trade-close',
+    PositionPoll: 'position-poll',
+    PositionAutoClose: 'position-auto-close',
 } as const;
 
 export type LogEntry =
@@ -65,7 +67,9 @@ export type LogEntry =
     | { tag: typeof LogEvent.ZombieSocket; gapMs: number }
 
     | { tag: typeof LogEvent.TradeOpen; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; dealId: string }
-    | { tag: typeof LogEvent.TradeClose; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; pnl: number };
+    | { tag: typeof LogEvent.TradeClose; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; pnl: number }
+    | { tag: typeof LogEvent.PositionPoll; fetchMs: number; hasPosition: boolean; epic: string | null }
+    | { tag: typeof LogEvent.PositionAutoClose; dealId: string; detectionLagMs: number };
 
 const LOG_STORAGE_KEY = 'mt_log_buffer';
 const FLUSH_INTERVAL_MS = 2000;
