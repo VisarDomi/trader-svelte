@@ -66,8 +66,8 @@ export type LogEntry =
     | { tag: typeof LogEvent.RiskCorrection; dealId: string; newLevel: number }
     | { tag: typeof LogEvent.ZombieSocket; gapMs: number }
 
-    | { tag: typeof LogEvent.TradeOpen; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; dealId: string }
-    | { tag: typeof LogEvent.TradeClose; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; pnl: number }
+    | { tag: typeof LogEvent.TradeOpen; mode: string; balance: number; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; dealId: string; entryLevel: number }
+    | { tag: typeof LogEvent.TradeClose; mode: string; balance: number; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; pnl: number; entryLevel: number; exitLevel: number }
     | { tag: typeof LogEvent.PositionPoll; fetchMs: number; hasPosition: boolean; epic: string | null }
     | { tag: typeof LogEvent.PositionAutoClose; dealId: string; detectionLagMs: number };
 

@@ -10,6 +10,7 @@ import { positionCmd } from './PositionCommands.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { PositionResponse } from '$lib/shared/types/trading.js';
+import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class PositionStore extends BaseStore {
@@ -96,6 +97,8 @@ export class PositionStore extends BaseStore {
 
             serverLog({
                 tag: LogEvent.TradeClose,
+                mode: session.mode,
+                balance: accountStore.balance,
                 epic: marketEpic,
                 direction: oppositeDir,
                 size: p.size,
@@ -103,6 +106,8 @@ export class PositionStore extends BaseStore {
                 confirmMs: Math.round(t2 - t1),
                 totalMs: Math.round(t2 - t0),
                 pnl: result.rawPnL,
+                entryLevel: p.level,
+                exitLevel: conf.level,
             });
 
             session.removeInitialBalance(p.dealId);

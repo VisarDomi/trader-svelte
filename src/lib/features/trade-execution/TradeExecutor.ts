@@ -36,6 +36,8 @@ export class TradeExecutor {
 
         serverLog({
             tag: LogEvent.TradeOpen,
+            mode: session.mode,
+            balance: currentBalance,
             epic: market.instrument.epic,
             direction: trade.direction,
             size: trade.size,
@@ -43,6 +45,7 @@ export class TradeExecutor {
             confirmMs: Math.round(t2 - t1),
             totalMs: Math.round(t2 - t0),
             dealId: confirmation.dealId,
+            entryLevel: confirmation.level,
         });
 
         session.setInitialBalance(confirmation.dealId, currentBalance);
