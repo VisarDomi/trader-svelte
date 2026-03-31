@@ -11,7 +11,9 @@ import type { UTCTimestamp } from 'lightweight-charts';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { notifications } from '$lib/core/services/NotificationService.svelte.js';
+import { bus } from '$lib/core/events/globalBus.js';
 import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
+import * as EVENTS from '$lib/shared/constants/events.js';
 
 const STALE_THRESHOLD_MS = 10000;
 const LIVENESS_CHECK_INTERVAL = 2000;
@@ -212,7 +214,11 @@ export class MarketDataPump {
             void positionPoller.refresh();
             void accountStore.refreshActive();
         }
+
         marketStore.dispatch(marketCmd.updateLive(u));
+
+        // Market domain emits price truth. Trading domain subscribes and reacts.
+        bus.emit(EVENTS.MARKET_TICK, { bid: u.bid, offer: u.offer });
     }
 
     private async syncHistory() {

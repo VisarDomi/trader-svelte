@@ -4,11 +4,16 @@ import { api } from '$lib/core/services/ApiService.svelte.js';
 import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
 import { positionStore } from '$lib/domains/trading/stores/PositionStore.svelte.js';
 import { positionCmd } from '$lib/domains/trading/stores/PositionCommands.js';
+import { detectBreach } from '$lib/domains/trading/domain/BreachDetector.js';
+import { bus } from '$lib/core/events/globalBus.js';
+import * as EVENTS from '$lib/shared/constants/events.js';
 import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class PositionPoller {
     private intervalId: ReturnType<typeof setInterval> | null = null;
     private currentEpic: string = "";
+    private breachTriggered = false;
+    private offTick: (() => void) | null = null;
 
     setEpic(epic: string) {
         this.currentEpic = epic;
@@ -30,6 +35,23 @@ export class PositionPoller {
         this.intervalId = setInterval(() => {
             void this.fetchAndSync();
         }, 15000);
+
+        // Subscribe to price truth from market domain. Trading domain owns
+        // breach detection — market domain just emits ticks, never reaches
+        // into position state.
+        this.offTick = bus.on(EVENTS.MARKET_TICK, ({ bid, offer }) => {
+            const pos = positionStore.anyActivePosition;
+            if (!pos) {
+                this.breachTriggered = false;
+                return;
+            }
+            if (this.breachTriggered || positionStore.isClosing) return;
+
+            if (detectBreach(bid, offer, pos.position)) {
+                this.breachTriggered = true;
+                void this.refresh();
+            }
+        });
     }
 
     stop() {
@@ -37,6 +59,11 @@ export class PositionPoller {
             clearInterval(this.intervalId);
             this.intervalId = null;
         }
+        if (this.offTick) {
+            this.offTick();
+            this.offTick = null;
+        }
+        this.breachTriggered = false;
     }
 
     async refresh() {
