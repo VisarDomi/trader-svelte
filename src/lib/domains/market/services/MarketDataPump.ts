@@ -5,7 +5,7 @@ import { marketCmd } from '$lib/domains/market/stores/MarketCommands.js';
 import { session } from '$lib/core/services/SessionManager.js';
 import { api } from '$lib/core/services/ApiService.svelte.js';
 import type { ChartData } from '$lib/shared/types/trading.js';
-import type { ChartCandle } from '$lib/shared/types/market.js';
+import type { ChartCandle, CandleFrame } from '$lib/shared/types/market.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import type { UTCTimestamp } from 'lightweight-charts';
 import { positionPoller } from '$lib/domains/trading/services/PositionPoller.js';
@@ -218,10 +218,10 @@ export class MarketDataPump {
             const { bid, ask } = await repo.getHistory(this.epic, this.abortController?.signal);
 
             const split = (arr: ChartCandle[]) => {
-                if (arr.length === 0) return { history: [], current: null };
-                const current = arr[arr.length - 1];
+                if (arr.length === 0) return { history: [], current: null as CandleFrame | null };
+                const { close: _, ...frame } = arr[arr.length - 1];
                 const history = arr.slice(0, -1);
-                return { history, current };
+                return { history, current: frame };
             };
 
             const bidData = split(bid);
@@ -241,7 +241,7 @@ export class MarketDataPump {
                 historyCandles: bidData.history.length,
                 historyExtended: historyCountAfter !== historyCountBefore,
                 newestHistoryTime: historyCountAfter,
-                currentFromApi: currentBid ? { time: currentBid.time, o: currentBid.open, h: currentBid.high, l: currentBid.low, c: currentBid.close } : null,
+                currentFromApi: currentBid ? { time: currentBid.time, o: currentBid.open, h: currentBid.high, l: currentBid.low } : null,
                 liveBefore: liveBefore ? { time: liveBefore.time, o: liveBefore.open, c: liveBefore.close } : null,
                 liveAfter: liveAfter ? { time: liveAfter.time, o: liveAfter.open, c: liveAfter.close } : null,
                 mergeChanged: liveBefore?.open !== liveAfter?.open || liveBefore?.high !== liveAfter?.high || liveBefore?.low !== liveAfter?.low,

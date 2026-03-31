@@ -1,7 +1,7 @@
 import { StreamClient } from '$lib/domains/market/api/StreamClient.js';
 import { CandleAggregator } from '$lib/domains/market/domain/CandleAggregator.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
-import type { QuoteMessage, ChartCandle } from '$lib/shared/types/market.js';
+import type { QuoteMessage, ChartCandle, CandleFrame } from '$lib/shared/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
 
 export interface FeedUpdate {
@@ -52,10 +52,10 @@ export class MarketFeed {
         return c ? { ...c } : null;
     }
 
-    mergeExternalData(bidCandle: ChartCandle | null, askCandle: ChartCandle | null) {
+    mergeExternalData(bidFrame: CandleFrame | null, askFrame: CandleFrame | null) {
         let changed = false;
-        if (bidCandle) changed = this.bidAgg.merge(bidCandle) || changed;
-        if (askCandle) changed = this.askAgg.merge(askCandle) || changed;
+        if (bidFrame) changed = this.bidAgg.merge(bidFrame) || changed;
+        if (askFrame) changed = this.askAgg.merge(askFrame) || changed;
 
         if (changed) this.emitSnapshot();
     }

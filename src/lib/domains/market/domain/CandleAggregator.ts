@@ -1,4 +1,4 @@
-import type { ChartCandle } from '$lib/shared/types/market.js';
+import type { ChartCandle, CandleFrame } from '$lib/shared/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
 import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
@@ -9,15 +9,19 @@ export class CandleAggregator {
         this.liveCandle = candle ? { ...candle } : null;
     }
 
-    merge(external: ChartCandle): boolean {
+    /**
+     * Merge API data into the live candle. Accepts CandleFrame (no close) —
+     * the type boundary enforces that API can never touch close.
+     */
+    merge(frame: CandleFrame): boolean {
         if (!this.liveCandle) {
-            this.liveCandle = { ...external };
+            this.liveCandle = { ...frame, close: frame.open };
             return true;
         }
 
-        if (this.isSameMinute(this.liveCandle, external)) {
+        if (this.isSameMinute(this.liveCandle, frame)) {
             const before = { ...this.liveCandle };
-            this.mergeCandleState(external);
+            this.mergeCandleState(frame);
 
             const changed = before.open !== this.liveCandle.open
                 || before.high !== this.liveCandle.high
@@ -32,8 +36,8 @@ export class CandleAggregator {
                 });
             }
             return changed;
-        } else if (external.time > this.liveCandle.time) {
-            this.liveCandle = { ...external };
+        } else if (frame.time > this.liveCandle.time) {
+            this.liveCandle = { ...frame, close: frame.open };
             return true;
         }
 
@@ -91,15 +95,15 @@ export class CandleAggregator {
         this.liveCandle.close = price;
     }
 
-    private isSameMinute(a: ChartCandle, b: ChartCandle): boolean {
+    private isSameMinute(a: ChartCandle, b: CandleFrame): boolean {
         return a.time === b.time;
     }
 
-    private mergeCandleState(external: ChartCandle) {
+    private mergeCandleState(frame: CandleFrame) {
         if (!this.liveCandle) return;
 
-        this.liveCandle.open = external.open;
-        this.liveCandle.high = Math.max(this.liveCandle.high, external.high);
-        this.liveCandle.low = Math.min(this.liveCandle.low, external.low);
+        this.liveCandle.open = frame.open;
+        this.liveCandle.high = Math.max(this.liveCandle.high, frame.high);
+        this.liveCandle.low = Math.min(this.liveCandle.low, frame.low);
     }
 }

@@ -18,12 +18,21 @@ export interface MarketPriceResponse {
     prices: PriceSnapshot[];
 }
 
+/** Full OHLC candle — close is exclusively owned by tick data. */
 export interface ChartCandle {
     time: UTCTimestamp;
     open: number;
     high: number;
     low: number;
     close: number;
+}
+
+/** API-sourced candle frame — no close field, enforcing tick-only ownership of close at the type level. */
+export interface CandleFrame {
+    time: UTCTimestamp;
+    open: number;
+    high: number;
+    low: number;
 }
 
 export interface WebSocketPayload {
