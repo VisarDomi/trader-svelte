@@ -121,14 +121,24 @@ export class MarketDataPump {
         if (tokens) {
             const seedBid = marketStore.getLiveBidCandle();
             const seedAsk = marketStore.getLiveAskCandle();
+
+            // Only seed with a candle that belongs to the current minute.
+            // A stale seed from before sleep is zombie data — neither tick-owned
+            // nor API-owned. It would get "completed" with wrong OHLC on the
+            // first tick, then replaced by sync → visible teleport.
+            const currentMinute = (Math.floor(Date.now() / 1000 / 60) * 60) as UTCTimestamp;
+            const freshBid = seedBid?.time === currentMinute ? seedBid : null;
+            const freshAsk = seedAsk?.time === currentMinute ? seedAsk : null;
+
             serverLog({
                 tag: LogEvent.ConnectSeed,
                 epic: this.epic,
                 bidTime: seedBid?.time ?? null,
                 bidOHLC: seedBid ? { o: seedBid.open, h: seedBid.high, l: seedBid.low, c: seedBid.close } : null,
                 staleMs: seedBid ? Date.now() - seedBid.time * 1000 : null,
+                seeded: freshBid !== null,
             });
-            this.feed.initialize(seedBid, seedAsk);
+            this.feed.initialize(freshBid, freshAsk);
             this.feed.connect(tokens, this.epic);
         } else {
             serverLog({ tag: LogEvent.ConnectAbort, reason: 'no-tokens', epic: this.epic });

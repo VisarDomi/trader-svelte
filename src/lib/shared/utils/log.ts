@@ -33,6 +33,9 @@ export const LogEvent = {
     BarGap: 'bar-gap',
     RiskCorrection: 'risk-correction',
     ZombieSocket: 'zombie-socket',
+
+    TradeOpen: 'trade-open',
+    TradeClose: 'trade-close',
 } as const;
 
 export type LogEntry =
@@ -41,7 +44,7 @@ export type LogEntry =
     | { tag: typeof LogEvent.ResumeComplete; elapsedMs: number }
     | { tag: typeof LogEvent.ResumeError; error: string }
     | { tag: typeof LogEvent.AuthFailure; phase: string; error: string }
-    | { tag: typeof LogEvent.ConnectSeed; epic: string; bidTime: number | null; bidOHLC: OHLC | null; staleMs: number | null }
+    | { tag: typeof LogEvent.ConnectSeed; epic: string; bidTime: number | null; bidOHLC: OHLC | null; staleMs: number | null; seeded: boolean }
     | { tag: typeof LogEvent.FirstTick; bid: number; offer: number; liveBidTime: number | null; completedBid: PriceSnapshot | null }
     | { tag: typeof LogEvent.SyncResult; historyCandles: number; historyExtended: boolean; newestHistoryTime: number; currentFromApi: OHLCWithTime | null; liveBefore: PriceSnapshot | null; liveAfter: PriceSnapshot | null; mergeChanged: boolean }
     | { tag: typeof LogEvent.CandleMerge; time: number; before: OHLC; after: OHLC }
@@ -59,7 +62,10 @@ export type LogEntry =
 
     | { tag: typeof LogEvent.BarGap; state: 'detected' | 'filled'; historyTime: number; liveTime: number }
     | { tag: typeof LogEvent.RiskCorrection; dealId: string; newLevel: number }
-    | { tag: typeof LogEvent.ZombieSocket; gapMs: number };
+    | { tag: typeof LogEvent.ZombieSocket; gapMs: number }
+
+    | { tag: typeof LogEvent.TradeOpen; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; dealId: string }
+    | { tag: typeof LogEvent.TradeClose; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; pnl: number };
 
 const LOG_STORAGE_KEY = 'mt_log_buffer';
 const FLUSH_INTERVAL_MS = 2000;

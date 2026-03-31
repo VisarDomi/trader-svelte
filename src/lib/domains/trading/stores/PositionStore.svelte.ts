@@ -10,7 +10,7 @@ import { positionCmd } from './PositionCommands.js';
 import * as TRADING from '$lib/shared/constants/trading.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
 import type { PositionResponse } from '$lib/shared/types/trading.js';
-import { log } from '$lib/shared/utils/log.js';
+import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class PositionStore extends BaseStore {
 
@@ -72,13 +72,19 @@ export class PositionStore extends BaseStore {
                 ? TRADING.SELL_DIRECTION
                 : TRADING.BUY_DIRECTION;
 
+            const t0 = performance.now();
+
             const res = await createPosition(client, {
                 epic: marketEpic,
                 direction: oppositeDir,
                 size: p.size
             });
 
+            const t1 = performance.now();
+
             const conf = await getConfirmation(client, res.dealReference);
+
+            const t2 = performance.now();
 
             const result = this.calculator.calculatePnL(
                 p.level,
@@ -87,6 +93,17 @@ export class PositionStore extends BaseStore {
                 p.direction,
                 0
             );
+
+            serverLog({
+                tag: LogEvent.TradeClose,
+                epic: marketEpic,
+                direction: oppositeDir,
+                size: p.size,
+                orderMs: Math.round(t1 - t0),
+                confirmMs: Math.round(t2 - t1),
+                totalMs: Math.round(t2 - t0),
+                pnl: result.rawPnL,
+            });
 
             session.removeInitialBalance(p.dealId);
             notifications.success(`Position Closed. PnL: ${result.rawPnL.toFixed(2)}`);

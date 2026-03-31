@@ -5,6 +5,7 @@ import type { ApiClient } from '$lib/core/api/ApiClient.js';
 import type { TradeRequest, PositionResponse, PositionBody } from '$lib/shared/types/trading.js';
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 import type { PlannedTrade } from '$lib/features/trade-execution/TradePlanner.js';
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class TradeExecutor {
     async execute(
@@ -23,9 +24,26 @@ export class TradeExecutor {
             profitLevel: trade.profitLevel
         };
 
+        const t0 = performance.now();
+
         const response = await createPosition(client, request);
 
+        const t1 = performance.now();
+
         const confirmation = await getConfirmation(client, response.dealReference);
+
+        const t2 = performance.now();
+
+        serverLog({
+            tag: LogEvent.TradeOpen,
+            epic: market.instrument.epic,
+            direction: trade.direction,
+            size: trade.size,
+            orderMs: Math.round(t1 - t0),
+            confirmMs: Math.round(t2 - t1),
+            totalMs: Math.round(t2 - t0),
+            dealId: confirmation.dealId,
+        });
 
         session.setInitialBalance(confirmation.dealId, currentBalance);
 
