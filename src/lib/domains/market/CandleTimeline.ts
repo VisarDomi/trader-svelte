@@ -35,12 +35,18 @@ export class CandleTimeline {
         return kept.length;
     }
 
-    /** Append a completed candle. Returns 'added' or 'dropped' (duplicate time). */
-    append(candle: ChartCandle): 'added' | 'dropped' {
+    /** Append a completed candle. Replaces if same time (tick data is fresher than API). */
+    append(candle: ChartCandle): 'added' | 'replaced' | 'dropped' {
         const last = this.newest();
-        if (last && candle.time <= last.time) return 'dropped';
-        this.candles = [...this.candles, candle];
-        return 'added';
+        if (!last || candle.time > last.time) {
+            this.candles = [...this.candles, candle];
+            return 'added';
+        }
+        if (candle.time === last.time) {
+            this.candles = [...this.candles.slice(0, -1), candle];
+            return 'replaced';
+        }
+        return 'dropped';
     }
 
     /**

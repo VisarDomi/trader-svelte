@@ -165,7 +165,7 @@ export class MarketStore extends BaseStore {
         const hasCompletion = u.completedBid || u.completedAsk;
         if (u.completedBid) {
             const result = this._bidTimeline.append(u.completedBid);
-            if (result === 'dropped') {
+            if (result !== 'added') {
                 serverLog({ tag: LogEvent.TimelineAppend, time: u.completedBid.time, result, newestExisting: this._bidTimeline.newest()?.time ?? 0 });
             }
         }
