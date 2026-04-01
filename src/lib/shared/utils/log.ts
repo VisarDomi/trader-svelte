@@ -41,6 +41,7 @@ export const LogEvent = {
     CameraEnforce: 'camera-enforce',
     CameraPassiveFollow: 'camera-passive-follow',
     CameraTrackingLost: 'camera-tracking-lost',
+    CameraDriftCheck: 'camera-drift-check',
 
     TradeOpen: 'trade-open',
     TradeClose: 'trade-close',
@@ -71,9 +72,10 @@ export type LogEntry =
     | { tag: typeof LogEvent.PrependApply; version: number; count: number; rangeBefore: { from: number; to: number } | null; rangeAfter: { from: number; to: number } | null }
 
     | { tag: typeof LogEvent.CameraInit; anchorTime: number; tracking: boolean; source: 'saved' | 'default' }
-    | { tag: typeof LogEvent.CameraEnforce; anchorTime: number; rangeFrom: number; rangeTo: number; span: number }
+    | { tag: typeof LogEvent.CameraEnforce; anchorTime: number; rangeFrom: number; rangeTo: number; span: number; anchorChanged: boolean }
     | { tag: typeof LogEvent.CameraPassiveFollow; oldTime: number; newTime: number; delta: number; liveVisible: boolean }
     | { tag: typeof LogEvent.CameraTrackingLost; drift: number; tolerance: number; rangeTo: number; idealTo: number }
+    | { tag: typeof LogEvent.CameraDriftCheck; drift: number; tolerance: number; graceFrames: number; rangeTo: number; idealTo: number }
 
     | { tag: typeof LogEvent.TimelineAppend; time: number; result: 'added' | 'dropped'; newestExisting: number }
     | { tag: typeof LogEvent.TimelineMerge; source: string; replaced: number; extended: number; newestBefore: number; newestAfter: number }

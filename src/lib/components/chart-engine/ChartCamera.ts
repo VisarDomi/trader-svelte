@@ -18,9 +18,10 @@ export interface CapturedViewport {
 
 export type CameraAction =
     | { kind: 'init'; anchorTime: number; tracking: boolean; source: 'saved' | 'default' }
-    | { kind: 'enforce'; anchorTime: number; rangeFrom: number; rangeTo: number; span: number }
+    | { kind: 'enforce'; anchorTime: number; rangeFrom: number; rangeTo: number; span: number; anchorChanged: boolean }
     | { kind: 'passive-follow'; oldTime: number; newTime: number; delta: number; liveVisible: boolean }
-    | { kind: 'tracking-lost'; drift: number; tolerance: number; rangeTo: number; idealTo: number };
+    | { kind: 'tracking-lost'; drift: number; tolerance: number; rangeTo: number; idealTo: number }
+    | { kind: 'drift-check'; drift: number; tolerance: number; graceFrames: number; rangeTo: number; idealTo: number };
 
 const DEFAULT_SPAN_SECONDS = 120 * 60;
 const DRIFT_TOLERANCE = 0.03;
@@ -84,22 +85,39 @@ export class ChartCamera {
 
         const actions: CameraAction[] = [];
         const oldAnchorTime = this.lastAnchorTime;
+        const anchorChanged = newAnchorTime !== oldAnchorTime;
         this.lastAnchorTime = newAnchorTime;
 
         if (this.isTracking) {
             if (this.graceFrames > 0) {
                 this.graceFrames--;
             } else {
-                const driftAction = this.checkDrift();
-                if (driftAction) {
-                    this.isTracking = false;
-                    actions.push(driftAction);
+                const driftResult = this.measureDrift();
+                if (driftResult) {
+                    actions.push({
+                        kind: 'drift-check',
+                        drift: driftResult.drift,
+                        tolerance: driftResult.tolerance,
+                        graceFrames: this.graceFrames,
+                        rangeTo: driftResult.rangeTo,
+                        idealTo: driftResult.idealTo,
+                    });
+                    if (driftResult.drift > driftResult.tolerance) {
+                        this.isTracking = false;
+                        actions.push({
+                            kind: 'tracking-lost',
+                            drift: Math.round(driftResult.drift),
+                            tolerance: Math.round(driftResult.tolerance),
+                            rangeTo: Math.round(driftResult.rangeTo),
+                            idealTo: Math.round(driftResult.idealTo),
+                        });
+                    }
                 }
             }
         }
 
         if (this.isTracking) {
-            actions.push(this.enforceLivePosition(newAnchorTime));
+            actions.push(this.enforceLivePosition(newAnchorTime, undefined, anchorChanged));
         } else if (oldAnchorTime) {
             actions.push(this.checkAndApplyPassiveFollow(oldAnchorTime, newAnchorTime));
         }
@@ -182,28 +200,17 @@ export class ChartCamera {
 
     // --- Private: drift detection ---
 
-    private checkDrift(): CameraAction | null {
+    private measureDrift(): { drift: number; tolerance: number; rangeTo: number; idealTo: number } | null {
         if (!this.chart || !this.lastAnchorTime) return null;
 
         const range = this.chart.timeScale().getVisibleRange();
         if (!range) return null;
 
         const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, this.intendedSpan);
-
         const tolerance = this.intendedSpan * DRIFT_TOLERANCE;
         const drift = Math.abs((range.to as number) - idealTo);
 
-        if (drift > tolerance) {
-            return {
-                kind: 'tracking-lost',
-                drift: Math.round(drift),
-                tolerance: Math.round(tolerance),
-                rangeTo: Math.round(range.to as number),
-                idealTo: Math.round(idealTo),
-            };
-        }
-
-        return null;
+        return { drift, tolerance, rangeTo: range.to as number, idealTo };
     }
 
     // --- Private: camera modes ---
@@ -252,8 +259,8 @@ export class ChartCamera {
         }
     }
 
-    private enforceLivePosition(anchorTime: number, forceSpan?: number): CameraAction {
-        const fallback: CameraAction = { kind: 'enforce', anchorTime, rangeFrom: 0, rangeTo: 0, span: 0 };
+    private enforceLivePosition(anchorTime: number, forceSpan?: number, anchorChanged = true): CameraAction {
+        const fallback: CameraAction = { kind: 'enforce', anchorTime, rangeFrom: 0, rangeTo: 0, span: 0, anchorChanged };
         if (!this.chart) return fallback;
 
         if (forceSpan) {
@@ -269,7 +276,7 @@ export class ChartCamera {
 
         this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
-        return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(this.intendedSpan) };
+        return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(this.intendedSpan), anchorChanged };
     }
 
     // --- Private: geometry ---

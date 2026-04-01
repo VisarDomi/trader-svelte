@@ -27,15 +27,23 @@ export class LiveEdgePlugin implements Types {
         for (const action of actions) {
             switch (action.kind) {
                 case 'tracking-lost':
-                    // Always log — this is a discrete state change, not a per-tick event.
                     serverLog({ tag: LogEvent.CameraTrackingLost, drift: action.drift, tolerance: action.tolerance, rangeTo: action.rangeTo, idealTo: action.idealTo });
                     this.lastLoggedAnchor = null;
                     break;
 
+                case 'drift-check':
+                    // Only log when drift is non-trivial (user has panned)
+                    if (action.drift > 1) {
+                        serverLog({ tag: LogEvent.CameraDriftCheck, drift: Math.round(action.drift), tolerance: Math.round(action.tolerance), graceFrames: action.graceFrames, rangeTo: Math.round(action.rangeTo), idealTo: Math.round(action.idealTo) });
+                    }
+                    break;
+
                 case 'enforce':
-                    if (action.anchorTime !== this.lastLoggedAnchor) {
+                    // Log every enforce when anchor didn't change (within-candle snap = the bug)
+                    // Gate by anchorTime only for normal new-candle enforcements
+                    if (!action.anchorChanged || action.anchorTime !== this.lastLoggedAnchor) {
                         this.lastLoggedAnchor = action.anchorTime;
-                        serverLog({ tag: LogEvent.CameraEnforce, anchorTime: action.anchorTime, rangeFrom: action.rangeFrom, rangeTo: action.rangeTo, span: action.span });
+                        serverLog({ tag: LogEvent.CameraEnforce, anchorTime: action.anchorTime, rangeFrom: action.rangeFrom, rangeTo: action.rangeTo, span: action.span, anchorChanged: action.anchorChanged });
                     }
                     break;
 
