@@ -32,16 +32,29 @@ export class ChartCamera {
     private lastAnchorTime: number | null = null;
 
     /**
-     * The range LWC actually rendered after our last programmatic setVisibleRange.
-     * Compared against current range to detect user scroll/zoom (drift).
-     * Only meaningful while isTracking — cleared when tracking is lost.
+     * Suppression counter for the range-change listener.
+     * > 0 means all range changes are programmatic — ignore them.
+     * Incremented by beginFlush (renderer) and withSuppress (camera writes outside flush).
+     * Nest-safe: flush + internal setRange both increment without conflict.
      */
-    private lastSetRange: { from: number; to: number } | null = null;
+    private suppressCount = 0;
+
+    /** Written by the range-change listener between frames (user scroll). Consumed by updateAnchor. */
+    private pendingTrackingLost: CameraAction | null = null;
 
     init(chart: IChartApi) {
         this.chart = chart;
-        // No listener — drift detection is pull-based in updateAnchor.
+
+        this.chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+            this.handleRangeChange();
+        });
     }
+
+    /** Called by the renderer before flush(). All range changes until endFlush are programmatic. */
+    beginFlush() { this.suppressCount++; }
+
+    /** Called by the renderer after flush(). */
+    endFlush() { this.suppressCount--; }
 
     initializeView(savedState: ViewState | null, liveTime: number): CameraAction | null {
         if (!this.chart) return null;
@@ -67,11 +80,8 @@ export class ChartCamera {
 
         const before = { from: currentRange.from, to: currentRange.to };
         const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
+        // Called during flush — suppressCount already > 0 from beginFlush.
         timeScale.setVisibleLogicalRange(newRange);
-
-        // Read back snapped time range so drift detection stays correct.
-        this.readBackRange();
-
         return { before, after: newRange };
     }
 
@@ -79,18 +89,15 @@ export class ChartCamera {
         if (!newAnchorTime || !this.chart) return [];
 
         const actions: CameraAction[] = [];
+
+        // Drain user-scroll signal from between frames.
+        if (this.pendingTrackingLost) {
+            actions.push(this.pendingTrackingLost);
+            this.pendingTrackingLost = null;
+        }
+
         const oldAnchorTime = this.lastAnchorTime;
         this.lastAnchorTime = newAnchorTime;
-
-        // Pull-based drift check: did the user scroll/zoom since our last write?
-        if (this.isTracking && this.lastSetRange) {
-            const driftAction = this.detectUserDrift();
-            if (driftAction) {
-                this.isTracking = false;
-                this.lastSetRange = null;
-                actions.push(driftAction);
-            }
-        }
 
         if (this.isTracking) {
             actions.push(this.enforceLivePosition(newAnchorTime));
@@ -106,6 +113,7 @@ export class ChartCamera {
 
         this.isTracking = true;
         this.lastAnchorTime = anchorTime;
+        this.pendingTrackingLost = null;
 
         const { from, to } = this.calculateTargetRange(anchorTime, DEFAULT_SPAN_SECONDS);
         this.setRange(from, to);
@@ -145,90 +153,84 @@ export class ChartCamera {
     applyResize(captured: CapturedViewport) {
         if (!this.chart) return;
 
-        this.chart.applyOptions({
-            timeScale: { barSpacing: captured.barSpacing }
+        this.withSuppress(() => {
+            this.chart!.applyOptions({
+                timeScale: { barSpacing: captured.barSpacing }
+            });
+
+            const newChartH = this.chart!.chartElement().clientHeight;
+            const newTsH = this.chart!.timeScale().height();
+            const newPriceAreaH = newChartH - newTsH;
+
+            if (newPriceAreaH <= 0) return;
+
+            const oldSpan = captured.apiPriceTo - captured.apiPriceFrom;
+            const newSpan = oldSpan * (newPriceAreaH / captured.priceAreaH);
+            const center = captured.apiPriceFrom + oldSpan / 2;
+
+            this.chart!.priceScale('right').applyOptions({ autoScale: false });
+            this.chart!.priceScale('right').setVisibleRange({
+                from: center - newSpan / 2,
+                to: center + newSpan / 2
+            });
         });
-
-        const newChartH = this.chart.chartElement().clientHeight;
-        const newTsH = this.chart.timeScale().height();
-        const newPriceAreaH = newChartH - newTsH;
-
-        if (newPriceAreaH <= 0) return;
-
-        const oldSpan = captured.apiPriceTo - captured.apiPriceFrom;
-        const newSpan = oldSpan * (newPriceAreaH / captured.priceAreaH);
-        const center = captured.apiPriceFrom + oldSpan / 2;
-
-        this.chart.priceScale('right').applyOptions({ autoScale: false });
-        this.chart.priceScale('right').setVisibleRange({
-            from: center - newSpan / 2,
-            to: center + newSpan / 2
-        });
-
-        // Time scale may have shifted due to resize — read back.
-        this.readBackRange();
     }
 
     destroy() {
         this.chart = null;
-        this.lastSetRange = null;
+        this.pendingTrackingLost = null;
     }
 
-    // --- Private: drift detection ---
+    // --- Private: range-change listener ---
 
     /**
-     * Compare current visible range against what we last set programmatically.
-     * Any difference is user-initiated scroll/zoom (LWC bar-snapping is accounted
-     * for because lastSetRange stores the post-snap read-back, not the request).
+     * Fires for every visible range change (LWC listener).
+     * During flush or camera writes: suppressCount > 0 → skip (programmatic change).
+     * Between flushes: suppressCount === 0 → user scrolled/zoomed → detect drift.
      */
-    private detectUserDrift(): CameraAction | null {
-        if (!this.chart || !this.lastSetRange) return null;
+    private handleRangeChange() {
+        if (this.suppressCount > 0) return;
+        if (!this.isTracking || !this.lastAnchorTime || !this.chart) return;
 
         const range = this.chart.timeScale().getVisibleRange();
-        if (!range) return null;
+        if (!range) return;
 
-        const actualTo = range.to as number;
-        const expectedTo = this.lastSetRange.to;
         const currentSpan = (range.to as number) - (range.from as number);
+        const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, currentSpan);
 
         const tolerance = currentSpan * 0.01;
-        const drift = Math.abs(actualTo - expectedTo);
+        const drift = Math.abs((range.to as number) - idealTo);
 
         if (drift > tolerance) {
-            return {
+            this.isTracking = false;
+            this.pendingTrackingLost = {
                 kind: 'tracking-lost',
                 drift: Math.round(drift),
                 tolerance: Math.round(tolerance),
-                rangeTo: Math.round(actualTo),
-                idealTo: Math.round(expectedTo),
+                rangeTo: Math.round(range.to as number),
+                idealTo: Math.round(idealTo),
             };
         }
-
-        return null;
     }
 
-    // --- Private: range writes ---
+    // --- Private: suppressed writes ---
 
-    /** All programmatic time-range writes go through here. Reads back the snapped result. */
+    /** Wrap any camera code that writes to the time scale outside of flush. */
+    private withSuppress(fn: () => void) {
+        this.suppressCount++;
+        try { fn(); } finally { this.suppressCount--; }
+    }
+
+    /** All programmatic time-range writes go through here. */
     private setRange(from: number, to: number) {
         if (!this.chart) return;
 
-        this.chart.timeScale().setVisibleRange({
-            from: from as UTCTimestamp,
-            to: to as UTCTimestamp
+        this.withSuppress(() => {
+            this.chart!.timeScale().setVisibleRange({
+                from: from as UTCTimestamp,
+                to: to as UTCTimestamp
+            });
         });
-
-        this.readBackRange();
-    }
-
-    /** Read back what LWC actually rendered (after bar-snapping) into lastSetRange. */
-    private readBackRange() {
-        if (!this.chart) return;
-
-        const actual = this.chart.timeScale().getVisibleRange();
-        if (actual) {
-            this.lastSetRange = { from: actual.from as number, to: actual.to as number };
-        }
     }
 
     // --- Private: camera modes ---
