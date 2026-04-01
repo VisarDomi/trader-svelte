@@ -95,6 +95,8 @@
 
 **ChartCamera passive follow**: If strict tracking is active, force the reset layout position. If NOT tracking, check if the live candle is visible. If visible, shift the view forward by the time delta to keep it in view. This makes the chart appear to "flow" without snapping the user's zoom or offset.
 
+**ChartCamera viewport ownership**: The viewport has exactly one owner at a time — Camera or User. ChartController listens for `pointerdown`/`wheel` on the chart container and calls `camera.userAcquire()`. `pointerup`/`pointercancel` on `window` calls `camera.userRelease()`, which starts a 300ms debounce before returning ownership to Camera. While the user owns the viewport, Camera never calls `setVisibleRange` — neither enforce nor passive-follow. Drift detection still runs for observability. When ownership reverts, the next `updateAnchor` resumes normal behavior: enforce if tracking and drift is small, or tracking-lost if drift exceeds tolerance.
+
 ## Rotation / Resize View Preservation
 
 **ChartUI owns physical dimensions, Camera owns logical viewport**: ChartUI tracks `lastWidth`/`lastHeight` as plain fields (not $state) and provides `onBeforeResize`/`onAfterResize` callbacks. Camera's `captureViewport()`/`applyResize()` handle the logical viewport transition. No cross-ownership.

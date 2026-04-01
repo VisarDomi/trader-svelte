@@ -26,6 +26,7 @@ export type CameraAction =
 const DEFAULT_SPAN_SECONDS = 120 * 60;
 const DRIFT_TOLERANCE = 0.03;
 const GRACE_FRAMES_AFTER_ENFORCE = 3;
+const USER_RELEASE_DELAY_MS = 300;
 
 export class ChartCamera {
     private chart: IChartApi | null = null;
@@ -45,8 +46,35 @@ export class ChartCamera {
      */
     private graceFrames = 0;
 
+    /**
+     * Viewport ownership: when true, the user is actively manipulating the
+     * viewport (pan/zoom). Camera must not write to the viewport until
+     * ownership reverts. Acquired on pointerdown/wheel, released on
+     * pointerup after a debounce.
+     */
+    private userOwnsViewport = false;
+    private releaseTimer: ReturnType<typeof setTimeout> | null = null;
+
     init(chart: IChartApi) {
         this.chart = chart;
+    }
+
+    /** User starts interacting with the viewport (pointerdown / wheel). */
+    userAcquire(): void {
+        if (this.releaseTimer) {
+            clearTimeout(this.releaseTimer);
+            this.releaseTimer = null;
+        }
+        this.userOwnsViewport = true;
+    }
+
+    /** User stops interacting (pointerup). Reclaim after debounce. */
+    userRelease(): void {
+        if (this.releaseTimer) clearTimeout(this.releaseTimer);
+        this.releaseTimer = setTimeout(() => {
+            this.userOwnsViewport = false;
+            this.releaseTimer = null;
+        }, USER_RELEASE_DELAY_MS);
     }
 
     initializeView(savedState: ViewState | null, liveTime: number): CameraAction | null {
@@ -116,7 +144,11 @@ export class ChartCamera {
             }
         }
 
-        if (this.isTracking && anchorChanged) {
+        if (this.userOwnsViewport) {
+            // User owns viewport — camera must not write. Drift is still
+            // measured above for observability; enforcement waits until
+            // ownership reverts.
+        } else if (this.isTracking && anchorChanged) {
             actions.push(this.enforceLivePosition(newAnchorTime, undefined, anchorChanged));
         } else if (!this.isTracking && oldAnchorTime) {
             actions.push(this.checkAndApplyPassiveFollow(oldAnchorTime, newAnchorTime));
@@ -195,6 +227,7 @@ export class ChartCamera {
     }
 
     destroy() {
+        if (this.releaseTimer) clearTimeout(this.releaseTimer);
         this.chart = null;
     }
 

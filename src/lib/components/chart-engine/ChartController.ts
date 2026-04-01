@@ -20,6 +20,7 @@ export class ChartController {
     private crosshairBlocked = false;
     private unblockTimer: ReturnType<typeof setTimeout> | null = null;
     private cleanupBus: (() => void)[] = [];
+    private chartContainer: HTMLDivElement | null = null;
 
     public readonly camera = new ChartCamera();
 
@@ -34,6 +35,8 @@ export class ChartController {
     }
 
     init(container: HTMLDivElement) {
+        this.chartContainer = container;
+
         const width = viewport.width;
         const height = viewport.height;
         const isIos = isIOS();
@@ -49,6 +52,14 @@ export class ChartController {
         this._chart = createChart(container, getChartOptions(config));
 
         this.camera.init(this._chart);
+
+        // Viewport ownership: pointer/wheel events on the chart container
+        // signal that the user is actively manipulating the viewport.
+        // Camera must not write to the viewport while user holds ownership.
+        container.addEventListener('pointerdown', this.handlePointerDown);
+        window.addEventListener('pointerup', this.handlePointerUp);
+        window.addEventListener('pointercancel', this.handlePointerUp);
+        container.addEventListener('wheel', this.handleWheel, { passive: true });
 
         this._chart.subscribeCrosshairMove((param) => {
             if (this.crosshairBlocked && param.point) {
@@ -111,6 +122,14 @@ export class ChartController {
         this.cleanupBus.forEach(fn => fn());
         if (this.unblockTimer) clearTimeout(this.unblockTimer);
 
+        if (this.chartContainer) {
+            this.chartContainer.removeEventListener('pointerdown', this.handlePointerDown);
+            this.chartContainer.removeEventListener('wheel', this.handleWheel);
+            this.chartContainer = null;
+        }
+        window.removeEventListener('pointerup', this.handlePointerUp);
+        window.removeEventListener('pointercancel', this.handlePointerUp);
+
         if (this._chart) {
             this._chart.remove();
             this._chart = null;
@@ -118,6 +137,21 @@ export class ChartController {
             this._ghostSeries = null;
         }
     }
+
+    // --- Viewport ownership: user input signals ---
+
+    private handlePointerDown = () => {
+        this.camera.userAcquire();
+    };
+
+    private handlePointerUp = () => {
+        this.camera.userRelease();
+    };
+
+    private handleWheel = () => {
+        this.camera.userAcquire();
+        this.camera.userRelease();
+    };
 
     private ensureGhostSeriesExists() {
         if (this._ghostSeries) return;
