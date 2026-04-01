@@ -33,6 +33,10 @@ export class ChartCamera {
 
     private lastAnchorTime: number | null = null;
 
+    /** The span we intend to show. Stored so we don't re-read from LWC each frame
+     *  (LWC returns slightly different values due to async bar-snapping). */
+    private intendedSpan = DEFAULT_SPAN_SECONDS;
+
     /**
      * After enforce/init, skip drift detection for N frames.
      * LWC processes setVisibleRange asynchronously in its own RAF —
@@ -108,8 +112,9 @@ export class ChartCamera {
 
         this.isTracking = true;
         this.lastAnchorTime = anchorTime;
+        this.intendedSpan = DEFAULT_SPAN_SECONDS;
 
-        const { from, to } = this.calculateTargetRange(anchorTime, DEFAULT_SPAN_SECONDS);
+        const { from, to } = this.calculateTargetRange(anchorTime, this.intendedSpan);
         this.chart.timeScale().setVisibleRange({ from: from as UTCTimestamp, to: to as UTCTimestamp });
         this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
@@ -183,10 +188,9 @@ export class ChartCamera {
         const range = this.chart.timeScale().getVisibleRange();
         if (!range) return null;
 
-        const currentSpan = (range.to as number) - (range.from as number);
-        const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, currentSpan);
+        const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, this.intendedSpan);
 
-        const tolerance = currentSpan * DRIFT_TOLERANCE;
+        const tolerance = this.intendedSpan * DRIFT_TOLERANCE;
         const drift = Math.abs((range.to as number) - idealTo);
 
         if (drift > tolerance) {
@@ -252,23 +256,20 @@ export class ChartCamera {
         const fallback: CameraAction = { kind: 'enforce', anchorTime, rangeFrom: 0, rangeTo: 0, span: 0 };
         if (!this.chart) return fallback;
 
-        const timeScale = this.chart.timeScale();
-        const range = timeScale.getVisibleRange();
+        if (forceSpan) {
+            this.intendedSpan = forceSpan;
+        }
 
-        const span = forceSpan ?? (range
-            ? (range.to as number) - (range.from as number)
-            : DEFAULT_SPAN_SECONDS);
+        const { from, to } = this.calculateTargetRange(anchorTime, this.intendedSpan);
 
-        const { from, to } = this.calculateTargetRange(anchorTime, span);
-
-        timeScale.setVisibleRange({
+        this.chart.timeScale().setVisibleRange({
             from: from as UTCTimestamp,
             to: to as UTCTimestamp
         });
 
         this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
-        return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(span) };
+        return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(this.intendedSpan) };
     }
 
     // --- Private: geometry ---
