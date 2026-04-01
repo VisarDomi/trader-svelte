@@ -1,6 +1,7 @@
 import type { IChartApi, IRange, Time, UTCTimestamp } from 'lightweight-charts';
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export interface ViewState {
     centerTime: number;
@@ -24,6 +25,7 @@ export class ChartCamera {
     private isTracking = true;
 
     private lastAnchorTime: number | null = null;
+    private lastLoggedAnchor: number | null = null;
 
     init(chart: IChartApi) {
         this.chart = chart;
@@ -43,6 +45,8 @@ export class ChartCamera {
         } else {
             this.resetZoom(liveTime);
         }
+
+        serverLog({ tag: LogEvent.CameraInit, anchorTime: liveTime, tracking: this.isTracking, source: savedState ? 'saved' : 'default' });
     }
 
     maintainScrollPosition(barsAdded: number): { before: { from: number; to: number } | null; after: { from: number; to: number } | null } {
@@ -158,16 +162,18 @@ export class ChartCamera {
         const buffer = (visibleTo - visibleFrom) * 0.05;
         const isLiveVisible = (oldTime >= visibleFrom - buffer) && (oldTime <= visibleTo + buffer);
 
-        if (isLiveVisible) {
+        const delta = newTime - oldTime;
 
-            const delta = newTime - oldTime;
+        if (newTime !== this.lastLoggedAnchor) {
+            this.lastLoggedAnchor = newTime;
+            serverLog({ tag: LogEvent.CameraPassiveFollow, oldTime, newTime, delta, liveVisible: isLiveVisible });
+        }
 
-            if (delta > 0) {
-                timeScale.setVisibleRange({
-                    from: (visibleFrom + delta) as UTCTimestamp,
-                    to: (visibleTo + delta) as UTCTimestamp
-                });
-            }
+        if (isLiveVisible && delta > 0) {
+            timeScale.setVisibleRange({
+                from: (visibleFrom + delta) as UTCTimestamp,
+                to: (visibleTo + delta) as UTCTimestamp
+            });
         }
     }
 
@@ -203,6 +209,7 @@ export class ChartCamera {
 
             if (drift > tolerance) {
                 this.isTracking = false;
+                serverLog({ tag: LogEvent.CameraTrackingLost, drift: Math.round(drift), tolerance: Math.round(tolerance), rangeTo: Math.round(range.to as number), idealTo: Math.round(idealTo) });
             }
         }
     }
@@ -218,6 +225,11 @@ export class ChartCamera {
             : DEFAULT_SPAN_SECONDS);
 
         const { from, to } = this.calculateTargetRange(anchorTime, span);
+
+        if (anchorTime !== this.lastLoggedAnchor) {
+            this.lastLoggedAnchor = anchorTime;
+            serverLog({ tag: LogEvent.CameraEnforce, anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(span) });
+        }
 
         timeScale.setVisibleRange({
             from: from as UTCTimestamp,

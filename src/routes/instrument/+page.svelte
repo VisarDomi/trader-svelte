@@ -5,7 +5,7 @@
     import InstrumentCard from '$lib/domains/market/components/InstrumentCard.svelte';
 
     let searchTerm = $state('');
-    let isCollapsed = $state(false);
+    let isCollapsed = $state(true);
 
     onMount(() => {
         instrumentStore.load();

@@ -34,6 +34,11 @@ export const LogEvent = {
     RiskCorrection: 'risk-correction',
     ZombieSocket: 'zombie-socket',
 
+    CameraInit: 'camera-init',
+    CameraEnforce: 'camera-enforce',
+    CameraPassiveFollow: 'camera-passive-follow',
+    CameraTrackingLost: 'camera-tracking-lost',
+
     TradeOpen: 'trade-open',
     TradeClose: 'trade-close',
     PositionPoll: 'position-poll',
@@ -61,6 +66,11 @@ export type LogEntry =
     | { tag: typeof LogEvent.PrependStamp; version: number; count: number; totalCandles: number }
     | { tag: typeof LogEvent.ChartRender; version: number; candles: number; isFirstRender: boolean; prependCount: number }
     | { tag: typeof LogEvent.PrependApply; version: number; count: number; rangeBefore: { from: number; to: number } | null; rangeAfter: { from: number; to: number } | null }
+
+    | { tag: typeof LogEvent.CameraInit; anchorTime: number; tracking: boolean; source: 'saved' | 'default' }
+    | { tag: typeof LogEvent.CameraEnforce; anchorTime: number; rangeFrom: number; rangeTo: number; span: number }
+    | { tag: typeof LogEvent.CameraPassiveFollow; oldTime: number; newTime: number; delta: number; liveVisible: boolean }
+    | { tag: typeof LogEvent.CameraTrackingLost; drift: number; tolerance: number; rangeTo: number; idealTo: number }
 
     | { tag: typeof LogEvent.BarGap; state: 'detected' | 'filled'; historyTime: number; liveTime: number }
     | { tag: typeof LogEvent.RiskCorrection; dealId: string; newLevel: number }
