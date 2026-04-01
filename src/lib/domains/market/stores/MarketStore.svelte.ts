@@ -139,20 +139,23 @@ export class MarketStore extends BaseStore {
         const bidResult = this._bidTimeline.merge(newBid);
         this._askTimeline.merge(newAsk);
 
-        if (bidResult.trimmed > 0 || bidResult.extended > 0 || bidResult.replaced > 0) {
+        if (bidResult.extended > 0) {
             serverLog({
                 tag: LogEvent.TimelineMerge,
                 source: 'sync',
                 replaced: bidResult.replaced,
                 extended: bidResult.extended,
-                trimmed: bidResult.trimmed,
                 newestBefore: bidResult.newestBefore,
                 newestAfter: bidResult.newestAfter,
             });
         }
 
-        this.publishHistory();
-        this.updateTrigger++;
+        // Only re-render the chart if the timeline boundaries actually changed.
+        // Replacing existing bars with the same API data is a no-op for the chart.
+        if (bidResult.extended > 0) {
+            this.publishHistory();
+            this.updateTrigger++;
+        }
     }
 
     private _updateLive(u: FeedUpdate) {

@@ -76,7 +76,7 @@ export type LogEntry =
     | { tag: typeof LogEvent.CameraTrackingLost; drift: number; tolerance: number; rangeTo: number; idealTo: number }
 
     | { tag: typeof LogEvent.TimelineAppend; time: number; result: 'added' | 'dropped'; newestExisting: number }
-    | { tag: typeof LogEvent.TimelineMerge; source: string; replaced: number; extended: number; trimmed: number; newestBefore: number; newestAfter: number }
+    | { tag: typeof LogEvent.TimelineMerge; source: string; replaced: number; extended: number; newestBefore: number; newestAfter: number }
 
     | { tag: typeof LogEvent.BarGap; state: 'detected' | 'filled'; historyTime: number; liveTime: number }
     | { tag: typeof LogEvent.RiskCorrection; dealId: string; newLevel: number }

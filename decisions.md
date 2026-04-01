@@ -2,9 +2,20 @@
 
 ## Data Authority & Ownership
 
-**CandleAggregator merge strategy**: API open is authoritative (first trade of the minute). High/low take the best of both sources (tick may have seen extremes API hasn't reported yet, or vice versa). Close is untouched — the latest tick is always more current than the API snapshot.
+**Two ownership contexts for candle data**:
 
-**MarketStore mergeLatestHistory skip**: Completed candles don't change — tick-built local data is authoritative. If server data doesn't extend beyond what we already have, skip entirely. This prevents unnecessary series.setData() calls that cause chart flicker.
+1. **Completed candles (past minutes)**: API is the absolute source of truth for all four fields (open, high, low, close). Any mismatch is immediately overwritten by API data. The 30th-second sync enforces this — if the timeline has stale or tick-built data from a resume gap, the API corrects it.
+
+2. **Live candle (current minute)**: Four-field ownership split because the API snapshot is seconds stale while ticks are real-time:
+   - **Close** — tick owns. Always. The latest tick price is more current than any API snapshot.
+   - **Open** — API owns. The API saw the first trade of the minute; the tick stream may have connected mid-candle.
+   - **High/Low** — intelligent merge, no single owner. `Math.max(tick.high, api.high)`, `Math.min(tick.low, api.low)`. Tick may have seen spikes the API missed, or vice versa.
+
+**CandleAggregator implements the live candle rules**: `merge(frame)` applies API open, best-of high/low, and never touches close. This is the only place live candle ownership is enforced.
+
+**CandleTimeline.merge is non-destructive**: Replaces overlapping bars with API data (full overwrite for completed candles) and extends if API has newer bars. Never trims — existing bars beyond the new data's range are preserved. This prevents the sync (which splits off the current bar) from deleting the last completed bar in the timeline.
+
+**MarketStore mergeLatestHistory skips publishHistory if boundaries unchanged**: If the merge didn't extend the timeline and didn't trim anything, the chart already has the correct data — skip the publishHistory + setData cycle to save CPU. The merge still runs (API overwrites completed candles) but the chart isn't re-rendered needlessly.
 
 **MarketStore mergeLatestHistory does not call recalcLiveState**: The live candle is maintained by the feed aggregator via updateLive(). Overwriting it with the last history candle causes the chart to briefly lose the current-minute bar, and series.update() re-adding it shifts the view right by one bar.
 

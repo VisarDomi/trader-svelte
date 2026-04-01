@@ -6,8 +6,6 @@ export interface MergeResult {
     replaced: number;
     /** Number of new candles added beyond what existed. */
     extended: number;
-    /** Number of existing candles removed (were after the merge cutoff but not in new data). */
-    trimmed: number;
     newestBefore: number;
     newestAfter: number;
 }
@@ -45,41 +43,49 @@ export class CandleTimeline {
         return 'added';
     }
 
-    /** Merge newer API data. Returns what changed so the caller can log it. */
+    /**
+     * Merge API data into the timeline (API is source of truth for completed candles).
+     * Replaces overlapping bars, extends if API has newer data, but NEVER trims —
+     * existing bars beyond the new data's range are preserved.
+     */
     merge(newer: ChartCandle[]): MergeResult {
         const newestBefore = this.newest()?.time ?? 0;
 
         if (newer.length === 0) {
-            return { replaced: 0, extended: 0, trimmed: 0, newestBefore, newestAfter: newestBefore };
+            return { replaced: 0, extended: 0, newestBefore, newestAfter: newestBefore };
         }
 
         const clean = dedupAsc(newer);
 
         if (this.candles.length === 0) {
             this.candles = clean;
-            return { replaced: 0, extended: clean.length, trimmed: 0, newestBefore: 0, newestAfter: this.newest()?.time ?? 0 };
+            return { replaced: 0, extended: clean.length, newestBefore: 0, newestAfter: this.newest()?.time ?? 0 };
         }
 
         const firstNewTime = clean[0].time;
+        const lastNewTime = clean[clean.length - 1].time;
         const cutIdx = this.candles.findIndex(c => c.time >= firstNewTime);
 
         let replaced = 0;
-        let trimmed = 0;
 
         if (cutIdx === -1) {
             // All new data is after existing data — pure extension.
             this.candles = [...this.candles, ...clean];
         } else {
-            const existingAfterCut = this.candles.length - cutIdx;
-            replaced = Math.min(existingAfterCut, clean.length);
-            trimmed = Math.max(0, existingAfterCut - clean.length);
-            this.candles = [...this.candles.slice(0, cutIdx), ...clean];
+            // Preserve existing bars beyond the new data's range.
+            const tailIdx = this.candles.findIndex(c => c.time > lastNewTime);
+            const tail = tailIdx !== -1 ? this.candles.slice(tailIdx) : [];
+
+            const existingOverlap = (tailIdx !== -1 ? tailIdx : this.candles.length) - cutIdx;
+            replaced = Math.min(existingOverlap, clean.length);
+
+            this.candles = [...this.candles.slice(0, cutIdx), ...clean, ...tail];
         }
 
         const newestAfter = this.newest()?.time ?? 0;
         const extended = newestAfter > newestBefore ? 1 : 0;
 
-        return { replaced, extended, trimmed, newestBefore, newestAfter };
+        return { replaced, extended, newestBefore, newestAfter };
     }
 
     clear(): void {
