@@ -102,61 +102,52 @@ export class ChartRenderer {
         });
     }
 
-    /**
-     * Imperative shell: all LWC API calls happen here, in one synchronous pass per frame.
-     * Wrapped in camera.beginFlush/endFlush so the camera's range-change listener
-     * ignores all programmatic range changes (setData, update, enforce, etc.).
-     */
+    /** Imperative shell: all LWC API calls happen here, in one synchronous pass per frame. */
     private flush() {
         if (!this.series || !this.context) return;
 
-        this.camera.beginFlush();
-        try {
-            // --- Phase 1: setData (history) ---
-            const h = this.pendingHistory;
-            if (h) {
-                this.pendingHistory = null;
-                this.series.setData(h.history);
-                this.lastRenderedCandles = h.history.length;
+        // --- Phase 1: setData (history) ---
+        const h = this.pendingHistory;
+        if (h) {
+            this.pendingHistory = null;
+            this.series.setData(h.history);
+            this.lastRenderedCandles = h.history.length;
 
-                if (h.isFirstRender || h.version <= 2 || h.prependCount > 0) {
-                    serverLog({
-                        tag: LogEvent.ChartRender,
-                        version: h.version,
-                        candles: h.history.length,
-                        isFirstRender: h.isFirstRender,
-                        prependCount: h.prependCount,
-                    });
+            if (h.isFirstRender || h.version <= 2 || h.prependCount > 0) {
+                serverLog({
+                    tag: LogEvent.ChartRender,
+                    version: h.version,
+                    candles: h.history.length,
+                    isFirstRender: h.isFirstRender,
+                    prependCount: h.prependCount,
+                });
+            }
+
+            if (h.isFirstRender || !this.viewInitialized) {
+                const savedState = this.stateManager.loadState();
+                const lastTime = Number(h.history[h.history.length - 1].time);
+                const initAction = this.camera.initializeView(savedState, lastTime);
+                if (initAction) {
+                    serverLog({ tag: LogEvent.CameraInit, anchorTime: initAction.anchorTime, tracking: initAction.tracking, source: initAction.source });
                 }
-
-                if (h.isFirstRender || !this.viewInitialized) {
-                    const savedState = this.stateManager.loadState();
-                    const lastTime = Number(h.history[h.history.length - 1].time);
-                    const initAction = this.camera.initializeView(savedState, lastTime);
-                    if (initAction) {
-                        serverLog({ tag: LogEvent.CameraInit, anchorTime: initAction.anchorTime, tracking: initAction.tracking, source: initAction.source });
-                    }
-                    this.viewInitialized = true;
-                } else if (h.prependCount > 0) {
-                    const { before, after } = this.camera.maintainScrollPosition(h.prependCount);
-                    serverLog({ tag: LogEvent.PrependApply, version: h.version, count: h.prependCount, rangeBefore: before, rangeAfter: after });
-                } else if (h.prevCandles > 0 && h.history.length - h.prevCandles > 100) {
-                    log.warn(`[ChartRenderer] Large candle growth (${h.prevCandles} → ${h.history.length}) at version ${h.version} with no prepend — possible regression`);
-                }
+                this.viewInitialized = true;
+            } else if (h.prependCount > 0) {
+                const { before, after } = this.camera.maintainScrollPosition(h.prependCount);
+                serverLog({ tag: LogEvent.PrependApply, version: h.version, count: h.prependCount, rangeBefore: before, rangeAfter: after });
+            } else if (h.prevCandles > 0 && h.history.length - h.prevCandles > 100) {
+                log.warn(`[ChartRenderer] Large candle growth (${h.prevCandles} → ${h.history.length}) at version ${h.version} with no prepend — possible regression`);
             }
+        }
 
-            // --- Phase 2: live candle (update) — always after setData ---
-            const lastCandle = this.context.lastCandle;
-            if (this.context.isMarketLoaded && lastCandle) {
-                this.series.update(lastCandle);
-            }
+        // --- Phase 2: live candle (update) — always after setData ---
+        const lastCandle = this.context.lastCandle;
+        if (this.context.isMarketLoaded && lastCandle) {
+            this.series.update(lastCandle);
+        }
 
-            // --- Phase 3: plugins (camera anchor, price lines, etc.) ---
-            for (const feature of this.features) {
-                feature.update(this.context);
-            }
-        } finally {
-            this.camera.endFlush();
+        // --- Phase 3: plugins (camera anchor, price lines, etc.) ---
+        for (const feature of this.features) {
+            feature.update(this.context);
         }
     }
 

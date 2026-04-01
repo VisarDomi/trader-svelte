@@ -23,6 +23,8 @@ export type CameraAction =
     | { kind: 'tracking-lost'; drift: number; tolerance: number; rangeTo: number; idealTo: number };
 
 const DEFAULT_SPAN_SECONDS = 120 * 60;
+const DRIFT_TOLERANCE = 0.03;
+const GRACE_FRAMES_AFTER_ENFORCE = 3;
 
 export class ChartCamera {
     private chart: IChartApi | null = null;
@@ -32,29 +34,15 @@ export class ChartCamera {
     private lastAnchorTime: number | null = null;
 
     /**
-     * Suppression counter for the range-change listener.
-     * > 0 means all range changes are programmatic — ignore them.
-     * Incremented by beginFlush (renderer) and withSuppress (camera writes outside flush).
-     * Nest-safe: flush + internal setRange both increment without conflict.
+     * After enforce/init, skip drift detection for N frames.
+     * LWC processes setVisibleRange asynchronously in its own RAF —
+     * the range may not stabilize for 1-2 frames after we set it.
      */
-    private suppressCount = 0;
-
-    /** Written by the range-change listener between frames (user scroll). Consumed by updateAnchor. */
-    private pendingTrackingLost: CameraAction | null = null;
+    private graceFrames = 0;
 
     init(chart: IChartApi) {
         this.chart = chart;
-
-        this.chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
-            this.handleRangeChange();
-        });
     }
-
-    /** Called by the renderer before flush(). All range changes until endFlush are programmatic. */
-    beginFlush() { this.suppressCount++; }
-
-    /** Called by the renderer after flush(). */
-    endFlush() { this.suppressCount--; }
 
     initializeView(savedState: ViewState | null, liveTime: number): CameraAction | null {
         if (!this.chart) return null;
@@ -66,6 +54,8 @@ export class ChartCamera {
         } else {
             this.resetZoom(liveTime);
         }
+
+        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
         return { kind: 'init', anchorTime: liveTime, tracking: this.isTracking, source: savedState ? 'saved' : 'default' };
     }
@@ -80,8 +70,8 @@ export class ChartCamera {
 
         const before = { from: currentRange.from, to: currentRange.to };
         const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
-        // Called during flush — suppressCount already > 0 from beginFlush.
         timeScale.setVisibleLogicalRange(newRange);
+        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
         return { before, after: newRange };
     }
 
@@ -89,15 +79,20 @@ export class ChartCamera {
         if (!newAnchorTime || !this.chart) return [];
 
         const actions: CameraAction[] = [];
-
-        // Drain user-scroll signal from between frames.
-        if (this.pendingTrackingLost) {
-            actions.push(this.pendingTrackingLost);
-            this.pendingTrackingLost = null;
-        }
-
         const oldAnchorTime = this.lastAnchorTime;
         this.lastAnchorTime = newAnchorTime;
+
+        if (this.isTracking) {
+            if (this.graceFrames > 0) {
+                this.graceFrames--;
+            } else {
+                const driftAction = this.checkDrift();
+                if (driftAction) {
+                    this.isTracking = false;
+                    actions.push(driftAction);
+                }
+            }
+        }
 
         if (this.isTracking) {
             actions.push(this.enforceLivePosition(newAnchorTime));
@@ -113,10 +108,10 @@ export class ChartCamera {
 
         this.isTracking = true;
         this.lastAnchorTime = anchorTime;
-        this.pendingTrackingLost = null;
 
         const { from, to } = this.calculateTargetRange(anchorTime, DEFAULT_SPAN_SECONDS);
-        this.setRange(from, to);
+        this.chart.timeScale().setVisibleRange({ from: from as UTCTimestamp, to: to as UTCTimestamp });
+        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
         this.chart.priceScale('right').applyOptions({ autoScale: true });
     }
@@ -153,57 +148,49 @@ export class ChartCamera {
     applyResize(captured: CapturedViewport) {
         if (!this.chart) return;
 
-        this.withSuppress(() => {
-            this.chart!.applyOptions({
-                timeScale: { barSpacing: captured.barSpacing }
-            });
-
-            const newChartH = this.chart!.chartElement().clientHeight;
-            const newTsH = this.chart!.timeScale().height();
-            const newPriceAreaH = newChartH - newTsH;
-
-            if (newPriceAreaH <= 0) return;
-
-            const oldSpan = captured.apiPriceTo - captured.apiPriceFrom;
-            const newSpan = oldSpan * (newPriceAreaH / captured.priceAreaH);
-            const center = captured.apiPriceFrom + oldSpan / 2;
-
-            this.chart!.priceScale('right').applyOptions({ autoScale: false });
-            this.chart!.priceScale('right').setVisibleRange({
-                from: center - newSpan / 2,
-                to: center + newSpan / 2
-            });
+        this.chart.applyOptions({
+            timeScale: { barSpacing: captured.barSpacing }
         });
+
+        const newChartH = this.chart.chartElement().clientHeight;
+        const newTsH = this.chart.timeScale().height();
+        const newPriceAreaH = newChartH - newTsH;
+
+        if (newPriceAreaH <= 0) return;
+
+        const oldSpan = captured.apiPriceTo - captured.apiPriceFrom;
+        const newSpan = oldSpan * (newPriceAreaH / captured.priceAreaH);
+        const center = captured.apiPriceFrom + oldSpan / 2;
+
+        this.chart.priceScale('right').applyOptions({ autoScale: false });
+        this.chart.priceScale('right').setVisibleRange({
+            from: center - newSpan / 2,
+            to: center + newSpan / 2
+        });
+
+        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
     }
 
     destroy() {
         this.chart = null;
-        this.pendingTrackingLost = null;
     }
 
-    // --- Private: range-change listener ---
+    // --- Private: drift detection ---
 
-    /**
-     * Fires for every visible range change (LWC listener).
-     * During flush or camera writes: suppressCount > 0 → skip (programmatic change).
-     * Between flushes: suppressCount === 0 → user scrolled/zoomed → detect drift.
-     */
-    private handleRangeChange() {
-        if (this.suppressCount > 0) return;
-        if (!this.isTracking || !this.lastAnchorTime || !this.chart) return;
+    private checkDrift(): CameraAction | null {
+        if (!this.chart || !this.lastAnchorTime) return null;
 
         const range = this.chart.timeScale().getVisibleRange();
-        if (!range) return;
+        if (!range) return null;
 
         const currentSpan = (range.to as number) - (range.from as number);
         const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, currentSpan);
 
-        const tolerance = currentSpan * 0.01;
+        const tolerance = currentSpan * DRIFT_TOLERANCE;
         const drift = Math.abs((range.to as number) - idealTo);
 
         if (drift > tolerance) {
-            this.isTracking = false;
-            this.pendingTrackingLost = {
+            return {
                 kind: 'tracking-lost',
                 drift: Math.round(drift),
                 tolerance: Math.round(tolerance),
@@ -211,26 +198,8 @@ export class ChartCamera {
                 idealTo: Math.round(idealTo),
             };
         }
-    }
 
-    // --- Private: suppressed writes ---
-
-    /** Wrap any camera code that writes to the time scale outside of flush. */
-    private withSuppress(fn: () => void) {
-        this.suppressCount++;
-        try { fn(); } finally { this.suppressCount--; }
-    }
-
-    /** All programmatic time-range writes go through here. */
-    private setRange(from: number, to: number) {
-        if (!this.chart) return;
-
-        this.withSuppress(() => {
-            this.chart!.timeScale().setVisibleRange({
-                from: from as UTCTimestamp,
-                to: to as UTCTimestamp
-            });
-        });
+        return null;
     }
 
     // --- Private: camera modes ---
@@ -253,7 +222,10 @@ export class ChartCamera {
         result.liveVisible = isLiveVisible;
 
         if (isLiveVisible && delta > 0) {
-            this.setRange(visibleFrom + delta, visibleTo + delta);
+            this.chart.timeScale().setVisibleRange({
+                from: (visibleFrom + delta) as UTCTimestamp,
+                to: (visibleTo + delta) as UTCTimestamp
+            });
         }
 
         return result;
@@ -288,7 +260,13 @@ export class ChartCamera {
             : DEFAULT_SPAN_SECONDS);
 
         const { from, to } = this.calculateTargetRange(anchorTime, span);
-        this.setRange(from, to);
+
+        timeScale.setVisibleRange({
+            from: from as UTCTimestamp,
+            to: to as UTCTimestamp
+        });
+
+        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
         return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(span) };
     }
@@ -317,7 +295,10 @@ export class ChartCamera {
         });
 
         const tHalf = state.timeSpan / 2;
-        this.setRange(state.centerTime - tHalf, state.centerTime + tHalf);
+        this.chart.timeScale().setVisibleRange({
+            from: (state.centerTime - tHalf) as UTCTimestamp,
+            to: (state.centerTime + tHalf) as UTCTimestamp
+        });
     }
 
     private calculateTimeState(range: IRange<Time>) {
