@@ -116,9 +116,9 @@ export class ChartCamera {
             }
         }
 
-        if (this.isTracking) {
+        if (this.isTracking && anchorChanged) {
             actions.push(this.enforceLivePosition(newAnchorTime, undefined, anchorChanged));
-        } else if (oldAnchorTime) {
+        } else if (!this.isTracking && oldAnchorTime) {
             actions.push(this.checkAndApplyPassiveFollow(oldAnchorTime, newAnchorTime));
         }
 
