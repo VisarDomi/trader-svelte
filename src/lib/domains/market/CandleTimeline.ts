@@ -1,6 +1,17 @@
 import type { ChartCandle } from '$lib/shared/types/market.js';
 import { log } from '$lib/shared/utils/log.js';
 
+export interface MergeResult {
+    /** Number of existing candles replaced by newer API data. */
+    replaced: number;
+    /** Number of new candles added beyond what existed. */
+    extended: number;
+    /** Number of existing candles removed (were after the merge cutoff but not in new data). */
+    trimmed: number;
+    newestBefore: number;
+    newestAfter: number;
+}
+
 export class CandleTimeline {
     private candles: ChartCandle[] = [];
 
@@ -26,26 +37,49 @@ export class CandleTimeline {
         return kept.length;
     }
 
-    append(candle: ChartCandle): void {
+    /** Append a completed candle. Returns 'added' or 'dropped' (duplicate time). */
+    append(candle: ChartCandle): 'added' | 'dropped' {
         const last = this.newest();
-        if (last && candle.time <= last.time) return;
+        if (last && candle.time <= last.time) return 'dropped';
         this.candles = [...this.candles, candle];
+        return 'added';
     }
 
-    merge(newer: ChartCandle[]): void {
-        if (newer.length === 0) return;
+    /** Merge newer API data. Returns what changed so the caller can log it. */
+    merge(newer: ChartCandle[]): MergeResult {
+        const newestBefore = this.newest()?.time ?? 0;
+
+        if (newer.length === 0) {
+            return { replaced: 0, extended: 0, trimmed: 0, newestBefore, newestAfter: newestBefore };
+        }
+
         const clean = dedupAsc(newer);
+
         if (this.candles.length === 0) {
             this.candles = clean;
-            return;
+            return { replaced: 0, extended: clean.length, trimmed: 0, newestBefore: 0, newestAfter: this.newest()?.time ?? 0 };
         }
+
         const firstNewTime = clean[0].time;
         const cutIdx = this.candles.findIndex(c => c.time >= firstNewTime);
+
+        let replaced = 0;
+        let trimmed = 0;
+
         if (cutIdx === -1) {
+            // All new data is after existing data — pure extension.
             this.candles = [...this.candles, ...clean];
         } else {
+            const existingAfterCut = this.candles.length - cutIdx;
+            replaced = Math.min(existingAfterCut, clean.length);
+            trimmed = Math.max(0, existingAfterCut - clean.length);
             this.candles = [...this.candles.slice(0, cutIdx), ...clean];
         }
+
+        const newestAfter = this.newest()?.time ?? 0;
+        const extended = newestAfter > newestBefore ? 1 : 0;
+
+        return { replaced, extended, trimmed, newestBefore, newestAfter };
     }
 
     clear(): void {

@@ -136,8 +136,21 @@ export class MarketStore extends BaseStore {
 
     private _mergeLatestHistory(newBid: ChartCandle[], newAsk: ChartCandle[]) {
         if (newBid.length === 0) return;
-        this._bidTimeline.merge(newBid);
+        const bidResult = this._bidTimeline.merge(newBid);
         this._askTimeline.merge(newAsk);
+
+        if (bidResult.trimmed > 0 || bidResult.extended > 0 || bidResult.replaced > 0) {
+            serverLog({
+                tag: LogEvent.TimelineMerge,
+                source: 'sync',
+                replaced: bidResult.replaced,
+                extended: bidResult.extended,
+                trimmed: bidResult.trimmed,
+                newestBefore: bidResult.newestBefore,
+                newestAfter: bidResult.newestAfter,
+            });
+        }
+
         this.publishHistory();
         this.updateTrigger++;
     }
@@ -147,8 +160,15 @@ export class MarketStore extends BaseStore {
         this.offer = u.offer;
 
         const hasCompletion = u.completedBid || u.completedAsk;
-        if (u.completedBid) this._bidTimeline.append(u.completedBid);
-        if (u.completedAsk) this._askTimeline.append(u.completedAsk);
+        if (u.completedBid) {
+            const result = this._bidTimeline.append(u.completedBid);
+            if (result === 'dropped') {
+                serverLog({ tag: LogEvent.TimelineAppend, time: u.completedBid.time, result, newestExisting: this._bidTimeline.newest()?.time ?? 0 });
+            }
+        }
+        if (u.completedAsk) {
+            this._askTimeline.append(u.completedAsk);
+        }
 
         this._liveBidCandle = u.liveBid;
         this._liveAskCandle = u.liveAsk;
