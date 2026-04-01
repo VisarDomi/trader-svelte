@@ -31,15 +31,16 @@ export class ChartCamera {
 
     private lastAnchorTime: number | null = null;
 
-    /** Written by handleUserInteraction (sync listener), consumed by updateAnchor. */
-    private pendingTrackingLost: CameraAction | null = null;
+    /**
+     * The range LWC actually rendered after our last programmatic setVisibleRange.
+     * Compared against current range to detect user scroll/zoom (drift).
+     * Only meaningful while isTracking — cleared when tracking is lost.
+     */
+    private lastSetRange: { from: number; to: number } | null = null;
 
     init(chart: IChartApi) {
         this.chart = chart;
-
-        this.chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
-            this.handleUserInteraction();
-        });
+        // No listener — drift detection is pull-based in updateAnchor.
     }
 
     initializeView(savedState: ViewState | null, liveTime: number): CameraAction | null {
@@ -67,6 +68,10 @@ export class ChartCamera {
         const before = { from: currentRange.from, to: currentRange.to };
         const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
         timeScale.setVisibleLogicalRange(newRange);
+
+        // Read back snapped time range so drift detection stays correct.
+        this.readBackRange();
+
         return { before, after: newRange };
     }
 
@@ -74,24 +79,21 @@ export class ChartCamera {
         if (!newAnchorTime || !this.chart) return [];
 
         const actions: CameraAction[] = [];
-
-        // Drain tracking-lost from a prior user scroll (between RAF frames).
-        if (this.pendingTrackingLost) {
-            actions.push(this.pendingTrackingLost);
-            this.pendingTrackingLost = null;
-        }
-
         const oldAnchorTime = this.lastAnchorTime;
         this.lastAnchorTime = newAnchorTime;
 
+        // Pull-based drift check: did the user scroll/zoom since our last write?
+        if (this.isTracking && this.lastSetRange) {
+            const driftAction = this.detectUserDrift();
+            if (driftAction) {
+                this.isTracking = false;
+                this.lastSetRange = null;
+                actions.push(driftAction);
+            }
+        }
+
         if (this.isTracking) {
             actions.push(this.enforceLivePosition(newAnchorTime));
-            // enforceLivePosition → setVisibleRange → handleUserInteraction may have
-            // synchronously set pendingTrackingLost. Drain it now.
-            if (this.pendingTrackingLost) {
-                actions.push(this.pendingTrackingLost);
-                this.pendingTrackingLost = null;
-            }
         } else if (oldAnchorTime) {
             actions.push(this.checkAndApplyPassiveFollow(oldAnchorTime, newAnchorTime));
         }
@@ -106,11 +108,7 @@ export class ChartCamera {
         this.lastAnchorTime = anchorTime;
 
         const { from, to } = this.calculateTargetRange(anchorTime, DEFAULT_SPAN_SECONDS);
-
-        this.chart.timeScale().setVisibleRange({
-            from: from as UTCTimestamp,
-            to: to as UTCTimestamp
-        });
+        this.setRange(from, to);
 
         this.chart.priceScale('right').applyOptions({ autoScale: true });
     }
@@ -166,11 +164,74 @@ export class ChartCamera {
             from: center - newSpan / 2,
             to: center + newSpan / 2
         });
+
+        // Time scale may have shifted due to resize — read back.
+        this.readBackRange();
     }
 
     destroy() {
         this.chart = null;
+        this.lastSetRange = null;
     }
+
+    // --- Private: drift detection ---
+
+    /**
+     * Compare current visible range against what we last set programmatically.
+     * Any difference is user-initiated scroll/zoom (LWC bar-snapping is accounted
+     * for because lastSetRange stores the post-snap read-back, not the request).
+     */
+    private detectUserDrift(): CameraAction | null {
+        if (!this.chart || !this.lastSetRange) return null;
+
+        const range = this.chart.timeScale().getVisibleRange();
+        if (!range) return null;
+
+        const actualTo = range.to as number;
+        const expectedTo = this.lastSetRange.to;
+        const currentSpan = (range.to as number) - (range.from as number);
+
+        const tolerance = currentSpan * 0.01;
+        const drift = Math.abs(actualTo - expectedTo);
+
+        if (drift > tolerance) {
+            return {
+                kind: 'tracking-lost',
+                drift: Math.round(drift),
+                tolerance: Math.round(tolerance),
+                rangeTo: Math.round(actualTo),
+                idealTo: Math.round(expectedTo),
+            };
+        }
+
+        return null;
+    }
+
+    // --- Private: range writes ---
+
+    /** All programmatic time-range writes go through here. Reads back the snapped result. */
+    private setRange(from: number, to: number) {
+        if (!this.chart) return;
+
+        this.chart.timeScale().setVisibleRange({
+            from: from as UTCTimestamp,
+            to: to as UTCTimestamp
+        });
+
+        this.readBackRange();
+    }
+
+    /** Read back what LWC actually rendered (after bar-snapping) into lastSetRange. */
+    private readBackRange() {
+        if (!this.chart) return;
+
+        const actual = this.chart.timeScale().getVisibleRange();
+        if (actual) {
+            this.lastSetRange = { from: actual.from as number, to: actual.to as number };
+        }
+    }
+
+    // --- Private: camera modes ---
 
     private checkAndApplyPassiveFollow(oldTime: number, newTime: number): CameraAction {
         const delta = newTime - oldTime;
@@ -190,10 +251,7 @@ export class ChartCamera {
         result.liveVisible = isLiveVisible;
 
         if (isLiveVisible && delta > 0) {
-            timeScale.setVisibleRange({
-                from: (visibleFrom + delta) as UTCTimestamp,
-                to: (visibleTo + delta) as UTCTimestamp
-            });
+            this.setRange(visibleFrom + delta, visibleTo + delta);
         }
 
         return result;
@@ -216,32 +274,6 @@ export class ChartCamera {
         }
     }
 
-    private handleUserInteraction() {
-        if (!this.chart || !this.lastAnchorTime) return;
-
-        if (this.isTracking) {
-            const range = this.chart.timeScale().getVisibleRange();
-            if (!range) return;
-
-            const currentSpan = (range.to as number) - (range.from as number);
-            const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, currentSpan);
-
-            const tolerance = currentSpan * 0.01;
-            const drift = Math.abs((range.to as number) - idealTo);
-
-            if (drift > tolerance) {
-                this.isTracking = false;
-                this.pendingTrackingLost = {
-                    kind: 'tracking-lost',
-                    drift: Math.round(drift),
-                    tolerance: Math.round(tolerance),
-                    rangeTo: Math.round(range.to as number),
-                    idealTo: Math.round(idealTo),
-                };
-            }
-        }
-    }
-
     private enforceLivePosition(anchorTime: number, forceSpan?: number): CameraAction {
         const fallback: CameraAction = { kind: 'enforce', anchorTime, rangeFrom: 0, rangeTo: 0, span: 0 };
         if (!this.chart) return fallback;
@@ -254,14 +286,12 @@ export class ChartCamera {
             : DEFAULT_SPAN_SECONDS);
 
         const { from, to } = this.calculateTargetRange(anchorTime, span);
-
-        timeScale.setVisibleRange({
-            from: from as UTCTimestamp,
-            to: to as UTCTimestamp
-        });
+        this.setRange(from, to);
 
         return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(span) };
     }
+
+    // --- Private: geometry ---
 
     private calculateTargetRange(anchorTime: number, span: number) {
         const widthPixels = viewport.width || 1000;
@@ -285,10 +315,7 @@ export class ChartCamera {
         });
 
         const tHalf = state.timeSpan / 2;
-        this.chart.timeScale().setVisibleRange({
-            from: (state.centerTime - tHalf) as UTCTimestamp,
-            to: (state.centerTime + tHalf) as UTCTimestamp
-        });
+        this.setRange(state.centerTime - tHalf, state.centerTime + tHalf);
     }
 
     private calculateTimeState(range: IRange<Time>) {
