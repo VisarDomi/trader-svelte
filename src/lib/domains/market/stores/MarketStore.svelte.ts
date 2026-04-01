@@ -150,8 +150,6 @@ export class MarketStore extends BaseStore {
             });
         }
 
-        // Only re-render the chart if the timeline boundaries actually changed.
-        // Replacing existing bars with the same API data is a no-op for the chart.
         if (bidResult.extended > 0) {
             this.publishHistory();
             this.updateTrigger++;

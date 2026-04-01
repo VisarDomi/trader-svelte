@@ -7,7 +7,6 @@ import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 export class LiveEdgePlugin implements Types {
     id = "live_edge_sensor";
 
-    /** Gate: only log enforce/passive-follow once per anchor time. */
     private lastLoggedAnchor: number | null = null;
 
     constructor(private readonly camera: ChartCamera) {}
@@ -32,15 +31,12 @@ export class LiveEdgePlugin implements Types {
                     break;
 
                 case 'drift-check':
-                    // Only log when drift is non-trivial (user has panned)
                     if (action.drift > 1) {
                         serverLog({ tag: LogEvent.CameraDriftCheck, drift: Math.round(action.drift), tolerance: Math.round(action.tolerance), graceFrames: action.graceFrames, rangeTo: Math.round(action.rangeTo), idealTo: Math.round(action.idealTo) });
                     }
                     break;
 
                 case 'enforce':
-                    // Log every enforce when anchor didn't change (within-candle snap = the bug)
-                    // Gate by anchorTime only for normal new-candle enforcements
                     if (!action.anchorChanged || action.anchorTime !== this.lastLoggedAnchor) {
                         this.lastLoggedAnchor = action.anchorTime;
                         serverLog({ tag: LogEvent.CameraEnforce, anchorTime: action.anchorTime, rangeFrom: action.rangeFrom, rangeTo: action.rangeTo, span: action.span, anchorChanged: action.anchorChanged });

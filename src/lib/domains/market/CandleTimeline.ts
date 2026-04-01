@@ -2,9 +2,7 @@ import type { ChartCandle } from '$lib/shared/types/market.js';
 import { log } from '$lib/shared/utils/log.js';
 
 export interface MergeResult {
-    /** Number of existing candles replaced by newer API data. */
     replaced: number;
-    /** Number of new candles added beyond what existed. */
     extended: number;
     newestBefore: number;
     newestAfter: number;
@@ -35,7 +33,6 @@ export class CandleTimeline {
         return kept.length;
     }
 
-    /** Append a completed candle. Replaces if same time (tick data is fresher than API). */
     append(candle: ChartCandle): 'added' | 'replaced' | 'dropped' {
         const last = this.newest();
         if (!last || candle.time > last.time) {
@@ -49,11 +46,6 @@ export class CandleTimeline {
         return 'dropped';
     }
 
-    /**
-     * Merge API data into the timeline (API is source of truth for completed candles).
-     * Replaces overlapping bars, extends if API has newer data, but NEVER trims —
-     * existing bars beyond the new data's range are preserved.
-     */
     merge(newer: ChartCandle[]): MergeResult {
         const newestBefore = this.newest()?.time ?? 0;
 
@@ -75,10 +67,8 @@ export class CandleTimeline {
         let replaced = 0;
 
         if (cutIdx === -1) {
-            // All new data is after existing data — pure extension.
             this.candles = [...this.candles, ...clean];
         } else {
-            // Preserve existing bars beyond the new data's range.
             const tailIdx = this.candles.findIndex(c => c.time > lastNewTime);
             const tail = tailIdx !== -1 ? this.candles.slice(tailIdx) : [];
 

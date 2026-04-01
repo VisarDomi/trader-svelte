@@ -28,7 +28,6 @@
 </script>
 
 {#if isOpen && plannedTrade}
-    <!-- Backdrop is click-through so chart taps can re-plan at a different price -->
     <div class="backdrop">
         <div
                 role="dialog"

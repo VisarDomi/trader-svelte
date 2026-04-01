@@ -35,23 +35,10 @@ export class ChartCamera {
 
     private lastAnchorTime: number | null = null;
 
-    /** The span we intend to show. Stored so we don't re-read from LWC each frame
-     *  (LWC returns slightly different values due to async bar-snapping). */
     private intendedSpan = DEFAULT_SPAN_SECONDS;
 
-    /**
-     * After enforce/init, skip drift detection for N frames.
-     * LWC processes setVisibleRange asynchronously in its own RAF —
-     * the range may not stabilize for 1-2 frames after we set it.
-     */
     private graceFrames = 0;
 
-    /**
-     * Viewport ownership: when true, the user is actively manipulating the
-     * viewport (pan/zoom). Camera must not write to the viewport until
-     * ownership reverts. Acquired on pointerdown/wheel, released on
-     * pointerup after a debounce.
-     */
     private userOwnsViewport = false;
     private releaseTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -59,7 +46,6 @@ export class ChartCamera {
         this.chart = chart;
     }
 
-    /** User starts interacting with the viewport (pointerdown / wheel). */
     userAcquire(): void {
         if (this.releaseTimer) {
             clearTimeout(this.releaseTimer);
@@ -68,7 +54,6 @@ export class ChartCamera {
         this.userOwnsViewport = true;
     }
 
-    /** User stops interacting (pointerup). Reclaim after debounce. */
     userRelease(): void {
         if (this.releaseTimer) clearTimeout(this.releaseTimer);
         this.releaseTimer = setTimeout(() => {
@@ -145,9 +130,6 @@ export class ChartCamera {
         }
 
         if (this.userOwnsViewport) {
-            // User owns viewport — camera must not write. Drift is still
-            // measured above for observability; enforcement waits until
-            // ownership reverts.
         } else if (this.isTracking && anchorChanged) {
             actions.push(this.enforceLivePosition(newAnchorTime, undefined, anchorChanged));
         } else if (!this.isTracking && oldAnchorTime) {
@@ -231,8 +213,6 @@ export class ChartCamera {
         this.chart = null;
     }
 
-    // --- Private: drift detection ---
-
     private measureDrift(): { drift: number; tolerance: number; rangeTo: number; idealTo: number } | null {
         if (!this.chart || !this.lastAnchorTime) return null;
 
@@ -245,8 +225,6 @@ export class ChartCamera {
 
         return { drift, tolerance, rangeTo: range.to as number, idealTo };
     }
-
-    // --- Private: camera modes ---
 
     private checkAndApplyPassiveFollow(oldTime: number, newTime: number): CameraAction {
         const delta = newTime - oldTime;
@@ -311,8 +289,6 @@ export class ChartCamera {
 
         return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(this.intendedSpan), anchorChanged };
     }
-
-    // --- Private: geometry ---
 
     private calculateTargetRange(anchorTime: number, span: number) {
         const widthPixels = viewport.width || 1000;

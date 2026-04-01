@@ -28,7 +28,6 @@
 </script>
 
 {#snippet cardContent()}
-    <!-- Header Row -->
     <div class="header">
         <div class="title-group">
             <span class="name">{account.accountName}</span>
@@ -59,7 +58,6 @@
         </div>
     </div>
 
-    <!-- Stats Grid -->
     <div class="grid">
         <div>
             <div class="label">Balance</div>
@@ -82,7 +80,6 @@
     </div>
 {/snippet}
 
-<!-- Explicit Branching using Snippets: Guaranteed Valid HTML & Types -->
 {#if href}
     <a
             {id}

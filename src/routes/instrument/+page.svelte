@@ -49,7 +49,6 @@
         <a href="/chart" style="color: #d1d4dc;">← Back</a>
     </div>
 
-    <!-- Search Input -->
     <div style="margin-bottom: 2rem;">
         <input
                 type="text"

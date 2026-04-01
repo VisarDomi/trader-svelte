@@ -36,7 +36,6 @@
 </script>
 
 <div class="card">
-    <!-- Header -->
     <div
             class="header"
             class:no-border={collapsed}
@@ -75,7 +74,6 @@
 
     {#if !collapsed}
         <div class="body">
-            <!-- Prices Grid -->
             <div class="price-grid">
                 <div>
                     <div class="label">BID</div>
@@ -100,10 +98,8 @@
             {#if hasSchedule}
                 <div class="separator"></div>
 
-                <!-- Detailed Info (Only Visible if details available) -->
                 <div class="details-grid">
 
-                    <!-- 1. Dealing Rules -->
                     <div class="section">
                         <h4 class="section-title">Dealing Rules</h4>
                         <div class="key-val-list">
@@ -122,7 +118,6 @@
                         </div>
                     </div>
 
-                    <!-- 2. Overnight Fees -->
                     <div class="section">
                         <h4 class="section-title">Overnight Fees</h4>
                         <div class="key-val-list">
@@ -141,7 +136,6 @@
                         </div>
                     </div>
 
-                    <!-- 3. Trading Hours -->
                     <div class="section full-width">
                         <h4 class="section-title">Trading Hours</h4>
                         <div class="hours-container">

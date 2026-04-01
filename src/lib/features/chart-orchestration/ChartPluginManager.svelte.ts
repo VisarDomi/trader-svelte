@@ -18,7 +18,6 @@ import { HistoryLoaderPlugin } from "$lib/features/chart-drawings/plugins/Histor
 import { LiveEdgePlugin } from "$lib/features/chart-drawings/plugins/LiveEdgePlugin.js";
 import { ClockPlugin } from "$lib/features/chart-drawings/plugins/ClockPlugin.js";
 
-/** Captured by the $effect when historyVersion advances. Persists until RAF consumes it. */
 interface HistoryCommand {
     history: ChartCandle[];
     version: number;
@@ -37,7 +36,6 @@ export class ChartRenderer {
     private viewInitialized = false;
     private lastRenderedCandles = 0;
 
-    // RAF adapter — $effect writes, RAF reads
     private rafId = 0;
     private pendingHistory: HistoryCommand | null = null;
 
@@ -59,12 +57,9 @@ export class ChartRenderer {
         this.features.push(new LiveEdgePlugin(this.camera));
         this.features.push(new ClockPlugin());
 
-        // Functional core: $effect subscribes to reactive state and captures
-        // render intent. All LWC imperative calls happen in the RAF shell.
         $effect(() => {
             if (!this.context || !this.series) return;
 
-            // Subscribe to every change source that should trigger a render
             const _loaded = this.context.isMarketLoaded;
             const _lastCandle = this.context.lastCandle;
             const _trigger = this.marketStore.updateTrigger;
@@ -72,9 +67,6 @@ export class ChartRenderer {
             const version = this.marketStore.historyVersion;
             const marketLoaded = this.marketStore.isLoaded;
 
-            // Capture history change — persists in pendingHistory until RAF consumes it.
-            // Multiple $effect runs between RAFs won't lose this because renderedVersion
-            // is updated immediately, so subsequent runs skip this branch.
             if (marketLoaded && history.length > 0 && version !== this.renderedVersion) {
                 const isFirstRender = this.renderedVersion === 0;
                 const prevCandles = this.lastRenderedCandles;
@@ -93,7 +85,6 @@ export class ChartRenderer {
         });
     }
 
-    /** At most one RAF pending at a time. Multiple $effect runs coalesce into one render. */
     private scheduleRender() {
         if (this.rafId) return;
         this.rafId = requestAnimationFrame(() => {
@@ -102,11 +93,9 @@ export class ChartRenderer {
         });
     }
 
-    /** Imperative shell: all LWC API calls happen here, in one synchronous pass per frame. */
     private flush() {
         if (!this.series || !this.context) return;
 
-        // --- Phase 1: setData (history) ---
         const h = this.pendingHistory;
         if (h) {
             this.pendingHistory = null;
@@ -139,13 +128,11 @@ export class ChartRenderer {
             }
         }
 
-        // --- Phase 2: live candle (update) — always after setData ---
         const lastCandle = this.context.lastCandle;
         if (this.context.isMarketLoaded && lastCandle) {
             this.series.update(lastCandle);
         }
 
-        // --- Phase 3: plugins (camera anchor, price lines, etc.) ---
         for (const feature of this.features) {
             feature.update(this.context);
         }

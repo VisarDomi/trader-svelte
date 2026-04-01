@@ -9,10 +9,6 @@ export class CandleAggregator {
         this.liveCandle = candle ? { ...candle } : null;
     }
 
-    /**
-     * Merge API data into the live candle. Accepts CandleFrame (no close) —
-     * the type boundary enforces that API can never touch close.
-     */
     merge(frame: CandleFrame): boolean {
         if (!this.liveCandle) {
             this.liveCandle = { ...frame, close: frame.open };

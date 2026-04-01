@@ -53,9 +53,6 @@ export class ChartController {
 
         this.camera.init(this._chart);
 
-        // Viewport ownership: pointer/wheel events on the chart container
-        // signal that the user is actively manipulating the viewport.
-        // Camera must not write to the viewport while user holds ownership.
         container.addEventListener('pointerdown', this.handlePointerDown);
         window.addEventListener('pointerup', this.handlePointerUp);
         window.addEventListener('pointercancel', this.handlePointerUp);
@@ -137,8 +134,6 @@ export class ChartController {
             this._ghostSeries = null;
         }
     }
-
-    // --- Viewport ownership: user input signals ---
 
     private handlePointerDown = () => {
         this.camera.userAcquire();

@@ -36,9 +36,6 @@ export class PositionPoller {
             void this.fetchAndSync('poll');
         }, 15000);
 
-        // Subscribe to price truth from market domain. Trading domain owns
-        // breach detection — market domain just emits ticks, never reaches
-        // into position state.
         this.offTick = bus.on(EVENTS.MARKET_TICK, ({ bid, offer }) => {
             const pos = positionStore.anyActivePosition;
             if (!pos) {
@@ -97,7 +94,6 @@ export class PositionPoller {
                 ? list.positions.find(p => p.market.epic === this.currentEpic) || null
                 : null;
 
-            // Detect auto-close: had position, now gone, not manually closing
             const prev = positionStore.anyActivePosition;
             if (prev && !globalPos && !positionStore.isClosing) {
                 serverLog({

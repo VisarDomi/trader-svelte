@@ -28,7 +28,6 @@
 
     <label>
         API Key
-        <!-- font-size: 16px is the magic number that prevents iOS Safari from zooming in on focus -->
         <input type="text" bind:value={authStore.apiKey} placeholder="X-CAP-API-KEY" style="width: 100%; padding: 8px; font-size: 16px;" />
     </label>
     <label>
@@ -46,7 +45,6 @@
 </div>
 
 <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 2rem; max-width: 100%;">
-    <!-- REAL STATUS -->
     <div style="border: 1px solid #26a69a; padding: 1rem; border-radius: 8px;">
         <h3>REAL (Charts default)</h3>
         <p>Status: <strong>{authStore.realStatus}</strong></p>
@@ -64,7 +62,6 @@
         {/if}
     </div>
 
-    <!-- DEMO STATUS -->
     <div style="border: 1px solid #ef5350; padding: 1rem; border-radius: 8px;">
         <h3>DEMO (Trading default)</h3>
         <p>Status: <strong>{authStore.demoStatus}</strong></p>

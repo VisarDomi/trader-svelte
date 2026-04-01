@@ -33,16 +33,16 @@
 </script>
 
 {#if overlay.hasActiveAccount}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="overlay-container"
+        role="toolbar"
+        tabindex="-1"
         ontouchstart={onTouchStart}
         ontouchend={onTouchEnd}
         ontouchcancel={onTouchEnd}
         onmousedown={onTouchStart}
         onmouseup={onTouchEnd}
     >
-        <!-- The Toggle Arrow -->
         <button
                 class="toggle-btn"
                 onclick={() => overlay.toggle()}
@@ -55,10 +55,8 @@
             <span class="arrow">{overlay.isOpen ? '◀' : '▶'}</span>
         </button>
 
-        <!-- The Expanded Data Card -->
         {#if overlay.isOpen}
             <div class="data-card">
-                <!-- 1. Market Name + Reset -->
                 <div class="section market-section">
                     <div
                             role="button"
@@ -75,7 +73,6 @@
                     </button>
                 </div>
 
-                <!-- 2. Account Info -->
                 <div
                         role="button"
                         tabindex="0"
@@ -90,7 +87,6 @@
                     <div class="balance">{overlay.accountBalanceDisplay}</div>
                 </div>
 
-                <!-- 3. Position Info (if active) -->
                 {#if overlay.hasPosition}
                     <div
                             role="button"
@@ -106,7 +102,6 @@
                         </div>
                     </div>
 
-                    <!-- 4. Close Position Button -->
                     <button
                         class="section close-position-btn"
                         onclick={() => overlay.closePosition()}

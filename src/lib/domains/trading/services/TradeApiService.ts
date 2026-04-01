@@ -52,19 +52,12 @@ export async function updatePosition(
     return await response.json() as CreatePositionResponse;
 }
 
-/**
- * Fetch and validate trade confirmation from broker. Retries once if the
- * broker returns invalid data (level=0), since the confirmation endpoint
- * can lag behind order execution. Throws if still invalid after retry —
- * callers must not propagate garbage into PnL or balance.
- */
 export async function getConfirmation(client: ApiClient, dealReference: string): Promise<TradeConfirmation> {
     const endpoint = API.getDealReferenceEndpoint(dealReference);
     const conf = await client.get<TradeConfirmation>(endpoint);
 
     if (isValidConfirmation(conf)) return conf;
 
-    // Broker may not have finalized yet — one retry after a short delay
     await new Promise(r => setTimeout(r, 300));
     const retry = await client.get<TradeConfirmation>(endpoint);
 

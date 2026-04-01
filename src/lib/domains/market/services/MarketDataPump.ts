@@ -124,10 +124,6 @@ export class MarketDataPump {
             const seedBid = marketStore.getLiveBidCandle();
             const seedAsk = marketStore.getLiveAskCandle();
 
-            // Only seed with a candle that belongs to the current minute.
-            // A stale seed from before sleep is zombie data — neither tick-owned
-            // nor API-owned. It would get "completed" with wrong OHLC on the
-            // first tick, then replaced by sync → visible teleport.
             const currentMinute = (Math.floor(Date.now() / 1000 / 60) * 60) as UTCTimestamp;
             const freshBid = seedBid?.time === currentMinute ? seedBid : null;
             const freshAsk = seedAsk?.time === currentMinute ? seedAsk : null;
@@ -217,7 +213,6 @@ export class MarketDataPump {
 
         marketStore.dispatch(marketCmd.updateLive(u));
 
-        // Market domain emits price truth. Trading domain subscribes and reacts.
         bus.emit(EVENTS.MARKET_TICK, { bid: u.bid, offer: u.offer });
     }
 
