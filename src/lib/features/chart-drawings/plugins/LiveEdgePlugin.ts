@@ -1,24 +1,51 @@
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import type { Types } from "$lib/components/chart-engine/types.js";
-import type { ChartCamera } from "$lib/components/chart-engine/ChartCamera.js";
+import type { ChartCamera, CameraAction } from "$lib/components/chart-engine/ChartCamera.js";
 import type { ChartContext } from "$lib/features/chart-orchestration/ChartContext.svelte.js";
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export class LiveEdgePlugin implements Types {
     id = "live_edge_sensor";
 
+    /** Gate: only log enforce/passive-follow once per anchor time. */
+    private lastLoggedAnchor: number | null = null;
+
     constructor(private readonly camera: ChartCamera) {}
 
-    mount(chart: IChartApi, series: ISeriesApi<"Candlestick">): void {
-
-    }
+    mount(_chart: IChartApi, _series: ISeriesApi<"Candlestick">): void {}
 
     update(context: ChartContext): void {
         if (!context.lastCandle) return;
 
-        this.camera.updateAnchor(Number(context.lastCandle.time));
+        const actions = this.camera.updateAnchor(Number(context.lastCandle.time));
+        this.logActions(actions);
     }
 
-    destroy(): void {
+    destroy(): void {}
 
+    private logActions(actions: CameraAction[]): void {
+        for (const action of actions) {
+            switch (action.kind) {
+                case 'tracking-lost':
+                    // Always log — this is a discrete state change, not a per-tick event.
+                    serverLog({ tag: LogEvent.CameraTrackingLost, drift: action.drift, tolerance: action.tolerance, rangeTo: action.rangeTo, idealTo: action.idealTo });
+                    this.lastLoggedAnchor = null;
+                    break;
+
+                case 'enforce':
+                    if (action.anchorTime !== this.lastLoggedAnchor) {
+                        this.lastLoggedAnchor = action.anchorTime;
+                        serverLog({ tag: LogEvent.CameraEnforce, anchorTime: action.anchorTime, rangeFrom: action.rangeFrom, rangeTo: action.rangeTo, span: action.span });
+                    }
+                    break;
+
+                case 'passive-follow':
+                    if (action.newTime !== this.lastLoggedAnchor) {
+                        this.lastLoggedAnchor = action.newTime;
+                        serverLog({ tag: LogEvent.CameraPassiveFollow, oldTime: action.oldTime, newTime: action.newTime, delta: action.delta, liveVisible: action.liveVisible });
+                    }
+                    break;
+            }
+        }
     }
 }

@@ -126,7 +126,10 @@ export class ChartRenderer {
             if (h.isFirstRender || !this.viewInitialized) {
                 const savedState = this.stateManager.loadState();
                 const lastTime = Number(h.history[h.history.length - 1].time);
-                this.camera.initializeView(savedState, lastTime);
+                const initAction = this.camera.initializeView(savedState, lastTime);
+                if (initAction) {
+                    serverLog({ tag: LogEvent.CameraInit, anchorTime: initAction.anchorTime, tracking: initAction.tracking, source: initAction.source });
+                }
                 this.viewInitialized = true;
             } else if (h.prependCount > 0) {
                 const { before, after } = this.camera.maintainScrollPosition(h.prependCount);

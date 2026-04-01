@@ -1,7 +1,6 @@
 import type { IChartApi, IRange, Time, UTCTimestamp } from 'lightweight-charts';
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
-import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export interface ViewState {
     centerTime: number;
@@ -17,6 +16,12 @@ export interface CapturedViewport {
     priceAreaH: number;
 }
 
+export type CameraAction =
+    | { kind: 'init'; anchorTime: number; tracking: boolean; source: 'saved' | 'default' }
+    | { kind: 'enforce'; anchorTime: number; rangeFrom: number; rangeTo: number; span: number }
+    | { kind: 'passive-follow'; oldTime: number; newTime: number; delta: number; liveVisible: boolean }
+    | { kind: 'tracking-lost'; drift: number; tolerance: number; rangeTo: number; idealTo: number };
+
 const DEFAULT_SPAN_SECONDS = 120 * 60;
 
 export class ChartCamera {
@@ -25,7 +30,9 @@ export class ChartCamera {
     private isTracking = true;
 
     private lastAnchorTime: number | null = null;
-    private lastLoggedAnchor: number | null = null;
+
+    /** Written by handleUserInteraction (sync listener), consumed by updateAnchor. */
+    private pendingTrackingLost: CameraAction | null = null;
 
     init(chart: IChartApi) {
         this.chart = chart;
@@ -35,8 +42,8 @@ export class ChartCamera {
         });
     }
 
-    initializeView(savedState: ViewState | null, liveTime: number) {
-        if (!this.chart) return;
+    initializeView(savedState: ViewState | null, liveTime: number): CameraAction | null {
+        if (!this.chart) return null;
 
         this.lastAnchorTime = liveTime;
 
@@ -46,7 +53,7 @@ export class ChartCamera {
             this.resetZoom(liveTime);
         }
 
-        serverLog({ tag: LogEvent.CameraInit, anchorTime: liveTime, tracking: this.isTracking, source: savedState ? 'saved' : 'default' });
+        return { kind: 'init', anchorTime: liveTime, tracking: this.isTracking, source: savedState ? 'saved' : 'default' };
     }
 
     maintainScrollPosition(barsAdded: number): { before: { from: number; to: number } | null; after: { from: number; to: number } | null } {
@@ -63,17 +70,33 @@ export class ChartCamera {
         return { before, after: newRange };
     }
 
-    updateAnchor(newAnchorTime: number) {
-        if (!newAnchorTime || !this.chart) return;
+    updateAnchor(newAnchorTime: number): CameraAction[] {
+        if (!newAnchorTime || !this.chart) return [];
+
+        const actions: CameraAction[] = [];
+
+        // Drain tracking-lost from a prior user scroll (between RAF frames).
+        if (this.pendingTrackingLost) {
+            actions.push(this.pendingTrackingLost);
+            this.pendingTrackingLost = null;
+        }
 
         const oldAnchorTime = this.lastAnchorTime;
         this.lastAnchorTime = newAnchorTime;
 
         if (this.isTracking) {
-            this.enforceLivePosition(newAnchorTime);
+            actions.push(this.enforceLivePosition(newAnchorTime));
+            // enforceLivePosition → setVisibleRange → handleUserInteraction may have
+            // synchronously set pendingTrackingLost. Drain it now.
+            if (this.pendingTrackingLost) {
+                actions.push(this.pendingTrackingLost);
+                this.pendingTrackingLost = null;
+            }
         } else if (oldAnchorTime) {
-            this.checkAndApplyPassiveFollow(oldAnchorTime, newAnchorTime);
+            actions.push(this.checkAndApplyPassiveFollow(oldAnchorTime, newAnchorTime));
         }
+
+        return actions;
     }
 
     resetZoom(anchorTime: number) {
@@ -149,25 +172,22 @@ export class ChartCamera {
         this.chart = null;
     }
 
-    private checkAndApplyPassiveFollow(oldTime: number, newTime: number) {
-        if (!this.chart) return;
+    private checkAndApplyPassiveFollow(oldTime: number, newTime: number): CameraAction {
+        const delta = newTime - oldTime;
+        const result: CameraAction = { kind: 'passive-follow', oldTime, newTime, delta, liveVisible: false };
+
+        if (!this.chart) return result;
+
         const timeScale = this.chart.timeScale();
         const range = timeScale.getVisibleRange();
-
-        if (!range) return;
+        if (!range) return result;
 
         const visibleFrom = range.from as number;
         const visibleTo = range.to as number;
 
         const buffer = (visibleTo - visibleFrom) * 0.05;
         const isLiveVisible = (oldTime >= visibleFrom - buffer) && (oldTime <= visibleTo + buffer);
-
-        const delta = newTime - oldTime;
-
-        if (newTime !== this.lastLoggedAnchor) {
-            this.lastLoggedAnchor = newTime;
-            serverLog({ tag: LogEvent.CameraPassiveFollow, oldTime, newTime, delta, liveVisible: isLiveVisible });
-        }
+        result.liveVisible = isLiveVisible;
 
         if (isLiveVisible && delta > 0) {
             timeScale.setVisibleRange({
@@ -175,6 +195,8 @@ export class ChartCamera {
                 to: (visibleTo + delta) as UTCTimestamp
             });
         }
+
+        return result;
     }
 
     private restoreState(state: ViewState, currentLiveTime: number) {
@@ -209,13 +231,20 @@ export class ChartCamera {
 
             if (drift > tolerance) {
                 this.isTracking = false;
-                serverLog({ tag: LogEvent.CameraTrackingLost, drift: Math.round(drift), tolerance: Math.round(tolerance), rangeTo: Math.round(range.to as number), idealTo: Math.round(idealTo) });
+                this.pendingTrackingLost = {
+                    kind: 'tracking-lost',
+                    drift: Math.round(drift),
+                    tolerance: Math.round(tolerance),
+                    rangeTo: Math.round(range.to as number),
+                    idealTo: Math.round(idealTo),
+                };
             }
         }
     }
 
-    private enforceLivePosition(anchorTime: number, forceSpan?: number) {
-        if (!this.chart) return;
+    private enforceLivePosition(anchorTime: number, forceSpan?: number): CameraAction {
+        const fallback: CameraAction = { kind: 'enforce', anchorTime, rangeFrom: 0, rangeTo: 0, span: 0 };
+        if (!this.chart) return fallback;
 
         const timeScale = this.chart.timeScale();
         const range = timeScale.getVisibleRange();
@@ -226,15 +255,12 @@ export class ChartCamera {
 
         const { from, to } = this.calculateTargetRange(anchorTime, span);
 
-        if (anchorTime !== this.lastLoggedAnchor) {
-            this.lastLoggedAnchor = anchorTime;
-            serverLog({ tag: LogEvent.CameraEnforce, anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(span) });
-        }
-
         timeScale.setVisibleRange({
             from: from as UTCTimestamp,
             to: to as UTCTimestamp
         });
+
+        return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(span) };
     }
 
     private calculateTargetRange(anchorTime: number, span: number) {
