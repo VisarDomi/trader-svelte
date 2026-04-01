@@ -13,6 +13,8 @@
 
 **CandleAggregator implements the live candle rules**: `merge(frame)` applies API open, best-of high/low, and never touches close. This is the only place live candle ownership is enforced.
 
+**CandleTimeline.append replaces on same-time instead of dropping**: When a candle completes at minute rollover, the timeline may already have that time slot from the history fetch. The completed candle (tick-accurate close, intelligent-merged h/l) replaces the stale API snapshot — 99% accurate immediately. The :30 sync then overwrites it with 100% API truth within 30 seconds. Only candles strictly older than the newest are dropped.
+
 **CandleTimeline.merge is non-destructive**: Replaces overlapping bars with API data (full overwrite for completed candles) and extends if API has newer bars. Never trims — existing bars beyond the new data's range are preserved. This prevents the sync (which splits off the current bar) from deleting the last completed bar in the timeline.
 
 **MarketStore mergeLatestHistory skips publishHistory if boundaries unchanged**: If the merge didn't extend the timeline and didn't trim anything, the chart already has the correct data — skip the publishHistory + setData cycle to save CPU. The merge still runs (API overwrites completed candles) but the chart isn't re-rendered needlessly.
@@ -23,6 +25,8 @@
 
 **MarketStore backing arrays are never aliased to reactive state**: `_bidHistory`/`_askHistory` are private mutable arrays. `publishHistory()` always creates a new array via spread when assigning to `history` ($state.raw). This prevents the aliased-mutation bug where in-place `.push()` on the backing array is invisible to Svelte's reference-equality tracking. High-frequency ticks only update `lastCandle` via `publishLiveCandle()` — no history snapshot needed. Candle completion (once/minute) is the only tick-path that calls `publishHistory()`.
 
+**ChartRenderer functional core / imperative shell (Svelte 5 pitfall #11)**: `$effect` subscribes to reactive state and captures render intent into `pendingHistory`. A single `requestAnimationFrame` callback (`flush()`) reads the queue and makes ALL LWC imperative calls in one synchronous pass per frame. Multiple `$effect` runs between RAFs coalesce — at most one RAF is pending at a time. This prevents Svelte's microtask scheduling from interleaving with LWC's internal RAF render loop.
+
 **ChartRenderer uses historyVersion, not array heuristics**: The chart tracks `renderedVersion` against `marketStore.historyVersion` to decide when to call `setData()`. No epic comparison, no `hasInitializedView` flag, no `lastFirstTime` — just version mismatch = render.
 
 **ChartStateManager owns staleness check**: This class owns the saved state, so it owns the staleness check. If the last data at save time is >24h old, the view is stale — discard it rather than restoring a misleading viewport.
@@ -30,6 +34,8 @@
 **LiveEdgePlugin is a sensor, not an actor**: It detects new data and notifies the Camera. It does NOT manipulate the chart directly. The Camera owns the viewport.
 
 **PositionPoller injects initialBalance**: Business logic injects the initial balance into each position because the API doesn't provide it. This relies on accountStore being up to date.
+
+**MarketDataPump stale seed prevention**: On reconnect, only seed the CandleAggregator with a candle that belongs to the current minute. A stale seed from before sleep is zombie data — neither tick-owned nor API-owned. It would get "completed" with wrong OHLC on the first tick, then replaced by sync, causing a visible teleport.
 
 ## iOS PWA Workarounds
 
@@ -69,7 +75,13 @@
 
 **LogBuffer coalesced persist**: Multiple push() calls within the same microtask result in a single sessionStorage write, avoiding thrash during rapid-fire logging (7 entries in 1 second during resume).
 
+**LiveEdgePlugin camera log gating**: `camera-enforce` and `camera-passive-follow` are gated to log once per anchor time (new candle) to avoid flooding. `camera-enforce` with `anchorChanged: false` bypasses the gate to surface within-candle snaps. `camera-drift-check` only logs when drift > 1 second (user has actually panned). `camera-tracking-lost` always logs — it's a discrete state change, not a per-tick event.
+
 ## Trading Logic
+
+**BreachDetector is a pure function — trading domain owns breach detection**: Given a price and position, detects if SL or TP has been breached. Owns no state, mutates nothing. Market domain emits ticks via the event bus; trading domain (PositionPoller) subscribes and runs breach detection. Market domain never reaches into position state.
+
+**TradeApiService confirmation validation with retry**: Fetches and validates trade confirmation from the broker. Retries once if the broker returns invalid data (level=0), since the confirmation endpoint can lag behind order execution. Throws if still invalid after retry — callers must not propagate garbage into PnL or balance.
 
 **AccountStore optimistic update**: Immediate local balance update ensures TradePlanner sees correct funds instantly after a trade closes. Assumes single-position mode: floating PnL is reset to 0, available = deposit.
 
