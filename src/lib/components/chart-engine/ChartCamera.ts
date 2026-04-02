@@ -24,7 +24,6 @@ export type CameraAction =
 
 const DEFAULT_SPAN_SECONDS = 120 * 60;
 const DRIFT_TOLERANCE = 0.03;
-const USER_RELEASE_DELAY_MS = 300;
 
 export class ChartCamera {
     private chart: IChartApi | null = null;
@@ -36,7 +35,6 @@ export class ChartCamera {
     private intendedSpan = DEFAULT_SPAN_SECONDS;
 
     private userOwnsViewport = false;
-    private releaseTimer: ReturnType<typeof setTimeout> | null = null;
     private acquireRange: { from: number; to: number } | null = null;
 
     init(chart: IChartApi) {
@@ -44,22 +42,14 @@ export class ChartCamera {
     }
 
     userAcquire(): void {
-        if (this.releaseTimer) {
-            clearTimeout(this.releaseTimer);
-            this.releaseTimer = null;
-        }
         this.userOwnsViewport = true;
         const range = this.chart?.timeScale().getVisibleRange();
         this.acquireRange = range ? { from: range.from as number, to: range.to as number } : null;
     }
 
     userRelease(): void {
-        if (this.releaseTimer) clearTimeout(this.releaseTimer);
-        this.releaseTimer = setTimeout(() => {
-            this.userOwnsViewport = false;
-            this.releaseTimer = null;
-            this.checkTrackingOnRelease();
-        }, USER_RELEASE_DELAY_MS);
+        this.userOwnsViewport = false;
+        this.checkTrackingOnRelease();
     }
 
     initializeView(savedState: ViewState | null, liveTime: number): CameraAction | null {
@@ -176,7 +166,6 @@ export class ChartCamera {
     }
 
     destroy() {
-        if (this.releaseTimer) clearTimeout(this.releaseTimer);
         this.chart = null;
     }
 
