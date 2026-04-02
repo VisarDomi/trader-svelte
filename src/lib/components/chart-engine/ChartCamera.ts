@@ -100,7 +100,7 @@ export class ChartCamera {
         this.lastAnchorTime = newAnchorTime;
 
         if (this.userOwnsViewport) {
-        } else if (this.isTracking) {
+        } else if (this.isTracking && anchorChanged) {
             actions.push(this.enforceLivePosition(newAnchorTime, undefined, anchorChanged));
         } else if (oldAnchorTime) {
             actions.push(this.checkAndApplyPassiveFollow(oldAnchorTime, newAnchorTime));
