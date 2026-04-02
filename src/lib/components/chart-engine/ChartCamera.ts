@@ -38,6 +38,7 @@ export class ChartCamera {
     private intendedSpan = DEFAULT_SPAN_SECONDS;
 
     private graceFrames = 0;
+    private needsEnforce = false;
 
     private userOwnsViewport = false;
     private releaseTimer: ReturnType<typeof setTimeout> | null = null;
@@ -87,23 +88,15 @@ export class ChartCamera {
         if (!currentRange) return { before: null, after: null };
 
         const before = { from: currentRange.from, to: currentRange.to };
+        const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
+        timeScale.setVisibleLogicalRange(newRange);
+        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
-        if (this.isTracking && this.lastAnchorTime) {
-            // Tracking: camera owns the position in time-space.
-            // Re-enforce via setVisibleRange() so drift checker
-            // reads the same coordinate system that was written.
-            this.enforceLivePosition(this.lastAnchorTime);
-        } else {
-            // Not tracking: user owns the position in bar-index-space.
-            // Shift logical range to keep the same candles visible.
-            const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
-            timeScale.setVisibleLogicalRange(newRange);
-            this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
+        if (this.isTracking) {
+            this.needsEnforce = true;
         }
 
-        const afterRange = timeScale.getVisibleLogicalRange();
-        const after = afterRange ? { from: afterRange.from, to: afterRange.to } : null;
-        return { before, after };
+        return { before, after: newRange };
     }
 
     updateAnchor(newAnchorTime: number): CameraAction[] {
@@ -117,6 +110,9 @@ export class ChartCamera {
         if (this.isTracking) {
             if (this.graceFrames > 0) {
                 this.graceFrames--;
+            } else if (this.needsEnforce) {
+                // Coordinate system is unstable after prepend — skip drift
+                // check. The enforce below will re-establish time-space.
             } else {
                 const driftResult = this.measureDrift();
                 if (driftResult) {
@@ -143,7 +139,8 @@ export class ChartCamera {
         }
 
         if (this.userOwnsViewport) {
-        } else if (this.isTracking && anchorChanged) {
+        } else if (this.isTracking && (anchorChanged || this.needsEnforce)) {
+            this.needsEnforce = false;
             actions.push(this.enforceLivePosition(newAnchorTime, undefined, anchorChanged));
         } else if (!this.isTracking && oldAnchorTime) {
             actions.push(this.checkAndApplyPassiveFollow(oldAnchorTime, newAnchorTime));
