@@ -30,12 +30,6 @@ export class LiveEdgePlugin implements Types {
                     this.lastLoggedAnchor = null;
                     break;
 
-                case 'drift-check':
-                    if (action.drift > 1) {
-                        serverLog({ tag: LogEvent.CameraDriftCheck, drift: Math.round(action.drift), tolerance: Math.round(action.tolerance), graceFrames: action.graceFrames, rangeTo: Math.round(action.rangeTo), idealTo: Math.round(action.idealTo) });
-                    }
-                    break;
-
                 case 'enforce':
                     if (!action.anchorChanged || action.anchorTime !== this.lastLoggedAnchor) {
                         this.lastLoggedAnchor = action.anchorTime;

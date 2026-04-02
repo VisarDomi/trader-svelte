@@ -20,12 +20,10 @@ export type CameraAction =
     | { kind: 'init'; anchorTime: number; tracking: boolean; source: 'saved' | 'default' }
     | { kind: 'enforce'; anchorTime: number; rangeFrom: number; rangeTo: number; span: number; anchorChanged: boolean }
     | { kind: 'passive-follow'; oldTime: number; newTime: number; delta: number; liveVisible: boolean }
-    | { kind: 'tracking-lost'; drift: number; tolerance: number; rangeTo: number; idealTo: number }
-    | { kind: 'drift-check'; drift: number; tolerance: number; graceFrames: number; rangeTo: number; idealTo: number };
+    | { kind: 'tracking-lost'; drift: number; tolerance: number; rangeTo: number; idealTo: number };
 
 const DEFAULT_SPAN_SECONDS = 120 * 60;
 const DRIFT_TOLERANCE = 0.03;
-const GRACE_FRAMES_AFTER_ENFORCE = 3;
 const USER_RELEASE_DELAY_MS = 300;
 
 export class ChartCamera {
@@ -36,9 +34,6 @@ export class ChartCamera {
     private lastAnchorTime: number | null = null;
 
     private intendedSpan = DEFAULT_SPAN_SECONDS;
-
-    private graceFrames = 0;
-    private needsEnforce = false;
 
     private userOwnsViewport = false;
     private releaseTimer: ReturnType<typeof setTimeout> | null = null;
@@ -60,6 +55,7 @@ export class ChartCamera {
         this.releaseTimer = setTimeout(() => {
             this.userOwnsViewport = false;
             this.releaseTimer = null;
+            this.checkTrackingOnRelease();
         }, USER_RELEASE_DELAY_MS);
     }
 
@@ -73,8 +69,6 @@ export class ChartCamera {
         } else {
             this.resetZoom(liveTime);
         }
-
-        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
         return { kind: 'init', anchorTime: liveTime, tracking: this.isTracking, source: savedState ? 'saved' : 'default' };
     }
@@ -90,11 +84,6 @@ export class ChartCamera {
         const before = { from: currentRange.from, to: currentRange.to };
         const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
         timeScale.setVisibleLogicalRange(newRange);
-        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
-
-        if (this.isTracking) {
-            this.needsEnforce = true;
-        }
 
         return { before, after: newRange };
     }
@@ -107,39 +96,10 @@ export class ChartCamera {
         const anchorChanged = newAnchorTime !== oldAnchorTime;
         this.lastAnchorTime = newAnchorTime;
 
-        if (this.isTracking) {
-            if (this.graceFrames > 0) {
-                this.graceFrames--;
-            } else if (!this.needsEnforce) {
-                const driftResult = this.measureDrift();
-                if (driftResult) {
-                    actions.push({
-                        kind: 'drift-check',
-                        drift: driftResult.drift,
-                        tolerance: driftResult.tolerance,
-                        graceFrames: this.graceFrames,
-                        rangeTo: driftResult.rangeTo,
-                        idealTo: driftResult.idealTo,
-                    });
-                    if (driftResult.drift > driftResult.tolerance) {
-                        this.isTracking = false;
-                        actions.push({
-                            kind: 'tracking-lost',
-                            drift: Math.round(driftResult.drift),
-                            tolerance: Math.round(driftResult.tolerance),
-                            rangeTo: Math.round(driftResult.rangeTo),
-                            idealTo: Math.round(driftResult.idealTo),
-                        });
-                    }
-                }
-            }
-        }
-
         if (this.userOwnsViewport) {
-        } else if (this.isTracking && (anchorChanged || this.needsEnforce)) {
-            this.needsEnforce = false;
+        } else if (this.isTracking) {
             actions.push(this.enforceLivePosition(newAnchorTime, undefined, anchorChanged));
-        } else if (!this.isTracking && oldAnchorTime) {
+        } else if (oldAnchorTime) {
             actions.push(this.checkAndApplyPassiveFollow(oldAnchorTime, newAnchorTime));
         }
 
@@ -155,7 +115,6 @@ export class ChartCamera {
 
         const { from, to } = this.calculateTargetRange(anchorTime, this.intendedSpan);
         this.chart.timeScale().setVisibleRange({ from: from as UTCTimestamp, to: to as UTCTimestamp });
-        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
         this.chart.priceScale('right').applyOptions({ autoScale: true });
     }
@@ -211,8 +170,6 @@ export class ChartCamera {
             from: center - newSpan / 2,
             to: center + newSpan / 2
         });
-
-        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
     }
 
     destroy() {
@@ -220,17 +177,19 @@ export class ChartCamera {
         this.chart = null;
     }
 
-    private measureDrift(): { drift: number; tolerance: number; rangeTo: number; idealTo: number } | null {
-        if (!this.chart || !this.lastAnchorTime) return null;
+    private checkTrackingOnRelease(): void {
+        if (!this.isTracking || !this.chart || !this.lastAnchorTime) return;
 
         const range = this.chart.timeScale().getVisibleRange();
-        if (!range) return null;
+        if (!range) return;
 
         const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, this.intendedSpan);
         const tolerance = this.intendedSpan * DRIFT_TOLERANCE;
         const drift = Math.abs((range.to as number) - idealTo);
 
-        return { drift, tolerance, rangeTo: range.to as number, idealTo };
+        if (drift > tolerance) {
+            this.isTracking = false;
+        }
     }
 
     private checkAndApplyPassiveFollow(oldTime: number, newTime: number): CameraAction {
@@ -291,8 +250,6 @@ export class ChartCamera {
             from: from as UTCTimestamp,
             to: to as UTCTimestamp
         });
-
-        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
 
         return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(this.intendedSpan), anchorChanged };
     }
