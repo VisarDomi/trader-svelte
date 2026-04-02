@@ -1,6 +1,7 @@
 import type { IChartApi, IRange, Time, UTCTimestamp } from 'lightweight-charts';
 import * as CHART_CONST from '$lib/shared/constants/chart.js';
 import { viewport } from '$lib/core/services/ViewportService.svelte.js';
+import { log } from '$lib/shared/utils/log.js';
 
 export interface ViewState {
     centerTime: number;
@@ -41,6 +42,11 @@ export class ChartCamera {
         this.chart = chart;
     }
 
+    private traceWrite(caller: string) {
+        const r = this.chart?.timeScale().getVisibleLogicalRange();
+        log.warn(`[viewport-write] ${caller} → logical={from:${r ? Math.round(r.from) : '?'},to:${r ? Math.round(r.to) : '?'}} tracking=${this.isTracking} userOwns=${this.userOwnsViewport}`);
+    }
+
     userAcquire(): void {
         this.userOwnsViewport = true;
         const range = this.chart?.timeScale().getVisibleRange();
@@ -77,6 +83,7 @@ export class ChartCamera {
         const before = { from: currentRange.from, to: currentRange.to };
         const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
         timeScale.setVisibleLogicalRange(newRange);
+        this.traceWrite('maintainScrollPosition');
 
         return { before, after: newRange };
     }
@@ -106,6 +113,7 @@ export class ChartCamera {
 
         const { from, to } = this.calculateTargetRange(anchorTime, this.intendedSpan);
         this.chart.timeScale().setVisibleRange({ from: from as UTCTimestamp, to: to as UTCTimestamp });
+        this.traceWrite('resetZoom');
 
         this.chart.priceScale('right').applyOptions({ autoScale: true });
     }
@@ -161,6 +169,7 @@ export class ChartCamera {
             from: center - newSpan / 2,
             to: center + newSpan / 2
         });
+        this.traceWrite('applyResize');
     }
 
     destroy() {
@@ -204,6 +213,7 @@ export class ChartCamera {
                 from: (visibleFrom + delta) as UTCTimestamp,
                 to: (visibleTo + delta) as UTCTimestamp
             });
+            this.traceWrite('passiveFollow');
         }
 
         return result;
@@ -221,6 +231,7 @@ export class ChartCamera {
             this.isTracking = true;
             this.lastAnchorTime = currentLiveTime;
             this.enforceLivePosition(currentLiveTime, state.timeSpan);
+            this.traceWrite('restoreState-enforce');
         } else {
             this.isTracking = false;
         }
@@ -240,6 +251,7 @@ export class ChartCamera {
             from: from as UTCTimestamp,
             to: to as UTCTimestamp
         });
+        this.traceWrite('enforceLivePosition');
 
         return { kind: 'enforce', anchorTime, rangeFrom: Math.round(from), rangeTo: Math.round(to), span: Math.round(this.intendedSpan), anchorChanged };
     }
@@ -270,6 +282,7 @@ export class ChartCamera {
             from: (state.centerTime - tHalf) as UTCTimestamp,
             to: (state.centerTime + tHalf) as UTCTimestamp
         });
+        this.traceWrite('restoreGeometry');
     }
 
     private calculateTimeState(range: IRange<Time>) {
