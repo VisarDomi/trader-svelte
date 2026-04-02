@@ -14,6 +14,7 @@ import { notifications } from '$lib/core/services/NotificationService.svelte.js'
 import { bus } from '$lib/core/events/globalBus.js';
 import { log, serverLog, LogEvent } from '$lib/shared/utils/log.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
+import { candleCache } from '$lib/domains/market/services/CandleCache.js';
 
 const STALE_THRESHOLD_MS = 10000;
 const LIVENESS_CHECK_INTERVAL = 2000;
@@ -47,16 +48,33 @@ export class MarketDataPump {
         if (!client) return;
 
         try {
+            const cached = await candleCache.get(epic);
             const repo = new MarketRepository(client);
 
-            const { bid, ask } = await repo.getHistory(epic);
+            if (cached && cached.length > 0) {
+                const cachedNewest = cached[cached.length - 1].time;
+                const { bid, ask } = await repo.getHistory(epic);
 
-            marketStore.dispatch(marketCmd.setHistory(bid, ask));
+                const newBid = bid.filter(c => c.time > cachedNewest);
+                const mergedBid = [...cached, ...newBid];
 
-            const lastBid = bid.length > 0 ? bid[bid.length - 1] : null;
-            const lastAsk = ask.length > 0 ? ask[ask.length - 1] : null;
+                marketStore.dispatch(marketCmd.setHistory(mergedBid, ask));
+                void candleCache.put(epic, mergedBid);
 
-            this.feed.initialize(lastBid, lastAsk);
+                const lastBid = mergedBid[mergedBid.length - 1];
+                const lastAsk = ask.length > 0 ? ask[ask.length - 1] : null;
+                this.feed.initialize(lastBid, lastAsk);
+            } else {
+                const { bid, ask } = await repo.getHistory(epic);
+
+                marketStore.dispatch(marketCmd.setHistory(bid, ask));
+                void candleCache.put(epic, bid);
+
+                const lastBid = bid.length > 0 ? bid[bid.length - 1] : null;
+                const lastAsk = ask.length > 0 ? ask[ask.length - 1] : null;
+                this.feed.initialize(lastBid, lastAsk);
+            }
+
             marketStore.dispatch(marketCmd.setLoaded(true));
 
         } catch (e) {
@@ -94,6 +112,7 @@ export class MarketDataPump {
                     this.isHistoryExhausted = true;
                 } else {
                     marketStore.dispatch(marketCmd.prependHistory(filteredBid, filteredAsk));
+                    void candleCache.put(this.epic, marketStore.history);
                 }
             }
 
