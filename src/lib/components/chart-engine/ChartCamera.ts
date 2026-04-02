@@ -37,6 +37,7 @@ export class ChartCamera {
 
     private userOwnsViewport = false;
     private releaseTimer: ReturnType<typeof setTimeout> | null = null;
+    private acquireRange: { from: number; to: number } | null = null;
 
     init(chart: IChartApi) {
         this.chart = chart;
@@ -48,6 +49,8 @@ export class ChartCamera {
             this.releaseTimer = null;
         }
         this.userOwnsViewport = true;
+        const range = this.chart?.timeScale().getVisibleRange();
+        this.acquireRange = range ? { from: range.from as number, to: range.to as number } : null;
     }
 
     userRelease(): void {
@@ -178,18 +181,18 @@ export class ChartCamera {
     }
 
     private checkTrackingOnRelease(): void {
-        if (!this.isTracking || !this.chart || !this.lastAnchorTime) return;
+        if (!this.isTracking || !this.chart) return;
 
         const range = this.chart.timeScale().getVisibleRange();
-        if (!range) return;
+        if (!range || !this.acquireRange) return;
 
-        const { to: idealTo } = this.calculateTargetRange(this.lastAnchorTime, this.intendedSpan);
-        const tolerance = this.intendedSpan * DRIFT_TOLERANCE;
-        const drift = Math.abs((range.to as number) - idealTo);
+        const moved = (range.from as number) !== this.acquireRange.from
+                   || (range.to as number) !== this.acquireRange.to;
 
-        if (drift > tolerance) {
+        if (moved) {
             this.isTracking = false;
         }
+        this.acquireRange = null;
     }
 
     private checkAndApplyPassiveFollow(oldTime: number, newTime: number): CameraAction {
