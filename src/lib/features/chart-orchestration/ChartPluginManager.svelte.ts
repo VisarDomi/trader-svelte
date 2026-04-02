@@ -135,10 +135,8 @@ export class ChartRenderer {
                 }
                 this.viewInitialized = true;
             } else if (h.prependCount > 0) {
-                const { before, after } = this.camera.maintainScrollPosition(h.prependCount);
-                const rangeAfterMaintain = this.getLogicalRange();
-                serverLog({ tag: LogEvent.PrependApply, version: h.version, count: h.prependCount, rangeBefore: before, rangeAfter: after });
-                log.warn(`[prepend-trace] beforeSetData=${JSON.stringify(rangeBeforeSetData)} afterSetData=${JSON.stringify(rangeAfterSetData)} afterMaintain=${JSON.stringify(rangeAfterMaintain)}`);
+                serverLog({ tag: LogEvent.PrependApply, version: h.version, count: h.prependCount, rangeBefore: rangeBeforeSetData, rangeAfter: rangeAfterSetData });
+                log.warn(`[prepend-trace] beforeSetData=${JSON.stringify(rangeBeforeSetData)} afterSetData=${JSON.stringify(rangeAfterSetData)} (no maintainScrollPosition — setData handles shift)`);
             } else if (h.prevCandles > 0 && h.history.length - h.prevCandles > 100) {
                 log.warn(`[ChartRenderer] Large candle growth (${h.prevCandles} → ${h.history.length}) at version ${h.version} with no prepend — possible regression`);
             }
