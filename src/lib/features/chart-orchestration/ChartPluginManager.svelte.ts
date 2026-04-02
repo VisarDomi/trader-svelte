@@ -93,14 +93,24 @@ export class ChartRenderer {
         });
     }
 
+    private getLogicalRange(): { from: number; to: number } | null {
+        const r = this.chart?.timeScale().getVisibleLogicalRange();
+        return r ? { from: Math.round(r.from), to: Math.round(r.to) } : null;
+    }
+
     private flush() {
         if (!this.series || !this.context) return;
 
         const h = this.pendingHistory;
+        const isPrepend = h && h.prependCount > 0;
+
         if (h) {
             this.pendingHistory = null;
+
+            const rangeBeforeSetData = isPrepend ? this.getLogicalRange() : null;
             this.series.setData(h.history);
             this.lastRenderedCandles = h.history.length;
+            const rangeAfterSetData = isPrepend ? this.getLogicalRange() : null;
 
             if (h.isFirstRender || h.version <= 2 || h.prependCount > 0) {
                 serverLog({
@@ -122,7 +132,9 @@ export class ChartRenderer {
                 this.viewInitialized = true;
             } else if (h.prependCount > 0) {
                 const { before, after } = this.camera.maintainScrollPosition(h.prependCount);
+                const rangeAfterMaintain = this.getLogicalRange();
                 serverLog({ tag: LogEvent.PrependApply, version: h.version, count: h.prependCount, rangeBefore: before, rangeAfter: after });
+                log.warn(`[prepend-trace] beforeSetData=${JSON.stringify(rangeBeforeSetData)} afterSetData=${JSON.stringify(rangeAfterSetData)} afterMaintain=${JSON.stringify(rangeAfterMaintain)}`);
             } else if (h.prevCandles > 0 && h.history.length - h.prevCandles > 100) {
                 log.warn(`[ChartRenderer] Large candle growth (${h.prevCandles} → ${h.history.length}) at version ${h.version} with no prepend — possible regression`);
             }
@@ -133,8 +145,18 @@ export class ChartRenderer {
             this.series.update(lastCandle);
         }
 
+        if (isPrepend) {
+            const rangeAfterUpdate = this.getLogicalRange();
+            log.warn(`[prepend-trace] afterUpdate=${JSON.stringify(rangeAfterUpdate)}`);
+        }
+
         for (const feature of this.features) {
             feature.update(this.context);
+        }
+
+        if (isPrepend) {
+            const rangeAfterFeatures = this.getLogicalRange();
+            log.warn(`[prepend-trace] afterFeatures=${JSON.stringify(rangeAfterFeatures)}`);
         }
     }
 
