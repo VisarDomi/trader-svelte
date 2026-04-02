@@ -87,10 +87,23 @@ export class ChartCamera {
         if (!currentRange) return { before: null, after: null };
 
         const before = { from: currentRange.from, to: currentRange.to };
-        const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
-        timeScale.setVisibleLogicalRange(newRange);
-        this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
-        return { before, after: newRange };
+
+        if (this.isTracking && this.lastAnchorTime) {
+            // Tracking: camera owns the position in time-space.
+            // Re-enforce via setVisibleRange() so drift checker
+            // reads the same coordinate system that was written.
+            this.enforceLivePosition(this.lastAnchorTime);
+        } else {
+            // Not tracking: user owns the position in bar-index-space.
+            // Shift logical range to keep the same candles visible.
+            const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
+            timeScale.setVisibleLogicalRange(newRange);
+            this.graceFrames = GRACE_FRAMES_AFTER_ENFORCE;
+        }
+
+        const afterRange = timeScale.getVisibleLogicalRange();
+        const after = afterRange ? { from: afterRange.from, to: afterRange.to } : null;
+        return { before, after };
     }
 
     updateAnchor(newAnchorTime: number): CameraAction[] {

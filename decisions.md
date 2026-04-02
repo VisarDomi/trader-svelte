@@ -41,6 +41,8 @@
 
 **Chart history prepend scroll correction**: LWC resets the view to Index 0 when data is prepended via setData(). MarketStore stamps each prepend with its `historyVersion` in a private Map (`_prependAtVersion`). ChartRenderer calls `consumePrependCount(version)` — a plain method, not a $state read — to atomically retrieve and delete the count for that specific version. This avoids $state read-after-write in the effect (Svelte 5 pitfall #6), eliminates the race where unrelated `publishHistory()` calls could clobber a shared `pendingPrependCount`, and ensures each prepend count is consumed exactly once by the version that produced it.
 
+**Prepend has two owners depending on tracking state**: `maintainScrollPosition` splits by `isTracking`. When tracking (camera owns viewport): re-enforce via `enforceLivePosition()` in time-space — the same coordinate system the drift checker reads from. When not tracking (user owns viewport): shift the logical range by `barsAdded` to preserve the user's historical view in bar-index-space. Never mix coordinate systems — the writer and reader of viewport position must use the same space.
+
 **TOP_LABEL_OFFSET is 50px**: Increased from 20 to provide iOS safe area inset for the chart HUD.
 
 **ChartController crosshair guard**: LWC attaches mousemove/pointermove listeners to the document, not just its canvas. iOS fires synthetic mouse events from overlay touches that reach those document-level listeners. Instead of fighting DOM events, we let LWC process them but immediately clear the crosshair result when overlays are active.
