@@ -101,16 +101,20 @@ export class ChartRenderer {
     private flush() {
         if (!this.series || !this.context) return;
 
+        const rangeAtFlushStart = this.getLogicalRange();
+
         const h = this.pendingHistory;
         const isPrepend = h && h.prependCount > 0;
 
         if (h) {
             this.pendingHistory = null;
 
-            const rangeBeforeSetData = isPrepend ? this.getLogicalRange() : null;
+            const rangeBeforeSetData = this.getLogicalRange();
             this.series.setData(h.history);
             this.lastRenderedCandles = h.history.length;
-            const rangeAfterSetData = isPrepend ? this.getLogicalRange() : null;
+            const rangeAfterSetData = this.getLogicalRange();
+
+            log.warn(`[flush-trace] v=${h.version} first=${h.isFirstRender} prepend=${h.prependCount} beforeSetData=${JSON.stringify(rangeBeforeSetData)} afterSetData=${JSON.stringify(rangeAfterSetData)}`);
 
             if (h.isFirstRender || h.version <= 2 || h.prependCount > 0) {
                 serverLog({
@@ -142,21 +146,24 @@ export class ChartRenderer {
 
         const lastCandle = this.context.lastCandle;
         if (this.context.isMarketLoaded && lastCandle) {
+            const beforeUpdate = this.getLogicalRange();
             this.series.update(lastCandle);
-        }
-
-        if (isPrepend) {
-            const rangeAfterUpdate = this.getLogicalRange();
-            log.warn(`[prepend-trace] afterUpdate=${JSON.stringify(rangeAfterUpdate)}`);
+            const afterUpdate = this.getLogicalRange();
+            if (beforeUpdate && afterUpdate && Math.abs(beforeUpdate.from - afterUpdate.from) > 5) {
+                log.warn(`[update-jump] beforeUpdate=${JSON.stringify(beforeUpdate)} afterUpdate=${JSON.stringify(afterUpdate)} candleTime=${lastCandle.time}`);
+            }
         }
 
         for (const feature of this.features) {
             feature.update(this.context);
         }
 
-        if (isPrepend) {
-            const rangeAfterFeatures = this.getLogicalRange();
-            log.warn(`[prepend-trace] afterFeatures=${JSON.stringify(rangeAfterFeatures)}`);
+        const rangeAtFlushEnd = this.getLogicalRange();
+        if (rangeAtFlushStart && rangeAtFlushEnd) {
+            const drift = Math.abs(rangeAtFlushStart.from - rangeAtFlushEnd.from);
+            if (drift > 5) {
+                log.warn(`[flush-jump] start=${JSON.stringify(rangeAtFlushStart)} end=${JSON.stringify(rangeAtFlushEnd)} hadHistory=${!!h} prepend=${h?.prependCount ?? 0}`);
+            }
         }
     }
 
