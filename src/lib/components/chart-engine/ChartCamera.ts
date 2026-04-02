@@ -110,10 +110,7 @@ export class ChartCamera {
         if (this.isTracking) {
             if (this.graceFrames > 0) {
                 this.graceFrames--;
-            } else if (this.needsEnforce) {
-                // Coordinate system is unstable after prepend — skip drift
-                // check. The enforce below will re-establish time-space.
-            } else {
+            } else if (!this.needsEnforce) {
                 const driftResult = this.measureDrift();
                 if (driftResult) {
                     actions.push({
