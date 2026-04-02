@@ -31,7 +31,7 @@
 
 **ChartStateManager owns staleness check**: This class owns the saved state, so it owns the staleness check. If the last data at save time is >24h old, the view is stale — discard it rather than restoring a misleading viewport.
 
-**LiveEdgePlugin is a sensor, not an actor**: It detects new data and notifies the Camera. It does NOT manipulate the chart directly. The Camera owns the viewport.
+**LWC owns live tracking natively**: `shiftVisibleRangeOnNewBar` is disabled because it fires on every `series.update()` while the last bar is visible, fighting user scroll. Live tracking is handled by `enforceLivePosition` which only fires when `anchorChanged` is true (once per minute, new candle). When the user pans, tracking is lost immediately (binary comparison, no threshold). When tracking is lost, no programmatic viewport writes occur — the viewport belongs to the user until they hit reset.
 
 **PositionPoller injects initialBalance**: Business logic injects the initial balance into each position because the API doesn't provide it. This relies on accountStore being up to date.
 
@@ -39,11 +39,11 @@
 
 ## iOS PWA Workarounds
 
-**Chart history prepend scroll correction**: LWC resets the view to Index 0 when data is prepended via setData(). MarketStore stamps each prepend with its `historyVersion` in a private Map (`_prependAtVersion`). ChartRenderer calls `consumePrependCount(version)` — a plain method, not a $state read — to atomically retrieve and delete the count for that specific version. This avoids $state read-after-write in the effect (Svelte 5 pitfall #6), eliminates the race where unrelated `publishHistory()` calls could clobber a shared `pendingPrependCount`, and ensures each prepend count is consumed exactly once by the version that produced it.
+**setData preserves viewport on prepend — no manual correction needed**: LWC v5 `setData()` preserves the visible time range when data is prepended. The logical indices shift by +prependCount, but the same candles remain visible. `maintainScrollPosition` was removed because it caused a double shift — `setData` shifted synchronously, then `maintainScrollPosition`'s `setVisibleLogicalRange` was deferred by LWC and applied one frame later, causing a visible jump. MarketStore still stamps prepends via `_prependAtVersion` for observability — the `prepend-stamp` / `chart-render` / `prepend-apply` log chain tracks each prepend.
 
-**Prepend just shifts the logical range**: `maintainScrollPosition` calls `setVisibleLogicalRange()` to compensate for the index shift after `setData()`. No grace frames, no flags. If tracking, the next `updateAnchor` frame calls `enforceLivePosition()` which overwrites the logical-range position with correct time-space values. If not tracking, the shift preserves the user's scroll position. Self-correcting within one frame.
+**Binary pan detection for tracking loss**: When the user touches the chart, `userAcquire` captures the visible range. On `pointerup`, `userRelease` compares immediately — if the range moved at all, `isTracking = false`. No arbitrary thresholds, no timers, no drift tolerance. Deterministic: if you moved the chart, you own it.
 
-**No per-frame drift detection**: Drift detection was a surrogate signal for "user panned away" that also fired on programmatic changes (prepend, resize, enforce), causing false tracking loss. Removed entirely. Tracking loss is decided once, at the moment the user releases the chart (`checkTrackingOnRelease`), using the same tolerance formula. User input is the sole authority for tracking → free transitions.
+**No programmatic viewport writes when user owns the chart**: When `isTracking` is false, neither `enforceLivePosition` nor `passiveFollow` runs. The viewport is entirely user-controlled until they hit reset (`resetZoom`). This prevents all classes of "jump to live edge" bugs during scroll-back.
 
 **TOP_LABEL_OFFSET is 50px**: Increased from 20 to provide iOS safe area inset for the chart HUD.
 
@@ -71,7 +71,7 @@
 
 **No log.info — all server logging goes through typed serverLog events**: `log.info` was removed. If something is worth logging to the server, it must have a typed `LogEntry` variant in the discriminated union. `log.warn` and `log.error` remain for boundary failures that can't be predicted at design time. `history-publish` and `chart-render` events are throttled to only fire on initial load, first sync, or significant candle count changes.
 
-**Prepend observability chain**: Three log events form a complete audit trail for back-history scroll correction: (1) `prepend-stamp` — store logs the version-to-count binding when created, (2) `chart-render` — effect logs that it consumed the prepend count for a given version, (3) `prepend-apply` — effect logs the viewport logical range before/after `maintainScrollPosition`. A canary `log.warn` fires if candle count grows by >100 with no prepend found — the signature of a regression where the count was lost or consumed by the wrong version.
+**Prepend observability chain**: Three log events form a complete audit trail: (1) `prepend-stamp` — store logs the version-to-count binding when created, (2) `chart-render` — renderer logs that it consumed the prepend count for a given version, (3) `prepend-apply` — renderer logs the viewport logical range before/after `setData()` (LWC handles the shift natively). A canary `log.warn` fires if candle count grows by >100 with no prepend found — the signature of a regression where the count was lost or consumed by the wrong version.
 
 **LogBuffer ownership model**: buffer[] holds entries waiting to be sent. inFlight[] holds entries currently in a fetch() call (temporarily transferred). On fetch success, inFlight is dropped. On fetch failure, inFlight is reclaimed back into buffer. On page hide, getAllPending() (inFlight + buffer) is persisted to sessionStorage and beacon-flushed — no entry is ever unowned.
 
@@ -79,7 +79,7 @@
 
 **LogBuffer coalesced persist**: Multiple push() calls within the same microtask result in a single sessionStorage write, avoiding thrash during rapid-fire logging (7 entries in 1 second during resume).
 
-**LiveEdgePlugin camera log gating**: `camera-enforce` and `camera-passive-follow` are gated to log once per anchor time (new candle) to avoid flooding. `camera-enforce` with `anchorChanged: false` bypasses the gate to surface within-candle snaps. `camera-drift-check` only logs when drift > 1 second (user has actually panned). `camera-tracking-lost` always logs — it's a discrete state change, not a per-tick event.
+**Flush-level viewport tracing**: Every `setData` call logs the logical range before and after (`flush-trace`). Any viewport drift >5 bars during a flush is logged as `flush-jump`. `series.update()` jumps are logged as `update-jump`. Every `setVisibleRange`/`setVisibleLogicalRange` call in ChartCamera logs its caller, resulting range, and tracking/userOwns state (`viewport-write`). These traces are the primary diagnostic tool for viewport bugs — they tell the full story of who moved the chart and when.
 
 ## Trading Logic
 
@@ -109,9 +109,9 @@
 
 **calcPriceLine is a pure function**: Replaces a class implementation to reduce object allocation in the hot render loop.
 
-**ChartCamera passive follow**: If strict tracking is active, force the reset layout position. If NOT tracking, check if the live candle is visible. If visible, shift the view forward by the time delta to keep it in view. This makes the chart appear to "flow" without snapping the user's zoom or offset.
+**ChartCamera is a thin utility, not a viewport controller**: Camera handles three edge cases LWC doesn't: view restore from localStorage (`restoreView`), resize preservation (`captureViewport`/`applyResize`), and reset (`resetZoom`). It tracks `isTracking` and `userOwnsViewport` to gate `enforceLivePosition` (only fires on `anchorChanged` when tracking). No passive follow, no per-frame enforcement, no drift detection. `pointerdown` captures the visible range, `pointerup` compares immediately — if moved, tracking is lost.
 
-**ChartCamera viewport ownership**: The viewport has exactly one owner at a time — Camera or User. ChartController listens for `pointerdown`/`wheel` on the chart container and calls `camera.userAcquire()`. `pointerup`/`pointercancel` on `window` calls `camera.userRelease()`, which starts a 300ms debounce before returning ownership to Camera. While the user owns the viewport, Camera never calls `setVisibleRange` — neither enforce nor passive-follow. On release, `checkTrackingOnRelease` runs once: if the user panned beyond 3% of the intended span, tracking is lost. This is the sole mechanism for tracking → free transitions — no per-frame drift detection.
+**IndexedDB candle cache for instant restore**: `CandleCache` stores bid `ChartCandle[]` per epic in IndexedDB. On load, cached candles are used as the base and only newer candles are fetched from the API. `loadMoreHistory` writes back to cache after each prepend. Cache is invalidated alongside the saved view state when data is >24h stale. Ask candles are not cached — scroll-back during sell positions is a known edge case (reset button fixes it).
 
 ## Rotation / Resize View Preservation
 
