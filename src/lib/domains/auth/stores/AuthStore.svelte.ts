@@ -1,7 +1,7 @@
 import { BaseStore } from '$lib/core/stores/BaseStore.svelte.js';
 import * as ENV from '$lib/core/config/env.js';
 import * as AUTH from '$lib/shared/constants/auth.js';
-import { login } from '$lib/domains/auth/services/AuthService.js';
+import { bootstrapShowcaseSession, login } from '$lib/domains/auth/services/AuthService.js';
 import { session } from '$lib/core/services/SessionManager.js';
 import type { SessionTokens, UserCredentials } from '$lib/shared/types/auth.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
@@ -9,6 +9,7 @@ import { api } from '$lib/core/services/ApiService.svelte.js';
 import * as API from '$lib/shared/constants/api.js';
 import { AuthError } from '$lib/core/api/ApiClient.js';
 import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
+import { isShowcaseProfile } from '$lib/core/config/runtime.js';
 
 export class AuthStore extends BaseStore {
 
@@ -30,6 +31,10 @@ export class AuthStore extends BaseStore {
     }
 
     init() {
+        if (isShowcaseProfile()) {
+            session.mode = AUTH.DEMO_TYPE;
+        }
+
         try {
             const c = session.getCredentials();
             this.identifier = c.identifier;
@@ -47,6 +52,15 @@ export class AuthStore extends BaseStore {
     }
 
     async validateSession(): Promise<void> {
+        if (isShowcaseProfile()) {
+            if (!this.demoTokens) {
+                throw new AuthError("No demo session available");
+            }
+
+            await this.validateShowcaseDemo();
+            return;
+        }
+
         if (!this.realTokens && !this.demoTokens) {
             throw new AuthError("No session tokens available");
         }
@@ -55,6 +69,29 @@ export class AuthStore extends BaseStore {
             this.realTokens ? this.validateMode(AUTH.REAL_TYPE) : Promise.resolve(),
             this.demoTokens ? this.validateMode(AUTH.DEMO_TYPE) : Promise.resolve()
         ]);
+    }
+
+    private async validateShowcaseDemo(): Promise<void> {
+        const client = api.getClientForMode(AUTH.DEMO_TYPE);
+        if (!client) {
+            throw new AuthError("No demo session available");
+        }
+
+        try {
+            await client.get(API.PING_ENDPOINT);
+        } catch (e) {
+            if (e instanceof AuthError) {
+                serverLog({ tag: LogEvent.AuthFailure, phase: 'refresh-showcase', error: 'session expired' });
+                const tokens = await bootstrapShowcaseSession();
+                session.saveTokens(AUTH.DEMO_TYPE, tokens);
+                session.saveLoginTimestamp();
+                session.mode = AUTH.DEMO_TYPE;
+                this.demoTokens = tokens;
+                this.demoStatus = "Connected";
+                return;
+            }
+            throw e;
+        }
     }
 
     private async validateMode(mode: URL_TYPE): Promise<void> {
@@ -88,7 +125,20 @@ export class AuthStore extends BaseStore {
         });
     }
 
+    async loginShowcase() {
+        await this.execute(async () => {
+            this.demoStatus = "Loading showcase...";
+            const sessionTokens = await bootstrapShowcaseSession();
+            session.saveTokens(AUTH.DEMO_TYPE, sessionTokens);
+            session.saveLoginTimestamp();
+            session.mode = AUTH.DEMO_TYPE;
+            this.demoTokens = sessionTokens;
+            this.demoStatus = "Connected";
+        });
+    }
+
     async retryReal() {
+        if (isShowcaseProfile()) return;
         await this.execute(async () => {
             await this.performLogin(AUTH.REAL_TYPE);
         });
@@ -101,6 +151,7 @@ export class AuthStore extends BaseStore {
     }
 
     private saveInputs() {
+        if (isShowcaseProfile()) return;
         const credentials: UserCredentials = {
             identifier: this.identifier,
             password: this.password,

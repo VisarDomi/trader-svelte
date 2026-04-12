@@ -1,29 +1,82 @@
-# trader-svelte
+# Tendies
 
-Click on the graph to open a position with all of your deposited cash. Stop loss at 50%.
+Tendies is a self-hosted trading PWA built around Capital.com market data and execution. It is optimized for mobile Safari and standalone iOS PWA use, with real-time charting, position planning, background-resume handling, and a custom chart orchestration layer on top of TradingView Lightweight Charts.
 
-## dev pwa - ios26 needs only these:
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<link rel="manifest" href="/manifest.json" />
-manifest.json
-{
-    "start_url": "/"
-}
-* no need for html for the icons
-* also some magic to get the correct dimensions for pwa and safari ios
+## Stack
 
-## todo - ios18 needs more for pwa
+- SvelteKit 2
+- Svelte 5
+- TypeScript
+- TradingView Lightweight Charts
+- IndexedDB for local candle cache and state restore
+- Node adapter for self-hosted deployment
 
-## dev pwa localhost notes:
-pwa needs https. this repo sets up https on localhost
+## What is interesting here
 
-we can pwa the app even though it is on local network
+- iOS PWA resilience: the app handles resume, visibility gaps, and background wake-up edge cases that appear in real mobile usage.
+- Functional core / imperative shell chart integration: Svelte reactivity captures intent, while a single RAF flush owns chart mutations.
+- Structured runtime telemetry: chart, viewport, resume, and trading flows emit typed logs to make production-only timing bugs diagnosable.
+- Local-first UX: the app keeps enough local state to restore quickly after reloads and intermittent mobile suspension.
 
-flow:
-use mkcert to create rootca and the cert for 192.168.1.197, i don't know how, ask a chatbot
-serve this express app, go to iphone to https://192.168.1.197:37984/cert to download the cert
-you may need to go through some hoops to download it on the iphone, but you can do it
-install the profile
-important hidden step - go to general-about-certificate settings - trust the certificate
-https is now ready for 192.168.1.197 - pwa and hls is unlocked for local network
+The architectural rationale lives in [architectural_decisions.md](./architectural_decisions.md) and [decisions.md](./decisions.md).
+
+## Getting started
+
+### Requirements
+
+- Node.js 20+
+- npm
+- A Capital.com account
+
+### Install
+
+```bash
+npm install
+```
+
+### Run in development
+
+```bash
+npm run dev
+```
+
+The Vite dev server binds to `0.0.0.0:24536`. If mkcert certificates exist under `~/.local/share/mkcert/pwa/`, HTTPS is enabled automatically for local iPhone/PWA testing.
+
+### Build
+
+```bash
+npm run build
+```
+
+This project uses `@sveltejs/adapter-node`. For a production-style local run after build:
+
+```bash
+node build
+```
+
+## Authentication and local env
+
+This repo does not ship live credentials.
+
+For local development, you can optionally create a `.env` from `.env.example` to prefill the login form:
+
+```bash
+cp .env.example .env
+```
+
+These values are for local development only. Do not commit `.env`, and do not use this `PUBLIC_*` autofill path as a public demo deployment strategy.
+
+## iPhone / PWA testing
+
+iOS standalone PWA behavior was a core design target for this project. For HTTPS-based local testing:
+
+1. Generate a local certificate with `mkcert`.
+2. Place the generated files at `~/.local/share/mkcert/pwa/key.pem` and `~/.local/share/mkcert/pwa/cert.pem`.
+3. Start the dev server and open the app from your iPhone on the same network.
+4. If you need the mkcert root CA, the app exposes it from `/api/cert` for manual installation on the test device.
+
+## Current status
+
+- Personal tool, not a multi-tenant product
+- No formal test suite yet
+- Documentation focuses on design decisions and runtime observability

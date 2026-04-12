@@ -156,6 +156,16 @@ export class SessionManager {
             localStorage.removeItem(STORAGE.TRADE_CONTEXT_KEY);
         }
     }
+
+    clearAppSession() {
+        if (typeof window === 'undefined') return;
+
+        localStorage.removeItem(STORAGE.CREDENTIALS_KEY);
+        localStorage.removeItem(STORAGE.SESSION_KEY);
+        localStorage.removeItem(STORAGE.STATE_KEY);
+        localStorage.removeItem(STORAGE.TRADE_CONTEXT_KEY);
+        localStorage.removeItem(STORAGE.CHART_STATE_KEY);
+    }
 }
 
 export const session = new SessionManager();

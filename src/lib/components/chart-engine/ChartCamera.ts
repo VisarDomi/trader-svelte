@@ -17,14 +17,17 @@ export interface CapturedViewport {
     priceAreaH: number;
 }
 
-export type CameraAction =
-    | { kind: 'init'; anchorTime: number; tracking: boolean; source: 'saved' | 'default' }
-    | { kind: 'enforce'; anchorTime: number; rangeFrom: number; rangeTo: number; span: number; anchorChanged: boolean }
-    | { kind: 'passive-follow'; oldTime: number; newTime: number; delta: number; liveVisible: boolean }
-    | { kind: 'tracking-lost'; drift: number; tolerance: number; rangeTo: number; idealTo: number };
+export interface CameraInitAction {
+    kind: 'init';
+    anchorTime: number;
+    tracking: boolean;
+    source: 'saved' | 'default';
+}
+
+export type CameraUpdateAction =
+    | { kind: 'enforce'; anchorTime: number; rangeFrom: number; rangeTo: number; span: number; anchorChanged: boolean };
 
 const DEFAULT_SPAN_SECONDS = 120 * 60;
-const DRIFT_TOLERANCE = 0.03;
 
 export class ChartCamera {
     private chart: IChartApi | null = null;
@@ -44,7 +47,7 @@ export class ChartCamera {
 
     private traceWrite(caller: string) {
         const r = this.chart?.timeScale().getVisibleLogicalRange();
-        log.warn(`[viewport-write] ${caller} → logical={from:${r ? Math.round(r.from) : '?'},to:${r ? Math.round(r.to) : '?'}} tracking=${this.isTracking} userOwns=${this.userOwnsViewport}`);
+        log.trace(`[viewport-write] ${caller} → logical={from:${r ? Math.round(r.from) : '?'},to:${r ? Math.round(r.to) : '?'}} tracking=${this.isTracking} userOwns=${this.userOwnsViewport}`);
     }
 
     userAcquire(): void {
@@ -58,7 +61,7 @@ export class ChartCamera {
         this.checkTrackingOnRelease();
     }
 
-    initializeView(savedState: ViewState | null, liveTime: number): CameraAction | null {
+    initializeView(savedState: ViewState | null, liveTime: number): CameraInitAction | null {
         if (!this.chart) return null;
 
         this.lastAnchorTime = liveTime;
@@ -72,36 +75,19 @@ export class ChartCamera {
         return { kind: 'init', anchorTime: liveTime, tracking: this.isTracking, source: savedState ? 'saved' : 'default' };
     }
 
-    maintainScrollPosition(barsAdded: number): { before: { from: number; to: number } | null; after: { from: number; to: number } | null } {
-        if (!this.chart || barsAdded <= 0) return { before: null, after: null };
+    updateAnchor(newAnchorTime: number): CameraUpdateAction | null {
+        if (!newAnchorTime || !this.chart) return null;
 
-        const timeScale = this.chart.timeScale();
-        const currentRange = timeScale.getVisibleLogicalRange();
-
-        if (!currentRange) return { before: null, after: null };
-
-        const before = { from: currentRange.from, to: currentRange.to };
-        const newRange = { from: currentRange.from + barsAdded, to: currentRange.to + barsAdded };
-        timeScale.setVisibleLogicalRange(newRange);
-        this.traceWrite('maintainScrollPosition');
-
-        return { before, after: newRange };
-    }
-
-    updateAnchor(newAnchorTime: number): CameraAction[] {
-        if (!newAnchorTime || !this.chart) return [];
-
-        const actions: CameraAction[] = [];
         const oldAnchorTime = this.lastAnchorTime;
         const anchorChanged = newAnchorTime !== oldAnchorTime;
         this.lastAnchorTime = newAnchorTime;
 
         if (this.userOwnsViewport) {
         } else if (this.isTracking && anchorChanged) {
-            actions.push(this.enforceLivePosition(newAnchorTime, undefined, anchorChanged));
+            return this.enforceLivePosition(newAnchorTime, undefined, anchorChanged);
         }
 
-        return actions;
+        return null;
     }
 
     resetZoom(anchorTime: number) {
@@ -191,34 +177,6 @@ export class ChartCamera {
         this.acquireRange = null;
     }
 
-    private checkAndApplyPassiveFollow(oldTime: number, newTime: number): CameraAction {
-        const delta = newTime - oldTime;
-        const result: CameraAction = { kind: 'passive-follow', oldTime, newTime, delta, liveVisible: false };
-
-        if (!this.chart) return result;
-
-        const timeScale = this.chart.timeScale();
-        const range = timeScale.getVisibleRange();
-        if (!range) return result;
-
-        const visibleFrom = range.from as number;
-        const visibleTo = range.to as number;
-
-        const buffer = (visibleTo - visibleFrom) * 0.05;
-        const isLiveVisible = (oldTime >= visibleFrom - buffer) && (oldTime <= visibleTo + buffer);
-        result.liveVisible = isLiveVisible;
-
-        if (isLiveVisible && delta > 0) {
-            this.chart.timeScale().setVisibleRange({
-                from: (visibleFrom + delta) as UTCTimestamp,
-                to: (visibleTo + delta) as UTCTimestamp
-            });
-            this.traceWrite('passiveFollow');
-        }
-
-        return result;
-    }
-
     private restoreState(state: ViewState, currentLiveTime: number) {
         if (!this.chart) return;
 
@@ -237,8 +195,8 @@ export class ChartCamera {
         }
     }
 
-    private enforceLivePosition(anchorTime: number, forceSpan?: number, anchorChanged = true): CameraAction {
-        const fallback: CameraAction = { kind: 'enforce', anchorTime, rangeFrom: 0, rangeTo: 0, span: 0, anchorChanged };
+    private enforceLivePosition(anchorTime: number, forceSpan?: number, anchorChanged = true): CameraUpdateAction {
+        const fallback: CameraUpdateAction = { kind: 'enforce', anchorTime, rangeFrom: 0, rangeTo: 0, span: 0, anchorChanged };
         if (!this.chart) return fallback;
 
         if (forceSpan) {

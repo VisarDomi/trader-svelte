@@ -1,5 +1,8 @@
+import { isChartTraceEnabled } from '$lib/core/debug/chart-trace.js';
+
 interface OHLC { o: number; h: number; l: number; c: number }
 interface OHLCWithTime extends OHLC { time: number }
+interface OHLWithTime { time: number; o: number; h: number; l: number }
 interface PriceSnapshot { time: number; o: number; c: number }
 
 export const LogEvent = {
@@ -39,8 +42,6 @@ export const LogEvent = {
 
     CameraInit: 'camera-init',
     CameraEnforce: 'camera-enforce',
-    CameraPassiveFollow: 'camera-passive-follow',
-    CameraTrackingLost: 'camera-tracking-lost',
 
     TradeOpen: 'trade-open',
     TradeClose: 'trade-close',
@@ -56,7 +57,7 @@ export type LogEntry =
     | { tag: typeof LogEvent.AuthFailure; phase: string; error: string }
     | { tag: typeof LogEvent.ConnectSeed; epic: string; bidTime: number | null; bidOHLC: OHLC | null; staleMs: number | null; seeded: boolean }
     | { tag: typeof LogEvent.FirstTick; bid: number; offer: number; liveBidTime: number | null; completedBid: PriceSnapshot | null }
-    | { tag: typeof LogEvent.SyncResult; historyCandles: number; historyExtended: boolean; newestHistoryTime: number; currentFromApi: OHLCWithTime | null; liveBefore: PriceSnapshot | null; liveAfter: PriceSnapshot | null; mergeChanged: boolean }
+    | { tag: typeof LogEvent.SyncResult; historyCandles: number; historyExtended: boolean; newestHistoryTime: number; currentFromApi: OHLWithTime | null; liveBefore: PriceSnapshot | null; liveAfter: PriceSnapshot | null; mergeChanged: boolean }
     | { tag: typeof LogEvent.CandleMerge; time: number; before: OHLC; after: OHLC }
     | { tag: typeof LogEvent.ResumeAttempt; source: string; status: string; elapsedMs: number; path: 'short' | 'full' | 'skipped'; reason?: string }
     | { tag: typeof LogEvent.StateTransition; from: string; to: string }
@@ -72,8 +73,6 @@ export type LogEntry =
 
     | { tag: typeof LogEvent.CameraInit; anchorTime: number; tracking: boolean; source: 'saved' | 'default' }
     | { tag: typeof LogEvent.CameraEnforce; anchorTime: number; rangeFrom: number; rangeTo: number; span: number; anchorChanged: boolean }
-    | { tag: typeof LogEvent.CameraPassiveFollow; oldTime: number; newTime: number; delta: number; liveVisible: boolean }
-    | { tag: typeof LogEvent.CameraTrackingLost; drift: number; tolerance: number; rangeTo: number; idealTo: number }
 
     | { tag: typeof LogEvent.TimelineAppend; time: number; result: 'added' | 'replaced' | 'dropped'; newestExisting: number }
     | { tag: typeof LogEvent.TimelineMerge; source: string; replaced: number; extended: number; newestBefore: number; newestAfter: number }
@@ -243,6 +242,10 @@ function format(args: unknown[]): string {
 export const log = {
     warn(...args: unknown[]) { logBuffer?.push('warn', { message: format(args) }); },
     error(...args: unknown[]) { logBuffer?.push('error', { message: format(args) }); },
+    trace(...args: unknown[]) {
+        if (!isChartTraceEnabled()) return;
+        logBuffer?.push('warn', { message: format(args) });
+    },
 
     flush() { logBuffer?.flush(); },
 };

@@ -6,6 +6,7 @@ import type { URL_TYPE } from "$lib/shared/types/url.js";
 import type { SessionTokens, UserCredentials } from "$lib/shared/types/auth.js";
 import { session } from "$lib/core/services/SessionManager.js";
 import { log } from '$lib/shared/utils/log.js';
+import { getAllowedModes, isShowcaseProfile } from '$lib/core/config/runtime.js';
 
 export async function login(type: URL_TYPE): Promise<SessionTokens> {
     const credentials: UserCredentials = session.getCredentials();
@@ -37,6 +38,22 @@ export async function login(type: URL_TYPE): Promise<SessionTokens> {
 }
 
 export async function authenticateAndStoreSession(): Promise<void> {
+    if (isShowcaseProfile()) {
+        const lastLogin = session.getTimestamp();
+        const hasDemo = session.isAuthenticated(AUTH.DEMO_TYPE);
+        const now = Date.now();
+        session.mode = AUTH.DEMO_TYPE;
+
+        if (hasDemo && (now - lastLogin < AUTH.REST_PING_INTERVAL)) {
+            return;
+        }
+
+        const demoTokens = await bootstrapShowcaseSession();
+        session.saveTokens(AUTH.DEMO_TYPE, demoTokens);
+        session.saveLoginTimestamp();
+        session.mode = AUTH.DEMO_TYPE;
+        return;
+    }
 
     session.getCredentials();
 
@@ -49,14 +66,31 @@ export async function authenticateAndStoreSession(): Promise<void> {
         return;
     }
 
-    const [realTokens, demoTokens] = await Promise.all([
-        login(AUTH.REAL_TYPE),
-        login(AUTH.DEMO_TYPE)
-    ]);
+    const [realTokens, demoTokens] = await Promise.all([login(AUTH.REAL_TYPE), login(AUTH.DEMO_TYPE)]);
 
     session.saveTokens(AUTH.REAL_TYPE, realTokens);
     session.saveTokens(AUTH.DEMO_TYPE, demoTokens);
     session.saveLoginTimestamp();
+}
+
+export async function bootstrapShowcaseSession(): Promise<SessionTokens> {
+    const response = await fetch(AUTH.SHOWCASE_BOOTSTRAP_ENDPOINT, {
+        method: API.POST_METHOD,
+    });
+
+    if (!response.ok) {
+        throw new Error(DEFAULT_ERROR);
+    }
+
+    const data = await response.json() as SessionTokens;
+    const cst = data[API.CST_KEY];
+    const sec = data[API.X_SECURITY_TOKEN_KEY];
+
+    if (!cst || !sec) {
+        throw new Error(DEFAULT_ERROR);
+    }
+
+    return data;
 }
 
 async function ping(type: URL_TYPE, tokens: SessionTokens): Promise<void> {
@@ -76,14 +110,11 @@ export function startRestHeartbeat() {
     const intervalId = setInterval(async () => {
         const promises = [];
 
-        const realTokens = session.getTokens(AUTH.REAL_TYPE);
-        if (realTokens) {
-            promises.push(ping(AUTH.REAL_TYPE, realTokens).catch(log.error));
-        }
-
-        const demoTokens = session.getTokens(AUTH.DEMO_TYPE);
-        if (demoTokens) {
-            promises.push(ping(AUTH.DEMO_TYPE, demoTokens).catch(log.error));
+        for (const mode of getAllowedModes()) {
+            const tokens = session.getTokens(mode);
+            if (tokens) {
+                promises.push(ping(mode, tokens).catch(log.error));
+            }
         }
 
         await Promise.all(promises);

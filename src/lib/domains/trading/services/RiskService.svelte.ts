@@ -44,10 +44,6 @@ export class RiskService {
 
         let details: MarketDetailsResponse | null = null;
 
-        if (marketStore.epic === position.market.epic && marketStore.isLoaded) {
-
-        }
-
         if (!this.marketDetailsCache.has(position.market.epic)) {
             const client = api.client;
             if (client) {

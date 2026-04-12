@@ -19,7 +19,7 @@ export class PositionPoller {
         this.currentEpic = epic;
 
         if (this.isRunning) {
-            void this.fetchAndSync();
+            void this.fetchAndSync('refresh');
         }
     }
 

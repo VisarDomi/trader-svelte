@@ -114,7 +114,9 @@ export class ChartRenderer {
             this.lastRenderedCandles = h.history.length;
             const rangeAfterSetData = this.getLogicalRange();
 
-            log.warn(`[flush-trace] v=${h.version} first=${h.isFirstRender} prepend=${h.prependCount} beforeSetData=${JSON.stringify(rangeBeforeSetData)} afterSetData=${JSON.stringify(rangeAfterSetData)}`);
+            // Intentional production canaries for iOS/LWC timing bugs that do not reproduce
+            // reliably in isolated tests. See decisions.md logging notes before removing.
+            log.trace(`[flush-trace] v=${h.version} first=${h.isFirstRender} prepend=${h.prependCount} beforeSetData=${JSON.stringify(rangeBeforeSetData)} afterSetData=${JSON.stringify(rangeAfterSetData)}`);
 
             if (h.isFirstRender || h.version <= 2 || h.prependCount > 0) {
                 serverLog({
@@ -136,7 +138,7 @@ export class ChartRenderer {
                 this.viewInitialized = true;
             } else if (h.prependCount > 0) {
                 serverLog({ tag: LogEvent.PrependApply, version: h.version, count: h.prependCount, rangeBefore: rangeBeforeSetData, rangeAfter: rangeAfterSetData });
-                log.warn(`[prepend-trace] beforeSetData=${JSON.stringify(rangeBeforeSetData)} afterSetData=${JSON.stringify(rangeAfterSetData)} (no maintainScrollPosition — setData handles shift)`);
+                log.trace(`[prepend-trace] beforeSetData=${JSON.stringify(rangeBeforeSetData)} afterSetData=${JSON.stringify(rangeAfterSetData)} (no maintainScrollPosition — setData handles shift)`);
             } else if (h.prevCandles > 0 && h.history.length - h.prevCandles > 100) {
                 log.warn(`[ChartRenderer] Large candle growth (${h.prevCandles} → ${h.history.length}) at version ${h.version} with no prepend — possible regression`);
             }
@@ -148,7 +150,7 @@ export class ChartRenderer {
             this.series.update(lastCandle);
             const afterUpdate = this.getLogicalRange();
             if (beforeUpdate && afterUpdate && Math.abs(beforeUpdate.from - afterUpdate.from) > 5) {
-                log.warn(`[update-jump] beforeUpdate=${JSON.stringify(beforeUpdate)} afterUpdate=${JSON.stringify(afterUpdate)} candleTime=${lastCandle.time}`);
+                log.trace(`[update-jump] beforeUpdate=${JSON.stringify(beforeUpdate)} afterUpdate=${JSON.stringify(afterUpdate)} candleTime=${lastCandle.time}`);
             }
         }
 
@@ -160,7 +162,7 @@ export class ChartRenderer {
         if (rangeAtFlushStart && rangeAtFlushEnd) {
             const drift = Math.abs(rangeAtFlushStart.from - rangeAtFlushEnd.from);
             if (drift > 5) {
-                log.warn(`[flush-jump] start=${JSON.stringify(rangeAtFlushStart)} end=${JSON.stringify(rangeAtFlushEnd)} hadHistory=${!!h} prepend=${h?.prependCount ?? 0}`);
+                log.trace(`[flush-jump] start=${JSON.stringify(rangeAtFlushStart)} end=${JSON.stringify(rangeAtFlushEnd)} hadHistory=${!!h} prepend=${h?.prependCount ?? 0}`);
             }
         }
     }

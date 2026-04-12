@@ -61,7 +61,6 @@ export class ChartUI {
 
     destroy() {
         if (typeof window === 'undefined') return;
-        window.visualViewport?.removeEventListener('resize', this.handleZoomCheck);
     }
 
     private handleResizeCycle(newW: number, newH: number) {
@@ -88,14 +87,9 @@ export class ChartUI {
         if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
         }
-        window.visualViewport?.addEventListener('resize', this.handleZoomCheck);
         setTimeout(() => this.viewportService.scan(), 100);
         setTimeout(() => this.viewportService.scan(), 500);
     }
-
-    private handleZoomCheck = () => {
-        if (!window.visualViewport) return;
-    };
 
     private updateDimensions() {
         if (!this.container || !this.chart) return;

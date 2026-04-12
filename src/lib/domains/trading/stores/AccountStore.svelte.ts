@@ -13,6 +13,7 @@ import type { Account } from '$lib/shared/types/account.js';
 import type { URL_TYPE } from '$lib/shared/types/url.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
 import { log } from '$lib/shared/utils/log.js';
+import { getDefaultMode, isShowcaseProfile } from '$lib/core/config/runtime.js';
 
 export class AccountStore extends BaseStore {
     activeAccount = $state<Account | null>(null);
@@ -65,6 +66,32 @@ export class AccountStore extends BaseStore {
     async loadAll() {
         this.isLoading = true;
         this.error = "";
+
+        if (isShowcaseProfile()) {
+            session.mode = getDefaultMode();
+            const demoClient = api.getClientForMode(AUTH.DEMO_TYPE);
+
+            if (!demoClient) {
+                this.error = "Showcase session incomplete. Please reload.";
+                this.realAccounts = [];
+                this.demoAccounts = [];
+                this.isLoading = false;
+                return;
+            }
+
+            try {
+                const demo = await getAccounts(demoClient);
+                this.realAccounts = [];
+                this.demoAccounts = demo;
+                await this.resolveSourceOfTruth();
+            } catch (e) {
+                log.error("AccountStore loadAll failed", e);
+                this.error = "Failed to load accounts";
+            } finally {
+                this.isLoading = false;
+            }
+            return;
+        }
 
         const realClient = api.getClientForMode(AUTH.REAL_TYPE);
         const demoClient = api.getClientForMode(AUTH.DEMO_TYPE);
@@ -183,6 +210,11 @@ export class AccountStore extends BaseStore {
     }
 
     async switchTo(account: Account, type: URL_TYPE) {
+        if (isShowcaseProfile() && type !== AUTH.DEMO_TYPE) {
+            this.error = "Showcase profile is demo-only.";
+            return;
+        }
+
         await this.execute(async () => {
             const tokens = session.getTokens(type);
             if (!tokens) throw new Error("No session tokens found");

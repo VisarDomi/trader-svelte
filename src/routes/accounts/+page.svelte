@@ -4,6 +4,7 @@
     import { accountStore } from '$lib/domains/trading/stores/AccountStore.svelte.js';
     import { session } from '$lib/core/services/SessionManager.js';
     import * as AUTH from '$lib/shared/constants/auth.js';
+    import { isShowcaseProfile } from '$lib/core/config/runtime.js';
 
     import AccountCard from '$lib/domains/trading/components/AccountCard.svelte';
     import type { Account } from '$lib/shared/types/account.js';
@@ -33,6 +34,8 @@
     function hasData() {
         return accountStore.realAccounts.length > 0 || accountStore.demoAccounts.length > 0;
     }
+
+    const showcase = isShowcaseProfile();
 </script>
 
 <div class="page-container">
@@ -52,27 +55,29 @@
         {/if}
 
         <div class="lists-container" style="opacity: {accountStore.isLoading ? 0.5 : 1}; transition: opacity 0.2s;">
-            <section>
-                <h2 class="section-title real">Real Accounts</h2>
-                {#if accountStore.realAccounts.length === 0}
-                    <p class="empty">No real accounts found.</p>
-                {:else}
-                    <div class="grid">
-                        {#each accountStore.realAccounts as account (account.accountId)}
-                            {@const isActive = isTradingAccount(account, AUTH.REAL_TYPE)}
-                            <AccountCard
-                                    id={account.accountId}
-                                    {account}
-                                    mode={AUTH.REAL_TYPE}
-                                    isActive={isActive}
-                                    href={isActive ? `/preferences?type=${AUTH.REAL_TYPE}` : undefined}
-                                    actionLabel={!isActive ? 'Switch' : undefined}
-                                    onAction={() => accountStore.switchTo(account, AUTH.REAL_TYPE)}
-                            />
-                        {/each}
-                    </div>
-                {/if}
-            </section>
+            {#if !showcase}
+                <section>
+                    <h2 class="section-title real">Real Accounts</h2>
+                    {#if accountStore.realAccounts.length === 0}
+                        <p class="empty">No real accounts found.</p>
+                    {:else}
+                        <div class="grid">
+                            {#each accountStore.realAccounts as account (account.accountId)}
+                                {@const isActive = isTradingAccount(account, AUTH.REAL_TYPE)}
+                                <AccountCard
+                                        id={account.accountId}
+                                        {account}
+                                        mode={AUTH.REAL_TYPE}
+                                        isActive={isActive}
+                                        href={isActive ? `/preferences?type=${AUTH.REAL_TYPE}` : undefined}
+                                        actionLabel={!isActive ? 'Switch' : undefined}
+                                        onAction={() => accountStore.switchTo(account, AUTH.REAL_TYPE)}
+                                />
+                            {/each}
+                        </div>
+                    {/if}
+                </section>
+            {/if}
 
             <section>
                 <h2 class="section-title demo">Demo Accounts</h2>

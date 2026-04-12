@@ -81,6 +81,8 @@
 
 **Flush-level viewport tracing**: Every `setData` call logs the logical range before and after (`flush-trace`). Any viewport drift >5 bars during a flush is logged as `flush-jump`. `series.update()` jumps are logged as `update-jump`. Every `setVisibleRange`/`setVisibleLogicalRange` call in ChartCamera logs its caller, resulting range, and tracking/userOwns state (`viewport-write`). These traces are the primary diagnostic tool for viewport bugs — they tell the full story of who moved the chart and when.
 
+**ChartPluginManager `log.warn` traces are intentional production telemetry**: `flush-trace`, `prepend-trace`, `update-jump`, and `flush-jump` are kept in production on purpose. The failure mode here is timing-sensitive iOS/LWC viewport drift under real device conditions, so these canaries are the substitute for a traditional unit-test harness on that boundary. Treat them as observability infrastructure, not leftover debug noise.
+
 ## Trading Logic
 
 **BreachDetector is a pure function — trading domain owns breach detection**: Given a price and position, detects if SL or TP has been breached. Owns no state, mutates nothing. Market domain emits ticks via the event bus; trading domain (PositionPoller) subscribes and runs breach detection. Market domain never reaches into position state.

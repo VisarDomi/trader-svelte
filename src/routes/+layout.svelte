@@ -1,12 +1,15 @@
 <script lang="ts">
+    import { browser } from '$app/environment';
     import '$lib/styles.css';
     import { onMount, onDestroy } from 'svelte';
     import { page } from '$app/stores';
     import { appEngine } from '$lib/core/engine/AppEngine.svelte.js';
     import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
     import HydrationGate from '$lib/components/ui/HydrationGate.svelte';
+    import { setRuntimeAppProfile } from '$lib/core/config/runtime.js';
 
-    let { children } = $props();
+    let { children, data } = $props();
+
     const fullscreen = $derived($page.route?.id === '/chart');
 
     function preventZoom(e: Event) {
@@ -14,6 +17,8 @@
     }
 
     onMount(() => {
+        setRuntimeAppProfile(data.appProfile);
+
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js');
         }
