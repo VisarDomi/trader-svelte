@@ -1,5 +1,12 @@
 # Architecture Decisions
 
+## Global Architecture Principles
+
+1. **Mobile First:** We optimize for iOS Safari quirks (viewports, tap delays). If a generic web solution fights with iOS behavior, the iOS workaround wins.
+2. **Explicit Architecture:** We use separate Service/Store/Controller layers. Do not inline domain logic into Svelte components.
+3. **Event Bus:** Cross-domain communication happens via `globalBus`. Do not import stores deeply across domains.
+4. **Comments are Warnings:** If you see a capitalized comment explaining a hack, assume it prevents a specific bug. Do not remove it casually.
+
 ## Data Authority & Ownership
 
 **Two ownership contexts for candle data**:
@@ -39,6 +46,8 @@
 
 ## iOS PWA Workarounds
 
+**Full-screen chart under translucent iOS status bar**: The chart page renders its canvas at full `screen.height`, extending behind the translucent iOS status bar. `app.html` sets `--app-height` from `screen.height`, `body` uses `height: var(--app-height, 100vh)`, and `viewport-fit=cover` plus `apple-mobile-web-app-status-bar-style=black-translucent` make the status bar blend into the chart background. HUD overlays use `env(safe-area-inset-top)` to sit below the bar, while non-chart pages still get `padding-top: env(safe-area-inset-top)` via the layout's `.safe-area` class. This replaced the old spacer-div + auto-scroll hack from `TopBar.svelte`.
+
 **setData preserves viewport on prepend — no manual correction needed**: LWC v5 `setData()` preserves the visible time range when data is prepended. The logical indices shift by +prependCount, but the same candles remain visible. `maintainScrollPosition` was removed because it caused a double shift — `setData` shifted synchronously, then `maintainScrollPosition`'s `setVisibleLogicalRange` was deferred by LWC and applied one frame later, causing a visible jump. MarketStore still stamps prepends via `_prependAtVersion` for observability — the `prepend-stamp` / `chart-render` / `prepend-apply` log chain tracks each prepend.
 
 **Binary pan detection for tracking loss**: When the user touches the chart, `userAcquire` captures the visible range. On `pointerup`, `userRelease` compares immediately — if the range moved at all, `isTracking = false`. No arbitrary thresholds, no timers, no drift tolerance. Deterministic: if you moved the chart, you own it.
@@ -47,9 +56,9 @@
 
 **TOP_LABEL_OFFSET is 50px**: Increased from 20 to provide iOS safe area inset for the chart HUD.
 
-**ChartController crosshair guard**: LWC attaches mousemove/pointermove listeners to the document, not just its canvas. iOS fires synthetic mouse events from overlay touches that reach those document-level listeners. Instead of fighting DOM events, we let LWC process them but immediately clear the crosshair result when overlays are active.
+**Crosshair suppression uses an API-level guard, not DOM event blocking**: Overlays (`ChartHud`, `TradePopup`) sit above the chart. On iOS, touching an overlay or closing a modal produces synthetic pointer/mouse events that activate LWC's crosshair. The old DOM-blocking approach failed because LWC listens on `document`, not just the canvas; it blocked the wrong event types; and the block timer started too early on long touches. The fix is to control the output, not the input: `ChartController` subscribes to `chart.subscribeCrosshairMove()`, and when `crosshairBlocked` is true it clears the crosshair via `clearCrosshairPosition()` in `requestAnimationFrame`.
 
-**ChartHud and TradePopup crosshair blocking**: Block crosshair + chart pointer-events while position is closing or trade popup is open. When close completes, the position section unmounts — iOS fires synthetic events at that point. TradePopup leaves chart pointer-events enabled so the user can tap elsewhere on the chart to re-plan at a different price.
+**Overlay crosshair blocking protocol**: Overlays emit `overlay:block-crosshair` / `overlay:unblock-crosshair` on `globalBus`, with unblock delayed 400ms to catch post-interaction synthetic events. `ChartHud` blocks on `touchstart`/`mousedown` and unblocks on `touchend`/`mouseup`, and also blocks while `isClosingPosition` is true because unmounting the position section triggers synthetic events. `TradePopup` blocks while open and unblocks on close. Its backdrop remains `pointer-events: none` so chart taps still pass through and let the user re-plan at a different price.
 
 **AppEngine background sentinel**: iOS PWA visibilitychange often doesn't fire on screen unlock. The sentinel interval timer gets frozen by iOS when JS is suspended. When iOS resumes JS, the interval fires with a large time delta — the most reliable wake signal. Only acts if page is actually visible (screen unlocked) and status is still BACKGROUND.
 
