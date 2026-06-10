@@ -208,6 +208,7 @@ export class MarketDataPump {
             const gap = now - this.feed.lastUpdateTimestamp;
 
             if (gap > STALE_THRESHOLD_MS && marketStore.isLoaded && marketStore.marketStatus === 'TRADEABLE') {
+                fetch('/api/tick-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'zombie', gapMs: gap, ts: Date.now() }) }).catch(()=>{});
                 serverLog({ tag: LogEvent.ZombieSocket, gapMs: gap });
                 this.connect();
             }

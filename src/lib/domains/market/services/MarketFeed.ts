@@ -62,6 +62,11 @@ export class MarketFeed {
 
     private processMessage(msg: QuoteMessage) {
         this.lastUpdateTimestamp = Date.now();
+        fetch('/api/tick-log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'tick', epic: msg.payload.epic, bid: msg.payload.bid, offer: msg.payload.ofr, ts: Date.now() }),
+        }).catch(() => {});
 
         const p = msg.payload;
         const time = this.calculateMinuteTimestamp(p.timestamp);
