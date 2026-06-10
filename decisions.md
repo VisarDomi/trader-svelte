@@ -141,3 +141,23 @@
 **Price range scales by height ratio to preserve bar aspect ratio**: `newSpan = oldSpan × (newPriceAreaH / oldPriceAreaH)`, centered on the same midpoint. Price area height = `chartElement().clientHeight - timeScale().height()`. This keeps price-per-pixel constant — bars maintain their visual height. Landscape chops top/bottom of the price range, portrait extends it.
 
 **barSpacing preservation keeps bar width constant**: Camera captures `timeScale().options().barSpacing` before resize and restores it via `applyOptions` after `chart.resize()`. LWC's deferred reflow respects this value and adjusts the visible logical range to fit — more bars visible in landscape, fewer in portrait. The right edge stays pinned, the left edge extends/contracts.
+
+## Margin Buffer & Broker Close-Out
+
+**Capital.com rejects positions exceeding ~98% margin utilization.** The broker requires a minimum free margin cushion — tested empirically by escalating position sizes against a known balance. At 98% utilization the order is accepted, at 99% it returns `RC_NOT_ENOUGH_MARGIN`.
+
+**Position sizing applies `MARGIN_BUFFER_RATIO = 0.98`** to the raw `balance * leverage / price` calculation. This ensures the order stays under the broker's 98% threshold. The constant lives in `trading.ts` and is consumed by `TradePlanner.calculatePositionSize()`.
+
+**Stop loss vs broker close-out interaction:**
+
+| Component | Trigger | Loss level |
+|---|---|---|
+| User stop (`STOP_LOSS_RATIO = 0.5`) | Equity drops to 50% of initial balance | 50% × balance |
+| Broker force close-out (50% of used margin) | Equity drops to 50% of used margin | (1 − 0.50 × 0.98) × balance = 51% × balance |
+
+The 2% free margin creates a 1% safety buffer between the user's stop (50% loss) and the broker's force close-out (51% loss). The stop fires first. If the user wants more headroom, `STOP_LOSS_RATIO` can be lowered (e.g. 0.45 gives a 6% buffer).
+
+**Edge cases:**
+- **Minimum deal size**: If `balance × MARGIN_BUFFER_RATIO × leverage / price < minDealSize`, the position can't be opened — `calculatePositionSize()` returns null and the planner shows an error.
+- **Maximum deal size**: Already capped by `maxDealSize` in the dealing rules — applies after the buffer.
+- **Very small balance**: The 2% free margin becomes negligible in dollar terms (e.g. $0.04 on a $2 balance) but the ratio holds.

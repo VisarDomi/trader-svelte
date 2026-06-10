@@ -2,6 +2,7 @@ import * as API from '$lib/shared/constants/api.js';
 import * as BACKEND from '$lib/shared/constants/backend.js';
 import { getBaseUrl } from '$lib/shared/utils/helpers.js';
 import { DEFAULT_ERROR } from '$lib/shared/constants/error.js';
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 import type { PositionListResponse, CreatePositionResponse, TradeRequest, TradeConfirmation } from "$lib/shared/types/trading.js";
 import type { ApiClient } from '$lib/core/api/ApiClient.js';
 import type { SessionTokens } from '$lib/shared/types/auth.js';
@@ -56,10 +57,34 @@ export async function getConfirmation(client: ApiClient, dealReference: string):
     const endpoint = API.getDealReferenceEndpoint(dealReference);
     const conf = await client.get<TradeConfirmation>(endpoint);
 
+    if (conf.dealStatus === 'REJECTED') {
+        serverLog({
+            tag: LogEvent.TradeRejected,
+            dealReference,
+            rejectReason: conf.rejectReason || 'Unknown',
+            epic: conf.epic,
+            size: conf.size,
+            direction: conf.direction,
+        });
+        throw new Error(`Order rejected: ${conf.rejectReason || 'Unknown'}`);
+    }
+
     if (isValidConfirmation(conf)) return conf;
 
     await new Promise(r => setTimeout(r, 300));
     const retry = await client.get<TradeConfirmation>(endpoint);
+
+    if (retry.dealStatus === 'REJECTED') {
+        serverLog({
+            tag: LogEvent.TradeRejected,
+            dealReference,
+            rejectReason: retry.rejectReason || 'Unknown',
+            epic: retry.epic,
+            size: retry.size,
+            direction: retry.direction,
+        });
+        throw new Error(`Order rejected: ${retry.rejectReason || 'Unknown'}`);
+    }
 
     if (isValidConfirmation(retry)) return retry;
 

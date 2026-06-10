@@ -10,7 +10,7 @@ import type { SessionManager } from '$lib/core/services/SessionManager.js';
 import type { ChartLogic } from '$lib/features/chart-orchestration/ChartLogic.svelte.js';
 
 export class ChartOverlay {
-    isOpen = $state(false);
+    isOpen = $state(true);
     marketName = $state('');
 
     constructor(

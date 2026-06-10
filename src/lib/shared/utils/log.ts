@@ -45,6 +45,10 @@ export const LogEvent = {
 
     TradeOpen: 'trade-open',
     TradeClose: 'trade-close',
+    TradePlan: 'trade-plan',
+    TradeRejected: 'trade-rejected',
+    TradeFailed: 'trade-failed',
+    TradeRequest: 'trade-request',
     PositionPoll: 'position-poll',
     PositionAutoClose: 'position-auto-close',
 } as const;
@@ -83,6 +87,10 @@ export type LogEntry =
 
     | { tag: typeof LogEvent.TradeOpen; mode: string; balance: number; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; dealId: string; entryLevel: number }
     | { tag: typeof LogEvent.TradeClose; mode: string; balance: number; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; pnl: number; entryLevel: number; exitLevel: number }
+    | { tag: typeof LogEvent.TradePlan; balance: number; leverage: number; entryPrice: number; targetPrice: number; rawSize: number; steppedSize: number; size: number; marginRequired: number; decimalPlaces: number; minDealSize: number; maxDealSize: number }
+    | { tag: typeof LogEvent.TradeRejected; dealReference: string; rejectReason: string; epic: string; size: number; direction: string }
+    | { tag: typeof LogEvent.TradeFailed; reason: string; epic?: string; size?: number }
+    | { tag: typeof LogEvent.TradeRequest; epic: string; direction: string; size: number; stopLevel: number | undefined; profitLevel: number | undefined }
     | { tag: typeof LogEvent.PositionPoll; fetchMs: number; hasPosition: boolean; epic: string | null }
     | { tag: typeof LogEvent.PositionAutoClose; dealId: string; detectionLagMs: number; source: 'breach' | 'poll' | 'refresh' };
 

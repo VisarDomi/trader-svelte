@@ -24,6 +24,15 @@ export class TradeExecutor {
             profitLevel: trade.profitLevel
         };
 
+        serverLog({
+            tag: LogEvent.TradeRequest,
+            epic: request.epic,
+            direction: request.direction,
+            size: request.size,
+            stopLevel: request.stopLevel,
+            profitLevel: request.profitLevel,
+        });
+
         const t0 = performance.now();
 
         const response = await createPosition(client, request);

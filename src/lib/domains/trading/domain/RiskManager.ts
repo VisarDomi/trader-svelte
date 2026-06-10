@@ -15,7 +15,7 @@ export class RiskManager {
         const currentRiskRatio = this.calculateRiskRatio(position, market, balance);
         const toleranceEpsilon = 0.001;
 
-        if (currentRiskRatio <= TRADING.STOP_LOSS_RATIO + toleranceEpsilon) {
+        if (Math.abs(currentRiskRatio - TRADING.STOP_LOSS_RATIO) <= toleranceEpsilon) {
             return null;
         }
 

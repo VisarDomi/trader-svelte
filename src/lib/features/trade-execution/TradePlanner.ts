@@ -76,7 +76,7 @@ export class TradePlanner {
         const lotSize = market.instrument.lotSize || 1;
         const rules = market.dealingRules;
 
-        const rawSize = (balance * leverage) / (lotSize * price);
+        const rawSize = (balance * TRADING.MARGIN_BUFFER_RATIO * leverage) / (lotSize * price);
         const steppedSize = roundDownToStep(rawSize, rules.minSizeIncrement.value);
 
         const cappedSize = Math.min(steppedSize, rules.maxDealSize.value);

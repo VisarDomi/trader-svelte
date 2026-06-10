@@ -64,6 +64,7 @@ export interface TradeConfirmation {
     date: string;
     status: string;
     dealStatus: string;
+    rejectReason?: string;
     epic: string;
     dealReference: string;
     dealId: string;

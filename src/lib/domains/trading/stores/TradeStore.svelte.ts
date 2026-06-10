@@ -4,6 +4,7 @@ import { TradePlanner, type PlannedTrade } from '$lib/features/trade-execution/T
 import { TradeExecutor } from '$lib/features/trade-execution/TradeExecutor.js';
 import { MarketMapper } from '$lib/domains/market/domain/MarketMapper.js';
 import { bus } from '$lib/core/events/globalBus.js';
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 import * as TRADING from '$lib/shared/constants/trading.js';
 import * as EVENTS from '$lib/shared/constants/events.js';
@@ -93,8 +94,24 @@ export class TradeStore {
 
             this.isPlanning = true;
 
+            serverLog({
+                tag: LogEvent.TradePlan,
+                balance: accountStore.balance,
+                leverage: userLeverage,
+                entryPrice: initialEntryPrice,
+                targetPrice: initialTargetPrice,
+                rawSize: testPlan.size,
+                steppedSize: testPlan.size,
+                size: testPlan.size,
+                marginRequired: testPlan.marginRequired,
+                decimalPlaces: market.snapshot.decimalPlacesFactor,
+                minDealSize: market.dealingRules.minDealSize.value,
+                maxDealSize: market.dealingRules.maxDealSize.value,
+            });
+
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
+            serverLog({ tag: LogEvent.TradeFailed, reason: msg });
             notifications.error(msg);
             this.cancel();
         }
@@ -109,12 +126,16 @@ export class TradeStore {
         const plan = this.plannedTrade;
         const draft = this.draft;
 
-        if (!plan || !draft) return null;
+        if (!plan || !draft) {
+            serverLog({ tag: LogEvent.TradeFailed, reason: "Trade plan expired" });
+            return null;
+        }
 
         this.isExecuting = true;
         const client = api.client;
 
         if (!client) {
+            serverLog({ tag: LogEvent.TradeFailed, reason: "Session invalid" });
             notifications.error("Session invalid");
             this.isExecuting = false;
             return null;
@@ -142,6 +163,8 @@ export class TradeStore {
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
+            const epic = draft?.market?.instrument?.epic;
+            serverLog({ tag: LogEvent.TradeFailed, reason: msg, epic, size: plan?.size });
 
             bus.emit(EVENTS.TRADE_FAILED, { reason: msg });
             notifications.error(msg);
