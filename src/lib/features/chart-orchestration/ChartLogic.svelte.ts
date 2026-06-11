@@ -38,7 +38,7 @@ export class ChartLogic {
     private inputHandler: ChartInputHandler;
     private loader: ChartLoader;
 
-    private marketDetails = $state<MarketDetailsResponse | null>(null);
+    marketDetails = $state<MarketDetailsResponse | null>(null);
     private cleanupEvents: (() => void)[] = [];
 
     constructor() {

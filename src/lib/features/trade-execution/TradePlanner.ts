@@ -2,6 +2,7 @@ import * as TRADING from '$lib/shared/constants/trading.js';
 import { roundDownToStep, roundPrice } from '$lib/shared/utils/math.js';
 import type { MarketDetailsResponse } from '$lib/shared/types/market.js';
 import type { Direction } from '$lib/shared/types/trading.js';
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export interface PlannedTrade {
     size: number;
@@ -22,6 +23,7 @@ export class TradePlanner {
         entryPrice: number,
         targetPrice: number
     ): PlannedTrade | null {
+        const t0 = performance.now();
         if (accountBalance <= 0) {
             throw new Error("Insufficient funds to plan trade.");
         }
@@ -55,6 +57,9 @@ export class TradePlanner {
 
         const marginRequired = (size * lotSize * entryPrice) / userLeverage;
         const potentialLoss = accountBalance * TRADING.STOP_LOSS_RATIO;
+
+        const elapsed = Math.round(performance.now() - t0);
+        serverLog({ tag: LogEvent.TradePlan, timingMs: elapsed });
 
         return {
             size,
@@ -134,5 +139,43 @@ export class TradePlanner {
         }
 
         return bestPrice;
+    }
+
+    /**
+     * Calculate max position size (full balance * leverage, minus buffer).
+     * No SL/TP — just the raw size for Phase 1 of target trading.
+     */
+    calculateMaxSize(
+        market: MarketDetailsResponse,
+        accountBalance: number,
+        userLeverage: number,
+        entryPrice: number
+    ): number | null {
+        return this.calculatePositionSize(market, accountBalance, userLeverage, entryPrice);
+    }
+
+    /**
+     * Calculate SL and TP levels based on actual fill price and target percentage.
+     * Called in Phase 2 after getting the confirmation of the opened position.
+     */
+    calculateTargetLevels(
+        actualEntryPrice: number,
+        direction: Direction,
+        targetPct: number,
+        decimalPlaces: number
+    ): { profitLevel: number; stopLevel?: number } {
+        const isBuy = direction === 'BUY';
+        const targetPrice = actualEntryPrice * (1 + targetPct / 100);
+        const profitLevel = roundPrice(targetPrice, decimalPlaces);
+
+        // SL: place it at a reasonable distance based on ATR-like logic  
+        // For now, use a fixed 0.5% from entry as a safety net
+        const stopDist = actualEntryPrice * 0.0025; // 0.25% stop
+        const stopLevel = roundPrice(
+            isBuy ? actualEntryPrice - stopDist : actualEntryPrice + stopDist,
+            decimalPlaces
+        );
+
+        return { profitLevel, stopLevel };
     }
 }

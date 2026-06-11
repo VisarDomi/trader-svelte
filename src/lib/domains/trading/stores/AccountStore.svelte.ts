@@ -30,13 +30,16 @@ export class AccountStore extends BaseStore {
 
     constructor() {
         super();
-        bus.on(EVENTS.TRADE_EXECUTED, () => {
-            void this.refreshActive();
+        // On open: optimistically deduct margin, refresh in background once
+        bus.on(EVENTS.TRADE_EXECUTED, ({ marginUsed }) => {
+            this.dispatch(accountCmd.applyOptimistic(-marginUsed));
+            setTimeout(() => void this.refreshActive(), 2000);
         });
 
+        // On close: optimistically add PnL, refresh once in background
         bus.on(EVENTS.POSITION_CLOSED, ({ pnl }) => {
             this.dispatch(accountCmd.applyOptimistic(pnl));
-            void this.pollBalanceUpdate();
+            setTimeout(() => void this.refreshActive(), 2000);
         });
 
         bus.on(EVENTS.POSITION_VANISHED, () => {
@@ -239,19 +242,8 @@ export class AccountStore extends BaseStore {
         if (!this.activeAccount) return;
 
         this.activeAccount.balance.deposit += pnl;
-
         this.activeAccount.balance.profitLoss = 0;
-
         this.activeAccount.balance.available = this.activeAccount.balance.deposit;
-
-    }
-
-    private async pollBalanceUpdate() {
-
-        for (let i = 0; i < 5; i++) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await this.refreshActive();
-        }
     }
 }
 

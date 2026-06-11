@@ -89,7 +89,7 @@ export type LogEntry =
 
     | { tag: typeof LogEvent.TradeOpen; mode: string; balance: number; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; dealId: string; entryLevel: number }
     | { tag: typeof LogEvent.TradeClose; mode: string; balance: number; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; pnl: number; entryLevel: number; exitLevel: number }
-    | { tag: typeof LogEvent.TradePlan; balance: number; leverage: number; entryPrice: number; targetPrice: number; rawSize: number; steppedSize: number; size: number; marginRequired: number; decimalPlaces: number; minDealSize: number; maxDealSize: number }
+    | { tag: typeof LogEvent.TradePlan; balance: number; leverage: number; entryPrice: number; targetPrice: number; rawSize: number; steppedSize: number; size: number; marginRequired: number; decimalPlaces: number; minDealSize: number; maxDealSize: number; timingMs?: number }
     | { tag: typeof LogEvent.TradeRejected; dealReference: string; rejectReason: string; epic: string; size: number; direction: string }
     | { tag: typeof LogEvent.TradeFailed; reason: string; epic?: string; size?: number }
     | { tag: typeof LogEvent.TradeRequest; epic: string; direction: string; size: number; stopLevel: number | undefined; profitLevel: number | undefined }

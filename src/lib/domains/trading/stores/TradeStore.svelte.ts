@@ -157,7 +157,7 @@ export class TradeStore {
 
             this.cancel();
 
-            bus.emit(EVENTS.TRADE_EXECUTED, result);
+            bus.emit(EVENTS.TRADE_EXECUTED, { ...result, marginUsed: plan.marginRequired });
 
             return result;
 
