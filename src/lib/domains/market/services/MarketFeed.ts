@@ -3,6 +3,7 @@ import { CandleAggregator } from '$lib/domains/market/domain/CandleAggregator.js
 import type { SessionTokens } from '$lib/shared/types/auth.js';
 import type { QuoteMessage, ChartCandle, CandleFrame } from '$lib/shared/types/market.js';
 import type { UTCTimestamp } from 'lightweight-charts';
+import { serverLog, LogEvent } from '$lib/shared/utils/log.js';
 
 export interface FeedUpdate {
     bid: number;
@@ -62,11 +63,7 @@ export class MarketFeed {
 
     private processMessage(msg: QuoteMessage) {
         this.lastUpdateTimestamp = Date.now();
-        fetch('/api/tick-log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ event: 'tick', epic: msg.payload.epic, bid: msg.payload.bid, offer: msg.payload.ofr, ts: Date.now() }),
-        }).catch(() => {});
+        serverLog({ tag: LogEvent.Tick, epic: msg.payload.epic, bid: msg.payload.bid, offer: msg.payload.ofr, ts: Date.now() });
 
         const p = msg.payload;
         const time = this.calculateMinuteTimestamp(p.timestamp);

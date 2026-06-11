@@ -38,6 +38,7 @@ export const LogEvent = {
 
     BarGap: 'bar-gap',
     RiskCorrection: 'risk-correction',
+    Tick: 'tick',
     ZombieSocket: 'zombie-socket',
 
     CameraInit: 'camera-init',
@@ -83,6 +84,7 @@ export type LogEntry =
 
     | { tag: typeof LogEvent.BarGap; state: 'detected' | 'filled'; historyTime: number; liveTime: number }
     | { tag: typeof LogEvent.RiskCorrection; dealId: string; newLevel: number }
+    | { tag: typeof LogEvent.Tick; epic: string; bid: number; offer: number; ts: number }
     | { tag: typeof LogEvent.ZombieSocket; gapMs: number }
 
     | { tag: typeof LogEvent.TradeOpen; mode: string; balance: number; epic: string; direction: string; size: number; orderMs: number; confirmMs: number; totalMs: number; dealId: string; entryLevel: number }

@@ -66,7 +66,7 @@ export class StreamClient {
     }
 
     private handleOpen = () => {
-        fetch('/api/tick-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'ws-open', epic: this.epic, ts: Date.now() }) }).catch(()=>{});
+        
         serverLog({ tag: LogEvent.StreamOpen, epic: this.epic });
         this.retryCount = 0;
         this.subscribe();
@@ -96,7 +96,7 @@ export class StreamClient {
     private handleClose = (event: CloseEvent) => {
         this.stopPing();
         this.ws = null;
-        fetch('/api/tick-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'ws-close', epic: this.epic, code: event.code, msg: this.isIntentionalClose ? 'intentional' : 'unexpected', ts: Date.now() }) }).catch(()=>{});
+        
         serverLog({ tag: LogEvent.StreamClose, epic: this.epic, code: event.code, intentional: this.isIntentionalClose });
 
         if (!this.isIntentionalClose) {
@@ -107,13 +107,13 @@ export class StreamClient {
     private scheduleReconnect() {
         if (this.isIntentionalClose) return;
         if (this.retryCount >= this.MAX_RETRIES) {
-            fetch('/api/tick-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'ws-exhausted', epic: this.epic, msg: String(this.MAX_RETRIES), ts: Date.now() }) }).catch(()=>{});
+            
             serverLog({ tag: LogEvent.StreamExhausted, epic: this.epic, attempts: this.MAX_RETRIES });
             return;
         }
 
         const delay = Math.min(this.BASE_DELAY * Math.pow(1.5, this.retryCount), 30000);
-        fetch('/api/tick-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'ws-retry', epic: this.epic, code: this.retryCount + 1, msg: String(delay), ts: Date.now() }) }).catch(()=>{});
+        
         serverLog({ tag: LogEvent.StreamRetry, epic: this.epic, attempt: this.retryCount + 1, delayMs: delay });
 
         this.reconnectTimer = setTimeout(() => {
