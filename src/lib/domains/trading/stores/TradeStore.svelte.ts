@@ -21,6 +21,8 @@ interface TradeDraft {
     profitDistance: number;
 }
 
+let tradeSeq = 0;
+
 export class TradeStore {
     isPlanning = $state(false);
     isExecuting = $state(false);
@@ -67,6 +69,7 @@ export class TradeStore {
         market: MarketDetailsResponse,
         userLeverage: number
     ) {
+        const seq = ++tradeSeq;
         const profitDistance = Math.abs(initialTargetPrice - initialEntryPrice);
 
         this.draft = {
@@ -96,6 +99,7 @@ export class TradeStore {
 
             serverLog({
                 tag: LogEvent.TradePlan,
+                seq,
                 balance: accountStore.balance,
                 leverage: userLeverage,
                 entryPrice: initialEntryPrice,
@@ -125,6 +129,16 @@ export class TradeStore {
     async execute(): Promise<PositionResponse | null> {
         const plan = this.plannedTrade;
         const draft = this.draft;
+
+        serverLog({
+            tag: LogEvent.TradePlan,
+            event: 'execute-read',
+            size: plan?.size ?? null,
+            direction: plan?.direction ?? null,
+            entryPrice: plan?.entryPrice ?? null,
+            hasDraft: draft !== null,
+            balance: accountStore.balance,
+        });
 
         if (!plan || !draft) {
             serverLog({ tag: LogEvent.TradeFailed, reason: "Trade plan expired" });
@@ -157,7 +171,7 @@ export class TradeStore {
 
             this.cancel();
 
-            bus.emit(EVENTS.TRADE_EXECUTED, { ...result, marginUsed: plan.marginRequired });
+            bus.emit(EVENTS.TRADE_EXECUTED, result);
 
             return result;
 
