@@ -1,40 +1,34 @@
-# Continue Session — Target Buttons + State Fixes
+# Continue Session — MARGIN_BUFFER_RATIO calibration
 
-## What's implemented
-- `TargetButtons.svelte` + `LeverageBar.svelte` wired into chart page
-- `TargetExecutor.ts` with two-phase target order flow (Phase 1: open max size, Phase 2: set SL/TP)
-- Optimistic balance updates on trade confirmation (AccountStore deducts margin on open, adds PnL on close)
-- Removed aggressive 5×1s poll loop, replaced with single 2s delayed refresh
-- `serverLog` with `timingMs` on TradePlan for performance measurement
-- Added `seq` to trade-plan logs to trace individual plan→execute pairs
+## What's been done
+- Reverted target-buttons UI + optimistic balance updates (commit `c93318e`)
+- Kept logging improvements: tick logging, timingMs, seq, execute-read diagnostics
+- Identified root cause of stale-size bug: `plannedTrade` is `$derived` from `accountStore.balance`, so it re-derives between plan() and execute() when balance changes from previous close's applyOptimistic(pnl)
 
-## What's broken / needs investigation
-**Stale size on execute**: Logs show `plan()` calculates correct size (e.g. 0.928) but `execute()` sends a different stale size (e.g. 0.958 from previous trade). Needs debugging.
+## Margin Factor Investigation — BROKEN the API rate limit
+We need to find the exact `MARGIN_BUFFER_RATIO` (currently 0.98) by testing what ratio Capital.com actually rejects.
 
-**Added diagnostic logging**: `execute()` now logs an `execute-read` event right before reading `this.plannedTrade` — so you can see exactly what size was captured at execute time vs what was planned.
+**What went wrong (DO NOT REPEAT):**
+- Automated scripts made hundreds of POST /positions calls without pacing → consumed the 1000 req/hour demo rate limit → HTTP 429 on all subsequent calls
+- TopUp calls were also wasted (100/day/account limit)
+- Rate will reset ~24h from now (or check if the sliding window has freed up)
 
-## How to test
-1. Open `https://192.168.1.197:23456` on iPhone (local network, self-signed cert)
-2. Do rapid open/close cycles
-3. Check journalctl for `execute-read` events to trace stale state
+**Test script ready:** `/tmp/opencode/test-ratio.mjs`
+Usage: `node /tmp/opencode/test-ratio.mjs <ratio> [BUY|SELL]`
+It logs in, gets market + balance, calculates size, opens, confirms via GET /confirms, and closes if accepted. One shot per run.
 
-## How to watch logs
-```bash
-journalctl --user -u trader-svelte.service -f | grep "\[Frontend\]"
-```
+**How to test (manually, one at a time):**
+1. Wait for rate limit to reset
+2. Test 0.98 BUY → confirm accept/reject
+3. Test 0.99 BUY → compare
+4. Test 1.00 BUY → find boundary
+5. Zoom finer: 0.981, 0.982, ... around the boundary
+6. Repeat for SELL
+
+**Key empirical finding so far:** The first automated sweep (before rate limit) showed Capital.com accepted positions at 102% of full margin. This suggests the broker's margin check is not our `size * lotSize * price / leverage` formula. The exact threshold still needs manual determination.
 
 ## Key files
-- `src/lib/domains/trading/stores/TradeStore.svelte.ts` — plan/execute logic with $derived
-- `src/lib/domains/trading/stores/AccountStore.svelte.ts` — optimistic balance updates
-- `src/lib/features/target-buttons/TargetButtons.svelte` — target button UI
-- `src/lib/features/target-buttons/TargetExecutor.ts` — two-phase order flow
-- `src/lib/features/target-buttons/LeverageBar.svelte` — leverage switcher
-- `goal.md` — overall goal tracking
-
-## Not pushed
-Latest changes (diagnostic logging on execute) are NOT committed or pushed.
-Run `npm run restart` after any source change (wired to `systemctl --user restart trader-svelte.service`).
-
-## Investigate
-- Vite HMR: when is a full restart needed vs HMR sufficient? (for `.svelte`, `.ts` in `$lib/`, new routes, config changes)
-- Why does `execute()` sometimes get a different `plannedTrade` than what `plan()` logged
+- `/tmp/opencode/test-ratio.mjs` — reusable one-shot ratio tester
+- `src/lib/shared/constants/trading.ts` — MARGIN_BUFFER_RATIO = 0.98
+- `src/lib/features/trade-execution/TradePlanner.ts` — `calculatePositionSize()` uses MARGIN_BUFFER_RATIO
+- `decisions.md` — see "Margin Buffer Factor Investigation" section for details

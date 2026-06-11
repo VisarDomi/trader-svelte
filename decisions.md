@@ -1,5 +1,28 @@
 # Architecture Decisions
 
+## Margin Buffer Factor Investigation (2026-06-11)
+
+**Goal:** Find the exact `MARGIN_BUFFER_RATIO` (currently 0.98) by testing at what ratio Capital.com rejects a position.
+
+**Root cause of 429s (rate limits):**
+- The previous session's automated test scripts (`margin-test.mjs`, `threshold-test.mjs`, `precise-test.mjs`) made hundreds of rapid API calls without pacing, consuming the demo rate budget (1000 POST /positions per hour).
+- `threshold-test.mjs` ran `findThreshold()` which looped through ratios from 0.95 to 5.0 in 0.01 steps, each making ~5-10 binary search requests = hundreds of POST /positions calls.
+- TopUp calls also hit the 100/day/account limit.
+
+**Lessons for next agent:**
+1. **Don't automate broad sweeps** — test one ratio at a time, manually, waiting for confirmation between each.
+2. **Use a simple parameterized script** like `/tmp/opencode/test-ratio.mjs` that takes `ratio` and `direction` as args.
+3. **Check rate limits before starting:** 1000 POST /positions per hour in demo, 10 req/s general, 1 POST /session per second, 100 topUp/day/account.
+4. **Don't use topUp** — the ratio test is balance-invariant. Just use whatever balance the account has.
+5. **Pace every API call** with at least 150ms delay.
+6. **Validate via `GET /confirms/{dealRef}`**, not just POST 200 OK.
+7. **Empirical finding so far:** Even at 102% of full margin (ratio=1.02), Capital.com accepted the position in the first automated test. This suggests the broker's margin calculation differs from ours. Further manual testing needed to find the exact threshold.
+
+**Remaining work:**
+- Test ratios manually: 0.98, 0.99, 1.00, then zoom finer (0.981, 0.982...) around the boundary.
+- Test both BUY and SELL at each ratio.
+- Share the reusable test script with the next agent.
+
 ## Global Architecture Principles
 
 1. **Mobile First:** We optimize for iOS Safari quirks (viewports, tap delays). If a generic web solution fights with iOS behavior, the iOS workaround wins.
